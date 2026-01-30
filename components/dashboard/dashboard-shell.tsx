@@ -27,6 +27,9 @@ export function DashboardShell({
     async function fetchProfile() {
       if (!user?.id) return;
 
+      const ADMIN_EMAIL = "agbojoshua2005@gmail.com";
+      const isAdminEmail = user?.emailAddresses[0]?.emailAddress?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+
       const supabase = createClient();
       const { data } = await supabase
         .from("profiles")
@@ -35,7 +38,24 @@ export function DashboardShell({
         .single();
 
       if (data) {
-        setProfile(data);
+        if (isAdminEmail) {
+          setProfile({ ...data, role: "admin" });
+        } else {
+          setProfile(data);
+        }
+      } else if (isAdminEmail) {
+        // Fallback if profile doesn't exist yet but email is admin
+        setProfile({
+          id: user.id,
+          email: user.emailAddresses[0]?.emailAddress || "",
+          full_name: user.fullName || "Admin",
+          role: "admin",
+          avatar_url: user.imageUrl,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          status: 'active',
+          online_status: 'online'
+        } as Profile);
       }
     }
 
