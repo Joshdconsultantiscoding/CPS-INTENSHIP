@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { Task } from "@/lib/types";
 import {
   Card,
@@ -61,6 +61,22 @@ const statusIcons = {
 export function TaskList({ tasks, isAdmin, userId, interns }: TaskListProps) {
   const router = useRouter();
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return (
+      <Card>
+        <CardContent className="flex flex-col items-center justify-center py-12">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <p className="mt-4 text-sm text-muted-foreground">Loading tasks...</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   const pendingTasks = tasks.filter((t) => t.status === "pending");
   const inProgressTasks = tasks.filter((t) => t.status === "in_progress");

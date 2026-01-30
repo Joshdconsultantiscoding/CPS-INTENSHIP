@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import type { Profile, Task, DailyReport, Notification } from "@/lib/types";
 import {
@@ -40,15 +41,21 @@ interface InternDashboardProps {
 
 export function InternDashboard({
   profile,
-  tasks,
-  reports,
-  completedTasks,
-  pendingTasks,
-  overdueTasks,
-  unreadMessages,
-  notifications,
+  tasks = [],
+  reports = [],
+  completedTasks = 0,
+  pendingTasks = 0,
+  overdueTasks = 0,
+  unreadMessages = 0,
+  notifications = [],
 }: InternDashboardProps) {
   const { settings } = usePortalSettings();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const totalTasks = completedTasks + pendingTasks + overdueTasks;
   const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
   const upcomingTasks = tasks
@@ -59,6 +66,19 @@ export function InternDashboard({
     (r) =>
       new Date(r.report_date).toDateString() === new Date().toDateString()
   );
+
+  if (!mounted) {
+    return (
+      <div className="space-y-4 sm:space-y-6 animate-pulse">
+        <div className="h-20 bg-muted rounded-lg" />
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-24 bg-muted rounded-lg" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 sm:space-y-6">

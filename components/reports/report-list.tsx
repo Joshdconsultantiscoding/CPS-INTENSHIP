@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { DailyReport } from "@/lib/types";
 import {
   Card,
@@ -48,6 +48,22 @@ const statusBadge = {
 export function ReportList({ reports, isAdmin, userId }: ReportListProps) {
   const router = useRouter();
   const [selectedReport, setSelectedReport] = useState<DailyReport | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return (
+      <Card>
+        <CardContent className="flex flex-col items-center justify-center py-12">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <p className="mt-4 text-sm text-muted-foreground">Loading reports...</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   const submittedReports = reports.filter((r) => r.status === "submitted");
   const reviewedReports = reports.filter((r) => r.status === "reviewed");

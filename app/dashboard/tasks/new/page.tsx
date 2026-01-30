@@ -1,3 +1,4 @@
+import { getAuthUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { TaskCreationPage } from "@/components/tasks/task-creation-page";
@@ -7,14 +8,8 @@ export const metadata = {
 };
 
 export default async function NewTaskPage() {
+    const user = await getAuthUser();
     const supabase = await createClient();
-    const {
-        data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-        redirect("/auth/login");
-    }
 
     const { data: profile } = await supabase
         .from("profiles")

@@ -42,6 +42,7 @@ import {
   Bell,
 } from "lucide-react";
 import { usePortalSettings, type PortalSettings } from "@/hooks/use-portal-settings";
+import Link from "next/link";
 
 interface DashboardSidebarProps {
   userId: string;
@@ -146,10 +147,9 @@ const adminNavItems = [
 
 export function DashboardSidebar({ userId, profile }: DashboardSidebarProps) {
   const pathname = usePathname();
-  const router = useRouter();
   const { signOut } = useClerk();
   const { user } = useUser();
-  const isAdmin = profile?.role === "admin";
+  const isAdmin = profile?.role?.toLowerCase() === "admin";
   const { settings } = usePortalSettings();
 
   const settingKeyMap: Record<string, keyof PortalSettings | null> = {
@@ -168,10 +168,7 @@ export function DashboardSidebar({ userId, profile }: DashboardSidebarProps) {
   };
 
   const navItems = (isAdmin ? adminNavItems : internNavItems).filter(item => {
-    // Admins see everything
     if (isAdmin) return true;
-
-    // Check if the item is disabled in settings
     const settingKey = settingKeyMap[item.title];
     if (settingKey && settings[settingKey] === false) {
       return false;
@@ -180,12 +177,7 @@ export function DashboardSidebar({ userId, profile }: DashboardSidebarProps) {
   });
 
   const handleSignOut = async () => {
-    await signOut();
-    router.push("/sign-in");
-  };
-
-  const handleNavigation = (url: string) => {
-    router.push(url);
+    await signOut({ redirectUrl: "/auth/sign-in" });
   };
 
   const getInitials = (name: string | null) => {
@@ -203,16 +195,18 @@ export function DashboardSidebar({ userId, profile }: DashboardSidebarProps) {
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" onClick={() => handleNavigation("/dashboard")}>
-              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                <Briefcase className="size-4" />
-              </div>
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-semibold">InternHub</span>
-                <span className="truncate text-xs text-muted-foreground">
-                  {isAdmin ? "Admin Portal" : "Intern Portal"}
-                </span>
-              </div>
+            <SidebarMenuButton size="lg" asChild>
+              <Link href="/dashboard">
+                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                  <Briefcase className="size-4" />
+                </div>
+                <div className="grid flex-1 text-left text-sm leading-tight">
+                  <span className="truncate font-semibold">InternHub</span>
+                  <span className="truncate text-xs text-muted-foreground">
+                    {isAdmin ? "Admin Portal" : "Intern Portal"}
+                  </span>
+                </div>
+              </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
@@ -225,7 +219,7 @@ export function DashboardSidebar({ userId, profile }: DashboardSidebarProps) {
               {navItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
-                    onClick={() => handleNavigation(item.url)}
+                    asChild
                     isActive={
                       pathname === item.url ||
                       (item.url !== "/dashboard" &&
@@ -233,8 +227,10 @@ export function DashboardSidebar({ userId, profile }: DashboardSidebarProps) {
                     }
                     tooltip={item.title}
                   >
-                    <item.icon className="size-4" />
-                    <span>{item.title}</span>
+                    <Link href={item.url}>
+                      <item.icon className="size-4" />
+                      <span>{item.title}</span>
+                    </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
@@ -246,15 +242,19 @@ export function DashboardSidebar({ userId, profile }: DashboardSidebarProps) {
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton onClick={() => handleNavigation("/dashboard/notifications")} tooltip="Notifications">
-                  <Bell className="size-4" />
-                  <span>Notifications</span>
+                <SidebarMenuButton asChild tooltip="Notifications">
+                  <Link href="/dashboard/notifications">
+                    <Bell className="size-4" />
+                    <span>Notifications</span>
+                  </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton onClick={() => handleNavigation("/dashboard/settings")} tooltip="Settings">
-                  <Settings className="size-4" />
-                  <span>Settings</span>
+                <SidebarMenuButton asChild tooltip="Settings">
+                  <Link href="/dashboard/settings">
+                    <Settings className="size-4" />
+                    <span>Settings</span>
+                  </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
@@ -319,9 +319,11 @@ export function DashboardSidebar({ userId, profile }: DashboardSidebarProps) {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => handleNavigation("/dashboard/settings")}>
-                  <Settings className="mr-2 size-4" />
-                  Settings
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard/settings">
+                    <Settings className="mr-2 size-4" />
+                    Settings
+                  </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut}>

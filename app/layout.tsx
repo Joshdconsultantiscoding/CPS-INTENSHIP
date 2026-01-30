@@ -1,13 +1,12 @@
-import React from "react"
+import { ClerkProvider } from '@clerk/nextjs';
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { Toaster } from "@/components/ui/sonner";
-import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
 
-const _geist = Geist({ subsets: ["latin"] });
-const _geistMono = Geist_Mono({ subsets: ["latin"] });
+const geist = Geist({ subsets: ["latin"] });
+const geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: {
@@ -16,15 +15,6 @@ export const metadata: Metadata = {
   },
   description:
     "A comprehensive internship management platform for tracking tasks, daily reports, performance analytics, and team communication.",
-  keywords: [
-    "internship",
-    "management",
-    "tasks",
-    "reports",
-    "analytics",
-    "performance",
-  ],
-  generator: 'v0.app'
 };
 
 export const viewport: Viewport = {
@@ -38,13 +28,13 @@ export const viewport: Viewport = {
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
     <ClerkProvider>
-      <html lang="en" suppressHydrationWarning>
-        <body className="font-sans antialiased" suppressHydrationWarning>
+      <html lang="en">
+        <body className={`${geist.className} antialiased`}>
           {children}
           <Toaster richColors position="top-right" />
           <Analytics />

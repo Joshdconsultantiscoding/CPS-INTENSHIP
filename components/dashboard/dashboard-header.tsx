@@ -49,7 +49,7 @@ export function DashboardHeader({ profile }: DashboardHeaderProps) {
         <BreadcrumbList>
           <BreadcrumbItem className="hidden sm:block">
             <BreadcrumbLink href="/dashboard" className="text-sm">
-              {profile?.role === "admin" ? "Admin" : "Intern"}
+              {profile?.role?.toLowerCase() === "admin" ? "Admin" : "Intern"}
             </BreadcrumbLink>
           </BreadcrumbItem>
           {pathname !== "/dashboard" && (
@@ -65,7 +65,7 @@ export function DashboardHeader({ profile }: DashboardHeaderProps) {
           {pathname === "/dashboard" && (
             <BreadcrumbItem className="sm:hidden">
               <BreadcrumbPage className="text-sm font-medium">
-                {profile?.role === "admin" ? "Admin Dashboard" : "Dashboard"}
+                {profile?.role?.toLowerCase() === "admin" ? "Admin Dashboard" : "Dashboard"}
               </BreadcrumbPage>
             </BreadcrumbItem>
           )}

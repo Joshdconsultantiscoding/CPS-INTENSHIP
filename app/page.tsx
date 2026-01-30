@@ -1,7 +1,5 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   CheckCircle2,
@@ -16,7 +14,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { createClient } from "@/lib/supabase/client";
 
 const features = [
   {
@@ -58,11 +55,6 @@ const features = [
 ];
 
 export default function HomePage() {
-  const router = useRouter();
-
-  // Supabase auth check removed to prevent conflicts with Clerk
-  // We now rely on Clerk middleware/components for auth state
-
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -76,10 +68,10 @@ export default function HomePage() {
           </div>
           <div className="flex items-center gap-4">
             <Button asChild variant="ghost">
-              <Link href="/sign-in">Sign In</Link>
+              <Link href="/auth/sign-in">Sign In</Link>
             </Button>
             <Button asChild>
-              <Link href="/sign-up">Get Started</Link>
+              <Link href="/auth/sign-up">Get Started</Link>
             </Button>
           </div>
         </div>
@@ -103,13 +95,13 @@ export default function HomePage() {
           </p>
           <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
             <Button asChild size="lg" className="gap-2">
-              <Link href="/sign-up">
+              <Link href="/auth/sign-up">
                 Start Your Journey
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </Button>
             <Button asChild size="lg" variant="outline">
-              <Link href="/sign-in">
+              <Link href="/auth/sign-in">
                 Sign In to Dashboard
               </Link>
             </Button>
@@ -162,13 +154,11 @@ export default function HomePage() {
             Join InternHub today and take control of your internship experience
             with powerful tools and insights.
           </p>
-          <Button
-            size="lg"
-            className="mt-8 gap-2"
-            onClick={() => window.location.href = "/auth/sign-up"}
-          >
-            Create Your Account
-            <ArrowRight className="h-4 w-4" />
+          <Button asChild size="lg" className="mt-8 gap-2">
+            <Link href="/auth/sign-up">
+              Create Your Account
+              <ArrowRight className="h-4 w-4" />
+            </Link>
           </Button>
         </div>
       </section>

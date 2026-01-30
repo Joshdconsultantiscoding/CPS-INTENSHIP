@@ -1,3 +1,4 @@
+import { getAuthUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { ReportForm } from "@/components/reports/report-form";
@@ -7,14 +8,8 @@ export const metadata = {
 };
 
 export default async function NewReportPage() {
+  const user = await getAuthUser();
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/auth/login");
-  }
 
   // Get user's tasks for selection
   const { data: tasks } = await supabase

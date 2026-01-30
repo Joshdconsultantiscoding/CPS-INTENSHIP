@@ -1,5 +1,6 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
 
 export interface AuthUser {
     id: string;
@@ -12,29 +13,58 @@ export interface AuthUser {
 }
 
 /**
- * Get the authenticated user from Clerk.
- * Use this instead of supabase.auth.getUser() in all dashboard pages.
+ * Get the authenticated user from Clerk with Role from Supabase.
+ * Use this in all dashboard pages.
  * Redirects to sign-in if not authenticated.
  */
 export async function getAuthUser(): Promise<AuthUser> {
     const { userId } = await auth();
 
     if (!userId) {
-        redirect("/sign-in");
+        redirect("/auth/sign-in");
     }
 
     const user = await currentUser();
 
     if (!user) {
-        redirect("/sign-in");
+        redirect("/auth/sign-in");
     }
+
+    const email = user.emailAddresses[0]?.emailAddress || null;
+    const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "agbojoshua2005@gmail.com";
+
+    // 1. Strict Override for The Admin Email (Security & Identity)
+    if (email === ADMIN_EMAIL) {
+        return {
+            id: userId,
+            email: email,
+            full_name: [user.firstName, user.lastName].filter(Boolean).join(" ") || "Admin",
+            avatar_url: user.imageUrl || null,
+            role: "admin",
+            firstName: user.firstName,
+            lastName: user.lastName,
+        };
+    }
+
+    // 2. Fetch Role from Supabase for everyone else
+    const supabase = await createClient();
+
+    const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", userId)
+        .single();
+
+    // Default to 'intern' if no profile found
+    const dbRole = profile?.role?.toLowerCase();
+    const role = (dbRole === "admin") ? "admin" : "intern";
 
     return {
         id: userId,
-        email: user.emailAddresses[0]?.emailAddress || null,
+        email: email,
         full_name: [user.firstName, user.lastName].filter(Boolean).join(" ") || "User",
         avatar_url: user.imageUrl || null,
-        role: "admin", // You are the sole admin
+        role: role,
         firstName: user.firstName,
         lastName: user.lastName,
     };
@@ -62,7 +92,7 @@ export async function getAuthUserOptional(): Promise<AuthUser | null> {
         email: user.emailAddresses[0]?.emailAddress || null,
         full_name: [user.firstName, user.lastName].filter(Boolean).join(" ") || "User",
         avatar_url: user.imageUrl || null,
-        role: "admin",
+        role: "intern",
         firstName: user.firstName,
         lastName: user.lastName,
     };

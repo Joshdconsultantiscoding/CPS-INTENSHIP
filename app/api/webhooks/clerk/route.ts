@@ -1,17 +1,18 @@
 import { Webhook } from "svix";
 import { headers } from "next/headers";
 import { WebhookEvent } from "@clerk/nextjs/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@supabase/supabase-js";
+import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
-    //Get Clerk webhook secret
     const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET;
 
     if (!WEBHOOK_SECRET) {
-        throw new Error("Please add CLERK_WEBHOOK_SECRET from Clerk Dashboard to .env");
+        console.error("Missing CLERK_WEBHOOK_SECRET");
+        return new NextResponse("Please add CLERK_WEBHOOK_SECRET from Clerk Dashboard to .env", { status: 500 });
     }
 
-    // Get headers
+    // Get the headers
     const headerPayload = await headers();
     const svix_id = headerPayload.get("svix-id");
     const svix_timestamp = headerPayload.get("svix-timestamp");
@@ -19,7 +20,7 @@ export async function POST(req: Request) {
 
     // If there are no headers, error out
     if (!svix_id || !svix_timestamp || !svix_signature) {
-        return new Response("Error occured -- no svix headers", {
+        return new NextResponse("Error occurred -- no svix headers", {
             status: 400,
         });
     }
@@ -42,80 +43,58 @@ export async function POST(req: Request) {
         }) as WebhookEvent;
     } catch (err) {
         console.error("Error verifying webhook:", err);
-        return new Response("Error occured", {
+        return new NextResponse("Error occurred", {
             status: 400,
         });
     }
 
-    // Handle the webhook
+    // Handle the event
     const eventType = evt.type;
-    const supabase = await createClient();
 
-    if (eventType === "user.created") {
-        const { id, email_addresses, first_name, last_name, image_url } = evt.data;
+    if (eventType === "user.created" || eventType === "user.updated") {
+        const { id, email_addresses, first_name, last_name, image_url, public_metadata } = evt.data;
 
-        // Create profile in Supabase
-        const { error } = await supabase.from("profiles").insert({
-            id: id,
-            email: email_addresses[0]?.email_address || null,
-            full_name: [first_name, last_name].filter(Boolean).join(" ") || null,
-            avatar_url: image_url || null,
-            role: "intern", // Default role
-            online_status: "online",
-            last_seen_at: new Date().toISOString(),
-        });
+        const email = email_addresses[0]?.email_address;
+        const fullName = [first_name, last_name].filter(Boolean).join(" ");
 
-        if (error) {
-            console.error("Error creating profile:", error);
-            return new Response("Error creating profile", { status: 500 });
-        }
+        // Default role logic: "intern" unless email is the strict admin email
+        const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "agbojoshua2005@gmail.com";
+        const role = email === ADMIN_EMAIL ? "admin" : "intern";
 
-        console.log(`✅ Profile created for user ${id}`);
-        return new Response("Profile created", { status: 200 });
-    }
+        // Initialize Supabase Admin Client
+        const supabaseAdmin = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_ROLE_KEY!,
+            {
+                auth: {
+                    autoRefreshToken: false,
+                    persistSession: false,
+                },
+            }
+        );
 
-    if (eventType === "user.updated") {
-        const { id, email_addresses, first_name, last_name, image_url } = evt.data;
-
-        // Update profile in Supabase
-        const { error } = await supabase
+        // Upsert user into Supabase profiles
+        const { error } = await supabaseAdmin
             .from("profiles")
-            .update({
-                email: email_addresses[0]?.email_address || null,
-                full_name: [first_name, last_name].filter(Boolean).join(" ") || null,
-                avatar_url: image_url || null,
-            })
-            .eq("id", id);
+            .upsert({
+                id: id,
+                email: email,
+                full_name: fullName,
+                avatar_url: image_url,
+                role: role,
+                updated_at: new Date().toISOString(),
+                // Only set created_at and auth_provider on insert, ideally database handles created_at
+                // We leave them to default or handled by trigger if possible, but upsert might overwrite
+                // Let's rely on updated_at
+            }, { onConflict: "id" });
 
         if (error) {
-            console.error("Error updating profile:", error);
-            return new Response("Error updating profile", { status: 500 });
+            console.error("Error inserting/updating user in Supabase:", error);
+            return new NextResponse("Error syncing to database", { status: 500 });
         }
 
-        console.log(`✅ Profile updated for user ${id}`);
-        return new Response("Profile updated", { status: 200 });
+        console.log(`Successfully synced user ${id} (${email}) to Supabase as ${role}`);
     }
 
-    if (eventType === "user.deleted") {
-        const { id } = evt.data;
-
-        // Soft delete or mark as inactive
-        const { error } = await supabase
-            .from("profiles")
-            .update({
-                online_status: "offline",
-                last_seen_at: new Date().toISOString(),
-            })
-            .eq("id", id);
-
-        if (error) {
-            console.error("Error deleting profile:", error);
-            return new Response("Error deleting profile", { status: 500 });
-        }
-
-        console.log(`✅ Profile deleted for user ${id}`);
-        return new Response("Profile deleted", { status: 200 });
-    }
-
-    return new Response("Webhook processed", { status: 200 });
+    return new NextResponse("", { status: 200 });
 }
