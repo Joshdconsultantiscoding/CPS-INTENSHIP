@@ -1,6 +1,7 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { cache } from "react";
 
 export interface AuthUser {
     id: string;
@@ -17,7 +18,7 @@ export interface AuthUser {
  * Use this in all dashboard pages.
  * Redirects to sign-in if not authenticated.
  */
-export async function getAuthUser(): Promise<AuthUser> {
+export const getAuthUser = cache(async (): Promise<AuthUser> => {
     const { userId } = await auth();
 
     if (!userId) {
@@ -34,7 +35,7 @@ export async function getAuthUser(): Promise<AuthUser> {
     const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "agbojoshua2005@gmail.com";
 
     // 1. Strict Override for The Admin Email (Security & Identity)
-    if (email === ADMIN_EMAIL) {
+    if (email && email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
         return {
             id: userId,
             email: email,
@@ -47,7 +48,9 @@ export async function getAuthUser(): Promise<AuthUser> {
     }
 
     // 2. Fetch Role from Supabase for everyone else
-    const supabase = await createClient();
+    // We use createAdminClient to bypass RLS, ensuring we can always read the user's role
+    // This is safe because we have already verified the userId via Clerk
+    const supabase = await createAdminClient();
 
     const { data: profile } = await supabase
         .from("profiles")
@@ -68,13 +71,13 @@ export async function getAuthUser(): Promise<AuthUser> {
         firstName: user.firstName,
         lastName: user.lastName,
     };
-}
+});
 
 /**
  * Check if user is authenticated without redirecting.
  * Returns null if not authenticated.
  */
-export async function getAuthUserOptional(): Promise<AuthUser | null> {
+export const getAuthUserOptional = cache(async (): Promise<AuthUser | null> => {
     const { userId } = await auth();
 
     if (!userId) {
@@ -96,4 +99,4 @@ export async function getAuthUserOptional(): Promise<AuthUser | null> {
         firstName: user.firstName,
         lastName: user.lastName,
     };
-}
+});

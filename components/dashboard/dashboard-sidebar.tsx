@@ -226,11 +226,15 @@ export function DashboardSidebar({ userId, profile }: DashboardSidebarProps) {
                         pathname.startsWith(item.url))
                     }
                     tooltip={item.title}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      window.location.href = item.url;
+                    }}
                   >
-                    <Link href={item.url}>
+                    <a href={item.url}>
                       <item.icon className="size-4" />
                       <span>{item.title}</span>
-                    </Link>
+                    </a>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}

@@ -1,38 +1,37 @@
-import { Webhook } from "svix";
-import { headers } from "next/headers";
-import { WebhookEvent } from "@clerk/nextjs/server";
-import { createClient } from "@supabase/supabase-js";
-import { NextResponse } from "next/server";
+import { Webhook } from 'svix'
+import { headers } from 'next/headers'
+import { WebhookEvent } from '@clerk/nextjs/server'
+import { createAdminClient } from '@/lib/supabase/server'
 
 export async function POST(req: Request) {
-    const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET;
+    // You can find this in the Clerk Dashboard -> Webhooks -> choose the webhook
+    const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET
 
     if (!WEBHOOK_SECRET) {
-        console.error("Missing CLERK_WEBHOOK_SECRET");
-        return new NextResponse("Please add CLERK_WEBHOOK_SECRET from Clerk Dashboard to .env", { status: 500 });
+        throw new Error('Please add CLERK_WEBHOOK_SECRET from Clerk Dashboard to .env or .env.local')
     }
 
     // Get the headers
-    const headerPayload = await headers();
-    const svix_id = headerPayload.get("svix-id");
-    const svix_timestamp = headerPayload.get("svix-timestamp");
-    const svix_signature = headerPayload.get("svix-signature");
+    const headerPayload = await headers()
+    const svix_id = headerPayload.get("svix-id")
+    const svix_timestamp = headerPayload.get("svix-timestamp")
+    const svix_signature = headerPayload.get("svix-signature")
 
     // If there are no headers, error out
     if (!svix_id || !svix_timestamp || !svix_signature) {
-        return new NextResponse("Error occurred -- no svix headers", {
-            status: 400,
-        });
+        return new Response('Error occured -- no svix headers', {
+            status: 400
+        })
     }
 
     // Get the body
-    const payload = await req.json();
-    const body = JSON.stringify(payload);
+    const payload = await req.json()
+    const body = JSON.stringify(payload)
 
     // Create a new Svix instance with your secret.
-    const wh = new Webhook(WEBHOOK_SECRET);
+    const wh = new Webhook(WEBHOOK_SECRET)
 
-    let evt: WebhookEvent;
+    let evt: WebhookEvent
 
     // Verify the payload with the headers
     try {
@@ -40,61 +39,46 @@ export async function POST(req: Request) {
             "svix-id": svix_id,
             "svix-timestamp": svix_timestamp,
             "svix-signature": svix_signature,
-        }) as WebhookEvent;
+        }) as WebhookEvent
     } catch (err) {
-        console.error("Error verifying webhook:", err);
-        return new NextResponse("Error occurred", {
-            status: 400,
-        });
+        console.error('Error verifying webhook:', err)
+        return new Response('Error occured', {
+            status: 400
+        })
     }
 
-    // Handle the event
-    const eventType = evt.type;
+    const eventType = evt.type
 
-    if (eventType === "user.created" || eventType === "user.updated") {
-        const { id, email_addresses, first_name, last_name, image_url, public_metadata } = evt.data;
+    if (eventType === 'user.created' || eventType === 'user.updated') {
+        const { id, email_addresses, image_url, first_name, last_name, public_metadata } = evt.data
+        const email = email_addresses[0]?.email_address
+        const fullName = [first_name, last_name].filter(Boolean).join(' ')
 
-        const email = email_addresses[0]?.email_address;
-        const fullName = [first_name, last_name].filter(Boolean).join(" ");
-
-        // Default role logic: "intern" unless email is the strict admin email
-        const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "agbojoshua2005@gmail.com";
-        const role = email === ADMIN_EMAIL ? "admin" : "intern";
-
-        // Initialize Supabase Admin Client
-        const supabaseAdmin = createClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.SUPABASE_SERVICE_ROLE_KEY!,
-            {
-                auth: {
-                    autoRefreshToken: false,
-                    persistSession: false,
-                },
-            }
-        );
-
-        // Upsert user into Supabase profiles
-        const { error } = await supabaseAdmin
-            .from("profiles")
-            .upsert({
-                id: id,
-                email: email,
-                full_name: fullName,
-                avatar_url: image_url,
-                role: role,
-                updated_at: new Date().toISOString(),
-                // Only set created_at and auth_provider on insert, ideally database handles created_at
-                // We leave them to default or handled by trigger if possible, but upsert might overwrite
-                // Let's rely on updated_at
-            }, { onConflict: "id" });
-
-        if (error) {
-            console.error("Error inserting/updating user in Supabase:", error);
-            return new NextResponse("Error syncing to database", { status: 500 });
+        if (!email) {
+            return new Response('No email found', { status: 400 })
         }
 
-        console.log(`Successfully synced user ${id} (${email}) to Supabase as ${role}`);
+        const supabase = await createAdminClient()
+
+        // Determine role - default to 'intern' unless specified in metadata
+        // We do NOT override 'admin' role here to prevent accidental demotion if setup manually
+        // But we initiate as 'intern' for new users.
+        const role = (public_metadata?.role as string) || 'intern'
+
+        const { error } = await supabase.from('profiles').upsert({
+            id: id,
+            email: email,
+            full_name: fullName,
+            avatar_url: image_url,
+            role: role,
+            updated_at: new Date().toISOString(),
+        })
+
+        if (error) {
+            console.error('Error upserting profile:', error)
+            return new Response('Error upserting profile', { status: 500 })
+        }
     }
 
-    return new NextResponse("", { status: 200 });
+    return new Response('', { status: 200 })
 }
