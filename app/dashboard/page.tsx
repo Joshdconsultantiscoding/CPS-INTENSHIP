@@ -58,13 +58,16 @@ export default async function DashboardPage() {
       .eq("status", "submitted") // Assuming "submitted" means pending review
       .order("created_at", { ascending: false });
 
-    // Fetch recent activity (mocked if no table yet, or fetch from logs if exists)
-    // For now returning empty array to prevent crash
-    const recentActivity: ActivityLog[] = [];
+    // Fetch recent activity
+    const { data: recentActivityData } = await supabase
+      .from("activity_logs")
+      .select("*, user:profiles(full_name, avatar_url)")
+      .order("created_at", { ascending: false })
+      .limit(5);
 
-    // Map the fetched reports to match DailyReport type if needed, or cast if matches
-    // The select query structure matches standard expectation but we needs to be careful about joins
-    // We will cast for now, assuming types align or are compatible enough for UI
+    const recentActivity = (recentActivityData || []) as unknown as ActivityLog[];
+
+    // Map the fetched reports to match DailyReport type
     const typedReports = (pendingReports || []) as unknown as DailyReport[];
 
     // VAULT GATE SECURITY CHECK

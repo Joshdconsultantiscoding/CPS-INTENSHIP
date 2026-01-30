@@ -25,6 +25,8 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
+import { RealTimeStatsSync } from "@/components/dashboard/real-time-stats-sync";
+
 interface AdminDashboardProps {
   totalInterns: number;
   pendingReports: DailyReport[];
@@ -45,6 +47,7 @@ export function AdminDashboard({
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      <RealTimeStatsSync />
       {/* Welcome Section - Mobile Optimized */}
       <div className="flex flex-col gap-3">
         <div>
