@@ -61,12 +61,24 @@ export function VoiceRecorder({ onRecordingComplete, onCancel }: VoiceRecorderPr
     const handleStopAndSend = () => {
         if (!mediaRecorderRef.current) return;
 
-        mediaRecorderRef.current.onstop = () => {
-            const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-            const file = new File([blob], "voice-message.webm", { type: "audio/webm" });
+        const mimeType = [
+            'audio/webm;codecs=opus',
+            'audio/webm',
+            'audio/mp4',
+            'audio/ogg'
+        ].find(type => MediaRecorder.isTypeSupported(type)) || '';
+
+        // Clean event listener before stopping to prevent duplicates
+        mediaRecorderRef.current.onstop = null;
+
+        mediaRecorderRef.current.addEventListener('stop', () => {
+            const blob = new Blob(chunksRef.current, { type: mimeType });
+            // Create file with correct extension
+            const ext = mimeType.includes('mp4') ? 'm4a' : mimeType.includes('ogg') ? 'ogg' : 'webm';
+            const file = new File([blob], `voice-message.${ext}`, { type: mimeType });
             onRecordingComplete(file);
             stopRecordingCleanup();
-        };
+        }, { once: true });
 
         mediaRecorderRef.current.stop();
     };

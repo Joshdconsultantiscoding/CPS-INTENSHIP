@@ -8,27 +8,40 @@ export const metadata = {
 };
 
 export default async function NewTaskPage() {
-    const user = await getAuthUser();
-    const supabase = await createClient();
+    try {
+        const user = await getAuthUser();
+        console.log("[New Task Page] Authenticated user:", { id: user.id, email: user.email, role: user.role });
 
-    const { data: profile } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .single();
+        // Only admins can create tasks
+        if (user.role !== "admin") {
+            console.warn("[New Task Page] Non-admin user attempted to access:", user.email);
+            redirect("/dashboard/tasks");
+        }
 
-    // Only admins can create tasks
-    if (profile?.role !== "admin") {
+        const supabase = await createClient();
+
+        // Get interns list with better error handling
+        const { data: interns, error: internsError } = await supabase
+            .from("profiles")
+            .select("id, full_name, email")
+            .eq("role", "intern")
+            .eq("status", "active")
+            .order("full_name", { ascending: true });
+
+        if (internsError) {
+            console.error("[New Task Page] Error fetching interns:", internsError);
+        }
+
+        console.log("[New Task Page] Found interns:", interns?.length || 0);
+
+        return <TaskCreationPage userId={user.id} interns={interns || []} />;
+    } catch (error) {
+        console.error("[New Task Page] Critical error:", error);
+        // Re-throw redirect errors
+        if (error && typeof error === 'object' && 'digest' in error) {
+            throw error;
+        }
+        // For other errors, redirect to tasks page
         redirect("/dashboard/tasks");
     }
-
-    // Get interns list
-    const { data: interns } = await supabase
-        .from("profiles")
-        .select("id, full_name, email")
-        .eq("role", "intern")
-        .eq("status", "active")
-        .order("full_name", { ascending: true });
-
-    return <TaskCreationPage userId={user.id} interns={interns || []} />;
 }

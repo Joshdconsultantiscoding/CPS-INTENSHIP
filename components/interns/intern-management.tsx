@@ -55,6 +55,8 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { useRouter } from "next/navigation";
+import { usePresence } from "ably/react";
+import { useAbly } from "@/providers/ably-provider";
 
 interface UserStats {
   totalTasks: number;
@@ -71,6 +73,8 @@ interface UserStats {
 interface UserProfile {
   id: string;
   email: string;
+  first_name: string | null;
+  last_name: string | null;
   full_name: string | null;
   avatar_url: string | null;
   role: string;
@@ -106,31 +110,17 @@ export function InternManagement({
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [filter, setFilter] = useState<"all" | "online" | "offline" | "interns" | "admins">("all");
   const [onlineUsersSet, setOnlineUsersSet] = useState<Set<string>>(new Set());
+  const { isConfigured, client: ablyClient } = useAbly();
   const supabase = createClient();
   const router = useRouter();
 
-  // Real-time presence tracking
+  // Presence is now handled by the AblyPresenceSync sub-component below
+  // which is only rendered if Ably is configured.
+
+  // Secondary subscription for profile data updates (names, points, etc.)
   useEffect(() => {
-    const channel = supabase.channel("presence_tracking_admin", {
-      config: {
-        presence: {
-          key: currentUserId,
-        },
-      },
-    });
-
-    channel
-      .on("presence", { event: "sync" }, () => {
-        const state = channel.presenceState();
-        const p = new Set<string>();
-        Object.keys(state).forEach((k) => p.add(k));
-        setOnlineUsersSet(p);
-      })
-      .subscribe();
-
-    // Subscribe to profile changes for data updates
     const profileSubscription = supabase
-      .channel("profile-changes")
+      .channel("profile-management-updates")
       .on(
         "postgres_changes",
         {
@@ -149,16 +139,17 @@ export function InternManagement({
       .subscribe();
 
     return () => {
-      channel.unsubscribe();
       profileSubscription.unsubscribe();
     };
   }, [supabase]);
 
   // Filter users
   const filteredUsers = users.filter((user) => {
-    const isActuallyOnline = onlineUsersSet.has(user.id) || user.online_status === "online";
+    const isActuallyOnline = onlineUsersSet.has(user.id);
     const matchesSearch =
       user.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      user.first_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      user.last_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.department?.toLowerCase().includes(searchQuery.toLowerCase());
 
@@ -180,7 +171,7 @@ export function InternManagement({
 
   // Stats
   const totalUsers = users.length;
-  const onlineUsersCount = users.filter((u) => onlineUsersSet.has(u.id) || u.online_status === "online").length;
+  const onlineUsersCount = users.filter((u) => onlineUsersSet.has(u.id)).length;
   const totalInterns = users.filter((u) => u.role === "intern").length;
   const totalAdmins = users.filter((u) => u.role === "admin").length;
 
@@ -229,6 +220,11 @@ export function InternManagement({
 
   return (
     <div className="space-y-6">
+      {/* Ably Presence Sync (Conditional) */}
+      {isConfigured && ablyClient && (
+        <AblyPresenceSync onUpdateOnlineSet={setOnlineUsersSet} />
+      )}
+
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight">User Management</h1>
@@ -367,16 +363,19 @@ export function InternManagement({
                             <Avatar className="h-10 w-10">
                               <AvatarImage src={user.avatar_url || undefined} />
                               <AvatarFallback>
-                                {user.full_name?.[0] || user.email[0].toUpperCase()}
+                                {user.first_name?.[0] || user.full_name?.[0] || user.email[0].toUpperCase()}
+                                {user.last_name?.[0]}
                               </AvatarFallback>
                             </Avatar>
-                            {(onlineUsersSet.has(user.id) || user.online_status === "online") && (
+                            {onlineUsersSet.has(user.id) && (
                               <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 border-2 border-background" />
                             )}
                           </div>
                           <div>
                             <div className="font-medium">
-                              {user.full_name || "No name"}
+                              {user.first_name || user.last_name
+                                ? `${user.first_name || ""} ${user.last_name || ""}`.trim()
+                                : user.full_name || "No name"}
                             </div>
                             <div className="text-sm text-muted-foreground">
                               {user.email}
@@ -503,20 +502,23 @@ export function InternManagement({
                     <Avatar className="h-20 w-20">
                       <AvatarImage src={selectedUser.avatar_url || undefined} />
                       <AvatarFallback className="text-2xl">
-                        {selectedUser.full_name?.[0] || selectedUser.email[0].toUpperCase()}
+                        {selectedUser.first_name?.[0] || selectedUser.full_name?.[0] || selectedUser.email[0].toUpperCase()}
+                        {selectedUser.last_name?.[0]}
                       </AvatarFallback>
                     </Avatar>
-                    {selectedUser.online_status === "online" && (
+                    {onlineUsersSet.has(selectedUser.id) && (
                       <span className="absolute bottom-1 right-1 h-4 w-4 rounded-full bg-green-500 border-2 border-background" />
                     )}
                   </div>
                   <div className="flex-1">
                     <h3 className="text-xl font-semibold">
-                      {selectedUser.full_name || "No name"}
+                      {selectedUser.first_name || selectedUser.last_name
+                        ? `${selectedUser.first_name || ""} ${selectedUser.last_name || ""}`.trim()
+                        : selectedUser.full_name || "No name"}
                     </h3>
                     <p className="text-muted-foreground">{selectedUser.email}</p>
                     <div className="flex items-center gap-2 mt-2">
-                      {getOnlineStatusBadge(selectedUser.online_status, selectedUser.last_seen_at)}
+                      {getOnlineStatusBadge(onlineUsersSet.has(selectedUser.id) ? "online" : selectedUser.online_status, selectedUser.last_seen_at)}
                       <Badge variant={selectedUser.role === "admin" ? "default" : "secondary"}>
                         {selectedUser.role}
                       </Badge>
@@ -733,4 +735,26 @@ export function InternManagement({
       </Dialog>
     </div>
   );
+}
+
+// Sub-component to safely use Ably hooks only when configured
+function AblyPresenceSync({
+  onUpdateOnlineSet,
+}: {
+  onUpdateOnlineSet: (set: Set<string>) => void;
+}) {
+  const { presenceData } = usePresence({ channelName: "global" });
+
+  useEffect(() => {
+    if (!presenceData) return;
+    const p = new Set<string>();
+    presenceData.forEach((item) => {
+      if (item.clientId) {
+        p.add(item.clientId);
+      }
+    });
+    onUpdateOnlineSet(p);
+  }, [presenceData, onUpdateOnlineSet]);
+
+  return null;
 }

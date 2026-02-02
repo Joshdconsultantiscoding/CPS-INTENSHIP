@@ -101,25 +101,27 @@ export function CalendarView({ events, userId, isAdmin }: CalendarViewProps) {
     const isPublic = formData.get("isPublic") === "on";
 
     try {
-      const supabase = createClient();
-      const { error } = await supabase.from("calendar_events").insert({
-        user_id: userId,
+      // Use Server Action
+      const { createEventAction } = await import("@/app/actions/calendar");
+      const result = await createEventAction({
         title,
         description,
-        event_type: eventType,
-        start_time: startTime,
-        end_time: endTime || null,
-        location: location || null,
-        is_public: isPublic,
+        eventType,
+        startTime,
+        endTime,
+        location,
+        isPublic,
       });
 
-      if (error) throw error;
+      if (!result.success) throw new Error(result.error);
 
       toast.success("Event created successfully");
       setIsDialogOpen(false);
       router.refresh();
-    } catch {
-      toast.error("Failed to create event");
+      // Reset form if needed, but Dialog closes so it's fine
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error.message || "Failed to create event");
     } finally {
       setIsSubmitting(false);
     }
@@ -357,7 +359,7 @@ export function CalendarView({ events, userId, isAdmin }: CalendarViewProps) {
           </CardHeader>
           <CardContent>
             {events.filter((e) => new Date(e.start_time) >= new Date()).length ===
-            0 ? (
+              0 ? (
               <p className="text-center text-sm text-muted-foreground">
                 No upcoming events
               </p>

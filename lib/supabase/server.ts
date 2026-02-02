@@ -9,9 +9,17 @@ import { cookies } from 'next/headers'
 export async function createClient() {
   const cookieStore = await cookies()
 
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+
+  if (!url || !key) {
+    console.error("Supabase Client Error: Missing URL or Anon Key");
+    throw new Error("Missing Supabase configuration");
+  }
+
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!.trim(),
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!.trim(),
+    url,
+    key,
     {
       cookies: {
         getAll() {
@@ -41,9 +49,17 @@ export async function createClient() {
 export async function createAdminClient() {
   const cookieStore = await cookies()
 
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+
+  if (!url || !key) {
+    console.error("Supabase Admin Client Error: Missing URL or Service Role Key");
+    throw new Error("Missing Supabase configuration");
+  }
+
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!.trim(),
-    process.env.SUPABASE_SERVICE_ROLE_KEY!.trim(),
+    url,
+    key,
     {
       cookies: {
         getAll() {

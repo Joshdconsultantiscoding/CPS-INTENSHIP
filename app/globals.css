@@ -50,6 +50,18 @@
   --radius-md: 0.5rem;
   --radius-lg: 0.625rem;
   --radius-xl: 1rem;
+
+  @keyframes ripple {
+    0% {
+      transform: scale(0.5);
+      opacity: 0.8;
+    }
+    100% {
+      transform: scale(1.5);
+      opacity: 0;
+    }
+  }
+  --animate-ripple: ripple 3s linear infinite;
 }
 
 @layer base {

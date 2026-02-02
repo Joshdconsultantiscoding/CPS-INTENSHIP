@@ -37,9 +37,12 @@ import {
   LogOut,
   Briefcase,
   Users,
+  Users2,
   Sparkles,
   ChevronUp,
   Bell,
+  CalendarDays, // New icon for Events
+  GraduationCap,
 } from "lucide-react";
 import { usePortalSettings, type PortalSettings } from "@/hooks/use-portal-settings";
 import Link from "next/link";
@@ -69,6 +72,21 @@ const internNavItems = [
     title: "Messages",
     url: "/dashboard/messages",
     icon: MessageSquare,
+  },
+  {
+    title: "Community",
+    url: "/dashboard/community",
+    icon: Users2,
+  },
+  {
+    title: "Classroom",
+    url: "/dashboard/classroom",
+    icon: GraduationCap,
+  },
+  {
+    title: "Events",
+    url: "/dashboard/events",
+    icon: CalendarDays,
   },
   {
     title: "Calendar",
@@ -119,6 +137,21 @@ const adminNavItems = [
     icon: MessageSquare,
   },
   {
+    title: "Community",
+    url: "/dashboard/community",
+    icon: Users2,
+  },
+  {
+    title: "Classroom",
+    url: "/dashboard/classroom",
+    icon: GraduationCap,
+  },
+  {
+    title: "Events",
+    url: "/dashboard/events",
+    icon: CalendarDays,
+  },
+  {
     title: "Calendar",
     url: "/dashboard/calendar",
     icon: Calendar,
@@ -149,8 +182,8 @@ export function DashboardSidebar({ userId, profile }: DashboardSidebarProps) {
   const pathname = usePathname();
   const { signOut } = useClerk();
   const { user } = useUser();
-  const isAdmin = profile?.role?.toLowerCase() === "admin";
-  const { settings } = usePortalSettings();
+  const { settings: portalSettings } = usePortalSettings();
+  const isAdmin = profile?.role === "admin";
 
   const settingKeyMap: Record<string, keyof PortalSettings | null> = {
     "Dashboard": null,
@@ -159,7 +192,8 @@ export function DashboardSidebar({ userId, profile }: DashboardSidebarProps) {
     "Daily Reports": "reports_enabled",
     "Reports": "reports_enabled",
     "Messages": "messages_enabled",
-    "Calendar": "calendar_enabled",
+    "Events": "calendar_enabled",
+    "Calendar": "calendar_enabled", // Share restriction with calendar for now, or add new setting later
     "Analytics": "performance_enabled",
     "Performance": "performance_enabled",
     "Rewards": "rewards_enabled",
@@ -170,7 +204,7 @@ export function DashboardSidebar({ userId, profile }: DashboardSidebarProps) {
   const navItems = (isAdmin ? adminNavItems : internNavItems).filter(item => {
     if (isAdmin) return true;
     const settingKey = settingKeyMap[item.title];
-    if (settingKey && settings[settingKey] === false) {
+    if (settingKey && portalSettings[settingKey] === false) {
       return false;
     }
     return true;
@@ -197,11 +231,15 @@ export function DashboardSidebar({ userId, profile }: DashboardSidebarProps) {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <Link href="/dashboard">
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                  <Briefcase className="size-4" />
+                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground overflow-hidden">
+                  {portalSettings.company_logo_url ? (
+                    <img src={portalSettings.company_logo_url} alt={portalSettings.company_name} className="size-full object-cover" />
+                  ) : (
+                    <Briefcase className="size-4" />
+                  )}
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold">InternHub</span>
+                  <span className="truncate font-semibold">{portalSettings.company_name || "InternHub"}</span>
                   <span className="truncate text-xs text-muted-foreground">
                     {isAdmin ? "Admin Portal" : "Intern Portal"}
                   </span>
@@ -226,15 +264,11 @@ export function DashboardSidebar({ userId, profile }: DashboardSidebarProps) {
                         pathname.startsWith(item.url))
                     }
                     tooltip={item.title}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      window.location.href = item.url;
-                    }}
                   >
-                    <a href={item.url}>
+                    <Link href={item.url}>
                       <item.icon className="size-4" />
                       <span>{item.title}</span>
-                    </a>
+                    </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
@@ -281,12 +315,12 @@ export function DashboardSidebar({ userId, profile }: DashboardSidebarProps) {
                       alt={profile?.full_name || "User"}
                     />
                     <AvatarFallback className="rounded-lg">
-                      {getInitials(profile?.full_name || "User")}
+                      {profile?.first_name?.[0]}{profile?.last_name?.[0]}
                     </AvatarFallback>
                   </Avatar>
                   <div className="grid flex-1 text-left text-sm leading-tight">
                     <span className="truncate font-semibold">
-                      {profile?.full_name || user?.fullName || "User"}
+                      {profile?.first_name} {profile?.last_name}
                     </span>
                     <span className="truncate text-xs text-muted-foreground" suppressHydrationWarning>
                       {user?.emailAddresses[0]?.emailAddress}
@@ -309,15 +343,15 @@ export function DashboardSidebar({ userId, profile }: DashboardSidebarProps) {
                         alt={profile?.full_name || "User"}
                       />
                       <AvatarFallback className="rounded-lg">
-                        {getInitials(profile?.full_name || "User")}
+                        {profile?.first_name?.[0]}{profile?.last_name?.[0]}
                       </AvatarFallback>
                     </Avatar>
                     <div className="grid flex-1 text-left text-sm leading-tight">
                       <span className="truncate font-semibold">
-                        {profile?.full_name || user?.fullName || "User"}
+                        {profile?.first_name} {profile?.last_name}
                       </span>
                       <span className="truncate text-xs text-muted-foreground">
-                        {user?.emailAddresses[0]?.emailAddress}
+                        {profile?.email}
                       </span>
                     </div>
                   </div>

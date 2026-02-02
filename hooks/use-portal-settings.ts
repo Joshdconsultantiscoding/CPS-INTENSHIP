@@ -11,6 +11,8 @@ export interface PortalSettings {
     performance_enabled: boolean;
     rewards_enabled: boolean;
     ai_assistant_enabled: boolean;
+    company_name?: string;
+    company_logo_url?: string;
 }
 
 const defaultSettings: PortalSettings = {
@@ -21,6 +23,7 @@ const defaultSettings: PortalSettings = {
     performance_enabled: true,
     rewards_enabled: true,
     ai_assistant_enabled: true,
+    company_name: "InternHub",
 };
 
 export function usePortalSettings() {

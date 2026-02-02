@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import type { DailyReport, ActivityLog } from "@/lib/types";
+import { EventsWidget } from "@/components/dashboard/events-widget";
+import type { DailyReport, ActivityLog, CalendarEvent } from "@/lib/types";
 import {
   Card,
   CardContent,
@@ -33,6 +34,7 @@ interface AdminDashboardProps {
   completedTasks: number;
   pendingTasks: number;
   recentActivity: ActivityLog[];
+  events: CalendarEvent[];
 }
 
 export function AdminDashboard({
@@ -41,6 +43,7 @@ export function AdminDashboard({
   completedTasks,
   pendingTasks,
   recentActivity,
+  events,
 }: AdminDashboardProps) {
   const totalTasks = completedTasks + pendingTasks;
   const taskCompletionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
@@ -55,6 +58,11 @@ export function AdminDashboard({
           <p className="text-sm text-muted-foreground">
             Overview of your intern management
           </p>
+        </div>
+
+        {/* Events Widget - Desktop Placement */}
+        <div className="hidden lg:block">
+          <EventsWidget events={events} />
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" asChild className="flex-1 sm:flex-none bg-transparent">

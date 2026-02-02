@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { AdminDashboard } from "@/components/dashboard/admin-dashboard";
 import { InternDashboard } from "@/components/dashboard/intern-dashboard";
 import { redirect } from "next/navigation";
-import type { DailyReport, ActivityLog, Task, Notification } from "@/lib/types";
+import type { DailyReport, ActivityLog, Task, Notification, CalendarEvent } from "@/lib/types";
 import { AdminVaultGate } from "@/components/dashboard/admin-vault-gate";
 
 export default async function DashboardPage() {
@@ -15,6 +15,8 @@ export default async function DashboardPage() {
     id: user.id,
     email: user.email || "",
     full_name: user.full_name || "User",
+    first_name: user.full_name?.split(" ")[0] || "User",
+    last_name: user.full_name?.split(" ")[1] || "",
     avatar_url: user.avatar_url,
     role: user.role,
     department: null,
@@ -35,37 +37,26 @@ export default async function DashboardPage() {
   };
 
   if (user.role === "admin") {
-    // Fetch real stats for admin
-    const { count: internCount } = await supabase
-      .from("profiles")
-      .select("*", { count: "exact", head: true })
-      .eq("role", "intern");
-
-    const { count: completedTasksCount } = await supabase
-      .from("tasks")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "completed");
-
-    const { count: pendingTasksCount } = await supabase
-      .from("tasks")
-      .select("*", { count: "exact", head: true })
-      .neq("status", "completed");
-
-    // Fetch actual pending reports
-    const { data: pendingReports } = await supabase
-      .from("daily_reports")
-      .select("*, user:profiles(full_name, avatar_url), tasks:report_tasks(*)")
-      .eq("status", "submitted") // Assuming "submitted" means pending review
-      .order("created_at", { ascending: false });
-
-    // Fetch recent activity
-    const { data: recentActivityData } = await supabase
-      .from("activity_logs")
-      .select("*, user:profiles(full_name, avatar_url)")
-      .order("created_at", { ascending: false })
-      .limit(5);
+    const now = new Date().toISOString();
+    // Fetch all admin data in parallel to eliminate waterfalls
+    const [
+      { count: internCount },
+      { count: completedTasksCount },
+      { count: pendingTasksCount },
+      { data: pendingReports },
+      { data: recentActivityData },
+      { data: eventsData }
+    ] = (await Promise.all([
+      supabase.from("profiles").select("*", { count: "exact", head: true }).eq("role", "intern"),
+      supabase.from("tasks").select("*", { count: "exact", head: true }).eq("status", "completed"),
+      supabase.from("tasks").select("*", { count: "exact", head: true }).neq("status", "completed"),
+      supabase.from("daily_reports").select("*, user:profiles(full_name, avatar_url), tasks:report_tasks(*)").eq("status", "submitted").order("created_at", { ascending: false }),
+      supabase.from("activity_logs").select("*, user:profiles(full_name, avatar_url)").order("created_at", { ascending: false }).limit(5),
+      supabase.from("calendar_events").select("*").gte("start_time", now).order("start_time", { ascending: true }).limit(5)
+    ])) as any[];
 
     const recentActivity = (recentActivityData || []) as unknown as ActivityLog[];
+    const events = (eventsData || []) as unknown as CalendarEvent[];
 
     // Map the fetched reports to match DailyReport type
     const typedReports = (pendingReports || []) as unknown as DailyReport[];
@@ -98,25 +89,22 @@ export default async function DashboardPage() {
         completedTasks={completedTasksCount || 0}
         pendingTasks={pendingTasksCount || 0}
         recentActivity={recentActivity}
+        events={events}
       />
     );
   } else {
-    // Intern view - Fetch Data
-    const { data: tasks } = await supabase
-      .from("tasks")
-      .select("*")
-      .eq("assigned_to", user.id)
-      .order("due_date", { ascending: true });
-
-    const { data: reports } = await supabase
-      .from("daily_reports")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
+    const nowIso = new Date().toISOString();
+    // Intern view - Fetch Data in parallel
+    const [{ data: tasks }, { data: reports }, { data: eventsData }] = (await Promise.all([
+      supabase.from("tasks").select("*").eq("assigned_to", user.id).order("due_date", { ascending: true }),
+      supabase.from("daily_reports").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
+      supabase.from("calendar_events").select("*").or(`is_public.eq.true,user_id.eq.${user.id}`).gte("start_time", nowIso).order("start_time", { ascending: true }).limit(5)
+    ])) as any[];
 
     // Calculate stats
     const typedTasks = (tasks || []) as unknown as Task[];
     const typedReports = (reports || []) as unknown as DailyReport[];
+    const events = (eventsData || []) as unknown as CalendarEvent[];
 
     const completedTasks = typedTasks.filter(t => t.status === 'completed').length;
     const pendingTasks = typedTasks.filter(t => t.status === 'pending' || t.status === 'in_progress').length;
@@ -139,6 +127,7 @@ export default async function DashboardPage() {
         overdueTasks={overdueTasks}
         unreadMessages={unreadMessages}
         notifications={notifications}
+        events={events}
       />
     );
   }

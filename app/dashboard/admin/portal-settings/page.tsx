@@ -13,7 +13,9 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Loader2, Settings, Save } from "lucide-react";
+import { Loader2, Settings, Save, Building2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { ImageUpload } from "@/components/ui/image-upload";
 
 interface PortalSettings {
   tasks_enabled: boolean;
@@ -22,7 +24,10 @@ interface PortalSettings {
   calendar_enabled: boolean;
   performance_enabled: boolean;
   rewards_enabled: boolean;
+  rewards_enabled: boolean;
   ai_assistant_enabled: boolean;
+  company_name?: string;
+  company_logo_url?: string;
 }
 
 const defaultSettings: PortalSettings = {
@@ -33,6 +38,7 @@ const defaultSettings: PortalSettings = {
   performance_enabled: true,
   rewards_enabled: true,
   ai_assistant_enabled: true,
+  company_name: "InternHub",
 };
 
 export default function PortalSettingsPage() {
@@ -61,7 +67,7 @@ export default function PortalSettingsPage() {
   const saveSettings = async () => {
     setSaving(true);
     const supabase = createClient();
-    
+
     const { error } = await supabase
       .from("api_settings")
       .upsert({
@@ -110,6 +116,44 @@ export default function PortalSettingsPage() {
           Save Changes
         </Button>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Building2 className="h-5 w-5" />
+            Branding & Identity
+          </CardTitle>
+          <CardDescription>
+            Customize how your portal appears to interns
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-2">
+            <Label htmlFor="company_name">Company Name</Label>
+            <Input
+              id="company_name"
+              placeholder="e.g., Acme Corp"
+              value={settings.company_name || ""}
+              onChange={(e) => setSettings(prev => ({ ...prev, company_name: e.target.value }))}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Company Logo</Label>
+            <ImageUpload
+              bucket="portal-assets"
+              folder="branding"
+              aspectRatio={1}
+              initialImage={settings.company_logo_url}
+              onUploadComplete={(url) => setSettings(prev => ({ ...prev, company_logo_url: url }))}
+              label="Upload Company Logo"
+            />
+            <p className="text-sm text-muted-foreground">
+              This logo will appear in the sidebar and dashboard header.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

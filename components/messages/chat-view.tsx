@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import { getSyncedTime } from "@/lib/time";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import {
     Send,
     ArrowLeft,
@@ -12,36 +12,34 @@ import {
     Video,
     MoreVertical,
     Bot,
-    Sparkles,
     Hash,
     Check,
     CheckCheck,
     Clock,
     Paperclip,
-    FileIcon,
     ImageIcon,
     Mic,
     Camera,
-    Headphones,
     FileText,
     User as UserIcon,
     BarChart2,
-    Calendar
+    Calendar,
+    X,
+    Maximize2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { Message, Channel, Profile } from "@/lib/types";
+import type { Message, Channel } from "@/lib/types";
 import { OnlineIndicator } from "./online-indicator";
 import { Loader2 } from "lucide-react";
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { VoiceRecorder } from "./voice-recorder";
 import { toast } from "sonner";
+import { CldUploadWidget } from "next-cloudinary";
 
 interface AIMessage {
     id: string;
@@ -61,11 +59,15 @@ interface ChatViewProps {
     newMessage: string;
     aiTyping: boolean;
     isUploading?: boolean;
-    onSendMessage: (e: React.FormEvent) => void;
+    onSendMessage: (e?: React.FormEvent, attachmentUrl?: string) => void;
     onNewMessageChange: (value: string) => void;
     onFileSelect?: (file: File) => void;
     onCloseChat: () => void;
     onStartCall: (type: "voice" | "video") => void;
+    onViewContact?: () => void;
+    onClearMessages?: () => void;
+    onMute?: (muted: boolean) => void;
+    isOnline?: boolean;
 }
 
 function formatTime(date: Date | string): string {
@@ -74,38 +76,47 @@ function formatTime(date: Date | string): string {
 }
 
 function formatLastSeen(dateStr: string | null | undefined): string {
-    if (!dateStr) return "long time ago";
+    if (!dateStr) return "offline";
     const date = new Date(dateStr);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMins / 60);
-    const diffDays = Math.floor(diffHours / 24);
+    const now = getSyncedTime();
 
-    if (diffMins < 1) return "just now";
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays === 1) return "yesterday";
-    return date.toLocaleDateString();
+    // Day comparison using normalized date strings
+    const dateDay = date.toDateString();
+    const nowDay = now.toDateString();
+
+    // Check if it was yesterday
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayDay = yesterday.toDateString();
+
+    const timeStr = date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: true });
+
+    if (dateDay === nowDay) return `today at ${timeStr}`;
+    if (dateDay === yesterdayDay) return `yesterday at ${timeStr}`;
+
+    return `${date.toLocaleDateString()} at ${timeStr}`;
 }
 
 function MessageStatus({ status, isRead }: { status: string; isRead: boolean }) {
     if (isRead || status === "read") {
-        return <CheckCheck className="h-3.5 w-3.5 text-blue-500" />; // Blue for Read
+        return <CheckCheck className="h-3.5 w-3.5 text-blue-500" />;
     }
     if (status === "delivered") {
-        return <CheckCheck className="h-3.5 w-3.5 text-muted-foreground" />; // Double Grey for Delivered
+        return <CheckCheck className="h-3.5 w-3.5 text-muted-foreground" />;
     }
     if (status === "sent") {
-        return <Check className="h-3.5 w-3.5 text-muted-foreground" />; // Single Grey for Sent
+        return <Check className="h-3.5 w-3.5 text-muted-foreground" />;
     }
     return <Clock className="h-3 w-3 text-muted-foreground/70" />;
 }
 
-function getInitials(name: string | null, email: string) {
-    return name
-        ? name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
-        : email[0].toUpperCase();
+function getInitials(profile: any) {
+    if (profile.first_name || profile.last_name) {
+        return `${profile.first_name?.[0] || ""}${profile.last_name?.[0] || ""}`.toUpperCase();
+    }
+    return profile.full_name
+        ? profile.full_name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
+        : profile.email ? profile.email[0].toUpperCase() : "?";
 }
 
 export function ChatView({
@@ -123,12 +134,16 @@ export function ChatView({
     onFileSelect,
     onCloseChat,
     onStartCall,
+    onViewContact,
+    onClearMessages,
+    onMute,
+    isOnline = false,
 }: ChatViewProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
     const chatContainerRef = useRef<HTMLDivElement>(null);
     const [isRecording, setIsRecording] = useState(false);
+    const [previewImage, setPreviewImage] = useState<string | null>(null);
 
     const scrollToBottom = () => {
         if (chatContainerRef.current) {
@@ -138,28 +153,21 @@ export function ChatView({
 
     useEffect(() => {
         scrollToBottom();
-    }, [messages, aiMessages, isRecording]);
-
-    const isOnline = (user: any) => user?.online_status === "online";
-
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            onFileSelect?.(e.target.files[0]);
-        }
-        e.target.value = "";
-    };
-
-    const triggerFileUpload = (accept: string) => {
-        if (fileInputRef.current) {
-            fileInputRef.current.accept = accept;
-            fileInputRef.current.click();
-        }
-    };
+    }, [messages, aiMessages, isRecording, aiTyping]);
 
     return (
-        <div className="flex flex-col h-full bg-[#f0f2f5] dark:bg-background">
+        <div className="flex flex-col h-full bg-[#efeae2] dark:bg-[#0b141a] relative overflow-hidden">
+            {/* Professional Background Pattern */}
+            <div
+                className="absolute inset-0 opacity-[0.06] dark:opacity-[0.04] pointer-events-none"
+                style={{
+                    backgroundImage: `url("https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png")`,
+                    backgroundSize: '400px'
+                }}
+            />
+
             {/* Chat Header */}
-            <div className="sticky top-0 z-10 flex items-center gap-3 px-4 py-3 border-b bg-background/95 backdrop-blur-md shadow-sm">
+            <div className="sticky top-0 z-20 flex items-center gap-3 px-4 py-2 border-b bg-[#f0f2f5] dark:bg-[#202c33] shadow-sm">
                 <Button
                     variant="ghost"
                     size="icon"
@@ -169,55 +177,66 @@ export function ChatView({
                     <ArrowLeft className="h-5 w-5" />
                 </Button>
 
-                <div className="relative shrink-0">
+                <div className="relative shrink-0 cursor-pointer group" onClick={() => { }}>
                     {isAIChat ? (
-                        <div className="relative flex-shrink-0 transition-transform group-hover:scale-105">
-                            <Avatar className="h-14 w-14 bg-linear-to-tr from-primary via-primary/80 to-primary/60 shadow-md">
-                                <AvatarFallback className="bg-transparent text-white">
-                                    <Bot className="h-6 w-6" />
-                                </AvatarFallback>
-                            </Avatar>
-                        </div>
+                        <Avatar className="h-10 w-10 bg-linear-to-tr from-primary to-primary/60 border border-white/10">
+                            <AvatarFallback className="bg-transparent text-white">
+                                <Bot className="h-5 w-5" />
+                            </AvatarFallback>
+                        </Avatar>
                     ) : selectedUser ? (
-                        <Avatar className="h-11 w-11 shadow-sm border-2 border-background">
+                        <Avatar className="h-10 w-10 border border-white/10 group-hover:opacity-90 transition-opacity">
                             <AvatarImage src={selectedUser.avatar_url || ""} />
-                            <AvatarFallback className="bg-muted text-muted-foreground text-base">
-                                {getInitials(selectedUser.full_name, selectedUser.email)}
+                            <AvatarFallback className="bg-slate-400 text-white text-sm">
+                                {getInitials(selectedUser)}
                             </AvatarFallback>
                         </Avatar>
                     ) : (
-                        <div className="h-11 w-11 rounded-2xl bg-muted/80 flex items-center justify-center border-2 border-background shadow-sm">
-                            <Hash className="h-6 w-6 text-muted-foreground" />
+                        <div className="h-10 w-10 rounded-full bg-slate-500 flex items-center justify-center border border-white/10">
+                            <Hash className="h-5 w-5 text-white" />
                         </div>
                     )}
                     {selectedUser && !isAIChat && (
-                        <OnlineIndicator status={isOnline(selectedUser) ? "online" : "offline"} size="md" />
+                        <OnlineIndicator status={isOnline ? "online" : "offline"} size="sm" />
                     )}
                 </div>
 
                 <div className="flex-1 min-w-0">
-                    <h2 className="font-bold text-base truncate text-foreground leading-tight">
+                    <h2 className="font-semibold text-base truncate text-foreground leading-tight">
                         {isAIChat
                             ? "HG Core Agent"
-                            : selectedUser?.full_name || selectedUser?.email || selectedChannel?.name}
+                            : (selectedUser?.first_name || selectedUser?.last_name)
+                                ? `${selectedUser.first_name || ""} ${selectedUser.last_name || ""}`.trim()
+                                : selectedUser?.full_name || selectedUser?.email || selectedChannel?.name}
                     </h2>
-                    <p className="text-[11px] font-bold text-muted-foreground/80 truncate uppercase tracking-wider">
-                        {isAIChat
-                            ? "AI Response Active"
-                            : selectedUser
-                                ? isOnline(selectedUser)
-                                    ? "Online Now"
-                                    : `Active ${formatLastSeen(selectedUser.last_seen_at)}`
-                                : "Shared Channel"}
-                    </p>
+                    <div className="flex items-center gap-1.5 h-4">
+                        {aiTyping ? (
+                            <span className="text-xs text-green-600 dark:text-green-400 font-medium animate-pulse">typing...</span>
+                        ) : (
+                            <div className="text-[11px] text-muted-foreground truncate uppercase tracking-widest font-bold">
+                                {isAIChat
+                                    ? "AI Assistant Active"
+                                    : selectedUser ? (
+                                        isOnline ? (
+                                            <span className="text-green-600 font-medium flex items-center gap-1">
+                                                <span className="block h-2 w-2 rounded-full bg-green-600 animate-pulse" />
+                                                Online
+                                            </span>
+                                        ) : (
+                                            <span>LAST SEEN {formatLastSeen(selectedUser.last_seen_at)}</span>
+                                        )
+                                    ) : "Community Group"}
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {selectedUser && !isAIChat && (
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1">
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-10 w-10 text-muted-foreground hover:bg-muted/80 hover:text-primary rounded-full transition-colors"
+                            className="h-10 w-10 text-muted-foreground hover:bg-black/5 dark:hover:bg-white/5 rounded-full"
                             onClick={() => onStartCall("video")}
                         >
                             <Video className="h-5 w-5" />
@@ -225,88 +244,81 @@ export function ChatView({
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-10 w-10 text-muted-foreground hover:bg-muted/80 hover:text-primary rounded-full transition-colors"
+                            className="h-10 w-10 text-muted-foreground hover:bg-black/5 dark:hover:bg-white/5 rounded-full"
                             onClick={() => onStartCall("voice")}
                         >
                             <Phone className="h-5 w-5" />
                         </Button>
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-10 w-10 text-muted-foreground hover:bg-muted/80 rounded-full transition-colors">
+                                <Button variant="ghost" size="icon" className="h-10 w-10 text-muted-foreground hover:bg-black/5 dark:hover:bg-white/5 rounded-full">
                                     <MoreVertical className="h-5 w-5" />
                                 </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuItem>View Profile</DropdownMenuItem>
-                                <DropdownMenuItem>Search Chat</DropdownMenuItem>
-                                <DropdownMenuItem className="text-destructive">Mute Notifications</DropdownMenuItem>
+                            <DropdownMenuContent align="end" className="w-48">
+                                <DropdownMenuItem onClick={onViewContact}>Contact info</DropdownMenuItem>
+                                <DropdownMenuItem>Select messages</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => onMute?.(true)}>Mute notifications</DropdownMenuItem>
+                                <DropdownMenuItem className="text-destructive" onClick={onClearMessages}>Clear messages</DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
                     </div>
                 )}
             </div>
 
-            {/* Messages */}
+            {/* Message Area */}
             <div
                 ref={chatContainerRef}
-                className="flex-1 overflow-y-auto px-4 py-4 space-y-4"
-                style={{
-                    backgroundImage:
-                        "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fillRule='evenodd'%3E%3Cg fill='%239C92AC' fillOpacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")",
-                }}
+                className="flex-1 overflow-y-auto px-4 py-4 space-y-1 z-10"
             >
                 {!isAIChat &&
-                    messages.map((msg) => {
+                    messages.map((msg, idx) => {
                         const isOwn = msg.sender_id === currentUser.id;
+                        const prevMsg = idx > 0 ? messages[idx - 1] : null;
+                        const isSameSender = prevMsg?.sender_id === msg.sender_id;
                         const hasAttachments = msg.attachments && msg.attachments.length > 0;
+
                         return (
-                            <div key={msg.id} className={cn("flex", isOwn ? "justify-end" : "justify-start")}>
+                            <div key={msg.id} className={cn("flex w-full mb-0.5 animate-in fade-in slide-in-from-bottom-2 duration-300", isOwn ? "justify-end" : "justify-start", !isSameSender && "mt-3")}>
                                 <div
                                     className={cn(
-                                        "max-w-[85%] sm:max-w-[70%] rounded-2xl px-4 py-2.5 shadow-[0_1px_0.5px_rgba(0,0,0,0.13)] relative group transition-all hover:shadow-md",
+                                        "max-w-[85%] sm:max-w-[70%] rounded-xl px-2 py-1 shadow-sm relative transition-all hover:shadow-md",
                                         isOwn
-                                            ? "bg-linear-to-b from-[#d9fdd3] to-[#d1f9cc] dark:from-[#005c4b] dark:to-[#005445] rounded-tr-none text-[#111b21] dark:text-[#e9edef]"
-                                            : "bg-linear-to-b from-white to-[#f8f9fa] dark:from-[#202c33] dark:to-[#1a2329] rounded-tl-none text-[#111b21] dark:text-[#e9edef]"
+                                            ? "bg-[#d9fdd3] dark:bg-[#005c4b] rounded-tr-none text-[#111b21] dark:text-[#e9edef]"
+                                            : "bg-white dark:bg-[#202c33] rounded-tl-none text-[#111b21] dark:text-[#e9edef]",
+                                        !isSameSender && (isOwn ? "rounded-tr-none" : "rounded-tl-none")
                                     )}
                                 >
-                                    {/* Attachments */}
-                                    {hasAttachments && (
-                                        <div className="mb-1 flex flex-col gap-1">
-                                            {msg.attachments!.map((url, idx) => {
-                                                const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(url);
-                                                const isVideo = /\.(mp4|webm|mov)$/i.test(url);
-                                                const isAudio = /\.(mp3|wav|ogg|webm)$/i.test(url) || (url.includes('audio') && !isVideo);
+                                    {/* Tail */}
+                                    {!isSameSender && (
+                                        <div className={cn(
+                                            "absolute top-0 w-2 h-2.5",
+                                            isOwn
+                                                ? "right-[-8px] bg-[#d9fdd3] dark:bg-[#005c4b] [clip-path:polygon(0_0,0_100%,100%_0)]"
+                                                : "left-[-8px] bg-white dark:bg-[#202c33] [clip-path:polygon(100%_0,100%_100%,0_0)]"
+                                        )} />
+                                    )}
 
+                                    {/* Attachments (WhatsApp Style) */}
+                                    {hasAttachments && (
+                                        <div className="p-0.5 rounded-lg overflow-hidden bg-black/5 dark:bg-black/20 mb-1">
+                                            {msg.attachments!.map((url, i) => {
+                                                const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(url) || url.includes("cloudinary");
                                                 if (isImage) {
                                                     return (
-                                                        <a href={url} target="_blank" rel="noopener noreferrer" key={idx} className="block overflow-hidden rounded-lg">
-                                                            <img src={url} alt="Attachment" className="max-w-full h-auto object-cover max-h-[300px]" />
-                                                        </a>
+                                                        <div key={i} className="relative group/img cursor-pointer" onClick={() => setPreviewImage(url)}>
+                                                            <img src={url} alt="Media" className="max-w-full h-auto rounded-lg object-cover max-h-[400px] border border-black/5" />
+                                                            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center rounded-lg">
+                                                                <Maximize2 className="text-white h-8 w-8" />
+                                                            </div>
+                                                        </div>
                                                     );
                                                 }
-                                                if (isVideo) {
-                                                    return (
-                                                        <div key={idx} className="rounded-lg overflow-hidden max-w-[300px]">
-                                                            <video src={url} controls className="max-w-full h-auto" />
-                                                        </div>
-                                                    )
-                                                }
-                                                if (isAudio) {
-                                                    return (
-                                                        <div key={idx} className="flex items-center gap-2 p-2 bg-muted/20 rounded-lg min-w-[200px]">
-                                                            <Headphones className="h-5 w-5 text-muted-foreground" />
-                                                            <audio src={url} controls className="h-8 max-w-[200px]" />
-                                                        </div>
-                                                    )
-                                                }
                                                 return (
-                                                    <a href={url} target="_blank" rel="noopener noreferrer" key={idx} className="flex items-center gap-3 p-3 bg-muted/10 border rounded-lg hover:bg-muted/20 transition-colors">
-                                                        <div className="h-10 w-10 bg-red-100 dark:bg-red-900/20 text-red-500 rounded-lg flex items-center justify-center">
-                                                            <FileText className="h-6 w-6" />
-                                                        </div>
+                                                    <a href={url} target="_blank" rel="noopener noreferrer" key={i} className="flex items-center gap-3 p-3 bg-white/10 rounded-lg hover:bg-white/20 transition-colors">
+                                                        <FileText className="h-6 w-6 text-blue-500" />
                                                         <div className="flex-1 overflow-hidden">
-                                                            <p className="text-sm font-medium truncate">{url.split('/').pop()?.split('-').slice(1).join('-') || "Document"}</p>
-                                                            <p className="text-xs text-muted-foreground uppercase">{url.split('.').pop()}</p>
+                                                            <p className="text-sm font-medium truncate">Document Attachment</p>
                                                         </div>
                                                     </a>
                                                 );
@@ -314,13 +326,44 @@ export function ChatView({
                                         </div>
                                     )}
 
-                                    {msg.content && (
-                                        <div className="prose prose-sm dark:prose-invert max-w-none break-words whitespace-pre-wrap">{msg.content}</div>
-                                    )}
+                                    <div className="flex items-end gap-2 px-1">
+                                        {msg.content && msg.content.startsWith("[CALL_LOG]:") ? (() => {
+                                            const [_, type, duration] = msg.content.split(":");
+                                            const isMissed = duration === "missed";
+                                            const Icon = type === "video" ? Video : Phone;
 
-                                    <div className={cn("flex items-center gap-1 mt-0.5 select-none", isOwn ? "justify-end" : "justify-end")}>
-                                        <span className="text-[11px] text-muted-foreground/80">{formatTime(msg.created_at)}</span>
-                                        {isOwn && <MessageStatus status={msg.status || "sent"} isRead={msg.is_read} />}
+                                            return (
+                                                <div className="flex items-center gap-3 py-2 px-1 min-w-[180px]">
+                                                    <div className={cn(
+                                                        "h-10 w-10 rounded-full flex items-center justify-center",
+                                                        isMissed ? "bg-red-100 dark:bg-red-900/30" : "bg-blue-100 dark:bg-blue-900/30"
+                                                    )}>
+                                                        <Icon className={cn("h-5 w-5", isMissed ? "text-red-500" : "text-blue-500")} />
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[14px] font-bold">
+                                                            {isMissed ? `Missed ${type} call` : `${type.charAt(0).toUpperCase() + type.slice(1)} call`}
+                                                        </span>
+                                                        {!isMissed && (
+                                                            <span className="text-[12px] opacity-70">
+                                                                Duration: {(() => {
+                                                                    const d = parseInt(duration);
+                                                                    const mins = Math.floor(d / 60);
+                                                                    const secs = d % 60;
+                                                                    return `${mins}:${secs.toString().padStart(2, '0')}`;
+                                                                })()}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })() : msg.content && (
+                                            <p className="text-[14.5px] leading-relaxed whitespace-pre-wrap wrap-break-word py-0.5">{msg.content}</p>
+                                        )}
+                                        <div className="flex items-center gap-1 shrink-0 pb-0.5 ml-auto">
+                                            <span className="text-[10px] opacity-60 font-medium">{formatTime(msg.created_at)}</span>
+                                            {isOwn && <MessageStatus status={msg.status || "sent"} isRead={msg.is_read} />}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -330,25 +373,21 @@ export function ChatView({
                 {isAIChat && aiMessages.map((msg) => {
                     const isOwn = msg.role === "user";
                     return (
-                        <div key={msg.id} className={cn("flex", isOwn ? "justify-end" : "justify-start")}>
-                            <div className={cn("max-w-[85%] sm:max-w-[70%] rounded-2xl px-4 py-2.5 shadow-sm transition-all hover:shadow-md", isOwn ? "bg-linear-to-b from-[#d9fdd3] to-[#d1f9cc] dark:from-[#005c4b] dark:to-[#005445] rounded-tr-none" : "bg-linear-to-b from-white to-[#f8f9fa] dark:from-[#202c33] dark:to-[#1a2329] rounded-tl-none")}>
-                                <p className="text-[15px] break-words whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-                                <span className="text-[10px] font-bold text-muted-foreground/60 block text-right mt-1.5 uppercase">{formatTime(msg.timestamp)}</span>
+                        <div key={msg.id} className={cn("flex w-full mb-3", isOwn ? "justify-end" : "justify-start")}>
+                            <div className={cn("max-w-[85%] sm:max-w-[70%] rounded-xl px-3 py-1.5 shadow-sm relative", isOwn ? "bg-[#d9fdd3] dark:bg-[#005c4b] rounded-tr-none" : "bg-white dark:bg-[#202c33] rounded-tl-none")}>
+                                <p className="text-[14.5px] leading-relaxed whitespace-pre-wrap wrap-break-word">{msg.content}</p>
+                                <div className="flex justify-end mt-0.5">
+                                    <span className="text-[10px] opacity-60 font-bold uppercase">{formatTime(msg.timestamp)}</span>
+                                </div>
                             </div>
                         </div>
                     )
                 })}
-
-                {aiTyping && (
-                    <div className="flex justify-start">
-                        <div className="bg-white dark:bg-[#202c33] px-3 py-2 rounded-2xl shadow-sm"><span className="animate-pulse text-muted-foreground text-sm">typing...</span></div>
-                    </div>
-                )}
                 <div ref={messagesEndRef} />
             </div>
 
-            {/* Input */}
-            <div className="sticky bottom-0 bg-background p-2 px-3 sm:px-4 py-2 safa-area-inset">
+            {/* Input Layer */}
+            <div className="bg-[#f0f2f5] dark:bg-[#202c33] px-3 py-2 z-20 shadow-2xl">
                 {isRecording ? (
                     <VoiceRecorder
                         onRecordingComplete={(file) => {
@@ -358,79 +397,81 @@ export function ChatView({
                         onCancel={() => setIsRecording(false)}
                     />
                 ) : (
-                    <form onSubmit={onSendMessage} className="flex items-end gap-2 max-w-4xl mx-auto w-full">
-                        <input
-                            type="file"
-                            ref={fileInputRef}
-                            className="hidden"
-                            onChange={handleFileChange}
-                        />
+                    <div className="flex items-end gap-2 max-w-5xl mx-auto">
+                        <div className="flex items-center gap-1">
+                            <input
+                                type="file"
+                                id="file-upload"
+                                className="hidden"
+                                aria-label="Upload file"
+                                onChange={(e) => {
+                                    if (e.target.files?.[0]) {
+                                        onFileSelect?.(e.target.files[0]);
+                                        e.target.value = ''; // Reset
+                                    }
+                                }}
+                                accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
+                            />
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-10 w-10 text-muted-foreground hover:bg-black/5 dark:hover:bg-white/5 rounded-full"
+                                onClick={() => document.getElementById('file-upload')?.click()}
+                                disabled={isUploading}
+                            >
+                                <Paperclip className="h-5 w-5" />
+                            </Button>
+                        </div>
 
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-10 w-10 text-muted-foreground hover:bg-muted/50 rounded-full mb-1"
-                                    disabled={isUploading}
-                                >
-                                    {isUploading ? <Loader2 className="h-6 w-6 animate-spin" /> : <Paperclip className="h-6 w-6" />}
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start" className="w-56" side="top">
-                                <DropdownMenuItem onClick={() => triggerFileUpload("image/*,video/*")}>
-                                    <ImageIcon className="mr-2 h-4 w-4 text-purple-500" /> Photos & Videos
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => { }}>
-                                    <Camera className="mr-2 h-4 w-4 text-pink-500" /> Camera
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => triggerFileUpload(".pdf,.doc,.docx,.txt")}>
-                                    <FileText className="mr-2 h-4 w-4 text-blue-500" /> Document
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => { toast.info("Contact sharing coming soon") }}>
-                                    <UserIcon className="mr-2 h-4 w-4 text-blue-400" /> Contact
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => { toast.info("Polls coming soon") }}>
-                                    <BarChart2 className="mr-2 h-4 w-4 text-yellow-500" /> Poll
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => { toast.info("Events coming soon") }}>
-                                    <Calendar className="mr-2 h-4 w-4 text-green-500" /> Event
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-
-                        <Input
-                            ref={inputRef}
-                            value={newMessage}
-                            onChange={(e) => onNewMessageChange(e.target.value)}
-                            placeholder="Type a message"
-                            className="flex-1 min-w-0 bg-secondary/50 border-0 focus-visible:ring-0 rounded-2xl px-4 py-3 min-h-[44px] max-h-32"
-                            autoComplete="off"
-                        />
+                        <div className="flex-1 relative flex items-center bg-white dark:bg-[#2a3942] rounded-lg shadow-sm border border-black/5 dark:border-white/5 pr-2">
+                            <textarea
+                                rows={1}
+                                value={newMessage}
+                                onChange={(e) => onNewMessageChange(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                        e.preventDefault();
+                                        onSendMessage();
+                                    }
+                                }}
+                                placeholder="Type a message"
+                                className="flex-1 bg-transparent border-0 focus:ring-0 resize-none py-2.5 px-3 text-[15px] max-h-32 min-h-[40px] outline-none"
+                            />
+                        </div>
 
                         {newMessage.trim() ? (
                             <Button
-                                type="submit"
+                                onClick={() => onSendMessage()}
                                 size="icon"
-                                className="h-10 w-10 rounded-full flex-shrink-0 bg-primary mb-1 transition-all duration-200"
+                                className="h-11 w-11 rounded-full shrink-0 bg-[#00a884] hover:bg-[#008f72] shadow-md transition-all active:scale-95"
                             >
-                                <Send className="h-5 w-5" />
+                                <Send className="h-5 w-5 text-white" />
                             </Button>
                         ) : (
                             <Button
                                 type="button"
+                                variant="ghost"
                                 size="icon"
-                                className="h-10 w-10 rounded-full flex-shrink-0 text-muted-foreground hover:bg-muted/50 mb-1"
+                                className="h-11 w-11 rounded-full shrink-0 text-muted-foreground hover:bg-black/5"
                                 onClick={() => setIsRecording(true)}
                             >
                                 <Mic className="h-6 w-6" />
                             </Button>
                         )}
-
-                    </form>
+                    </div>
                 )}
             </div>
+
+            {/* Image Preview Modal */}
+            {previewImage && (
+                <div className="fixed inset-0 z-100 bg-black/90 backdrop-blur-xl flex items-center justify-center p-4 animate-in fade-in duration-300" onClick={() => setPreviewImage(null)}>
+                    <Button variant="ghost" size="icon" className="absolute top-6 right-6 text-white hover:bg-white/10 h-12 w-12 rounded-full z-110">
+                        <X className="h-8 w-8" />
+                    </Button>
+                    <img src={previewImage} alt="Preview" className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" />
+                </div>
+            )}
         </div>
     );
 }

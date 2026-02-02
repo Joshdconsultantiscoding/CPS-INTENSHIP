@@ -42,23 +42,13 @@ export default async function TasksPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Tasks</h1>
-          <p className="text-muted-foreground">
-            {isAdmin
-              ? "Manage and assign tasks to interns"
-              : "View and manage your assigned tasks"}
-          </p>
-        </div>
-        {isAdmin && (
-          <Button asChild>
-            <Link href="/dashboard/tasks/new">
-              <Plus className="mr-2 h-4 w-4" />
-              Create Task
-            </Link>
-          </Button>
-        )}
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Tasks</h1>
+        <p className="text-muted-foreground">
+          {isAdmin
+            ? "Manage and assign tasks to interns"
+            : "View and manage your assigned tasks"}
+        </p>
       </div>
 
       <TaskFilters isAdmin={isAdmin} interns={interns} userId={user.id} />

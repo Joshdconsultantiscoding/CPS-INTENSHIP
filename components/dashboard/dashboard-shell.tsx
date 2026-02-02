@@ -5,25 +5,82 @@ import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "./dashboard-sidebar";
 import { DashboardHeader } from "./dashboard-header";
 import { MobileNav } from "./mobile-nav";
-import { usePresence } from "@/hooks/use-presence";
 import { useUser } from "@clerk/nextjs";
+import { Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile } from "@/lib/types";
+import { type PortalSettings } from "@/hooks/use-portal-settings";
+import { TermsModal } from "@/components/onboarding/terms-modal";
+import { WelcomeScreen } from "@/components/onboarding/welcome-screen";
+import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
 
 interface DashboardShellProps {
   children: React.ReactNode;
+  serverProfile?: Profile | null;
+  serverSettings?: PortalSettings;
 }
+
+type OnboardingState = "checking" | "terms" | "welcome" | "flow" | "completed";
 
 export function DashboardShell({
   children,
+  serverProfile,
+  serverSettings,
 }: DashboardShellProps) {
   const { user, isLoaded } = useUser();
-  const [profile, setProfile] = React.useState<Profile | null>(null);
+  const [profile, setProfile] = React.useState<Profile | null>(serverProfile || null);
+  const [onboardingStatus, setOnboardingStatus] = React.useState<OnboardingState>("checking");
+  const [sessionTermsAccepted, setSessionTermsAccepted] = React.useState(false);
+  const [isReturningUser, setIsReturningUser] = React.useState(false);
 
-  // Use presence hook only when we have a userId
-  usePresence(user?.id || "");
+  // Presence is now handled globally by AblyClientProvider
+
+  // Check Onboarding Progress
+  React.useEffect(() => {
+    async function checkOnboarding() {
+      if (!user?.id) return;
+
+      const supabase = createClient();
+
+      // 1. Check Terms
+      const { data: terms } = await supabase
+        .from("terms_acceptances")
+        .select("*")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (!terms) {
+        setOnboardingStatus("terms");
+        return;
+      }
+
+      // 2. Check Onboarding
+      const { data: progress } = await supabase
+        .from("onboarding_progress")
+        .select("*")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (!progress || !progress.is_completed) {
+        setIsReturningUser(false);
+        setOnboardingStatus("welcome");
+      } else {
+        setIsReturningUser(true);
+        setOnboardingStatus("welcome");
+      }
+    }
+
+    if (isLoaded && user) {
+      checkOnboarding();
+    }
+  }, [user, isLoaded]);
 
   React.useEffect(() => {
+    if (serverProfile) {
+      if (profile !== serverProfile) setProfile(serverProfile);
+      return;
+    }
+
     async function fetchProfile() {
       if (!user?.id) return;
 
@@ -48,14 +105,14 @@ export function DashboardShell({
         setProfile({
           id: user.id,
           email: user.emailAddresses[0]?.emailAddress || "",
-          full_name: user.fullName || "Admin",
+          first_name: user.firstName || "Admin",
+          last_name: user.lastName || "",
           role: "admin",
           avatar_url: user.imageUrl,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-          status: 'active',
           online_status: 'online'
-        } as Profile);
+        } as any as Profile);
       }
     }
 
@@ -68,8 +125,39 @@ export function DashboardShell({
   const userId = user?.id || "";
 
   // Don't render until loaded to prevent hydration mismatch
-  if (!isLoaded) {
-    return null;
+  if (!isLoaded || onboardingStatus === "checking") {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // Terms must be accepted once per session for interns
+  const showTerms = !sessionTermsAccepted && !isAdmin;
+
+  if (showTerms) {
+    return <TermsModal userId={userId} onAccepted={() => setSessionTermsAccepted(true)} />;
+  }
+
+  if (onboardingStatus === "welcome") {
+    return (
+      <WelcomeScreen
+        userName={profile?.first_name || user?.firstName || "there"}
+        isReturningUser={isReturningUser}
+        onNext={() => {
+          if (isReturningUser) {
+            setOnboardingStatus("completed");
+          } else {
+            setOnboardingStatus("flow");
+          }
+        }}
+      />
+    );
+  }
+
+  if (onboardingStatus === "flow") {
+    return <OnboardingFlow userId={userId} onComplete={() => setOnboardingStatus("completed")} />;
   }
 
   return (

@@ -23,6 +23,8 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { Profile } from "@/lib/types";
+import { ImageUpload } from "@/components/ui/image-upload";
+import { updateProfile } from "@/app/actions/profile";
 
 interface SettingsFormProps {
   user: User;
@@ -47,23 +49,19 @@ export function SettingsForm({ user, profile }: SettingsFormProps) {
     const department = formData.get("department") as string;
 
     try {
-      const supabase = createClient();
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          first_name: firstName,
-          last_name: lastName,
-          bio,
-          department,
-        })
-        .eq("id", user.id);
+      const result = await updateProfile(user.id, {
+        first_name: firstName,
+        last_name: lastName,
+        bio,
+        department,
+      });
 
-      if (error) throw error;
+      if (!result.success) throw new Error(result.error);
 
       toast.success("Profile updated successfully");
       router.refresh();
-    } catch {
-      toast.error("Failed to update profile");
+    } catch (error: any) {
+      toast.error(`Failed to update profile: ${error.message}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -132,6 +130,24 @@ export function SettingsForm({ user, profile }: SettingsFormProps) {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            <div className="mb-8">
+              <Label className="block mb-2">Profile Picture</Label>
+              <ImageUpload
+                bucket="profiles"
+                folder={user.id}
+                initialImage={profile?.avatar_url || ""}
+                onUploadComplete={async (url) => {
+                  try {
+                    const result = await updateProfile(user.id, { avatar_url: url });
+                    if (!result.success) throw new Error(result.error);
+                    toast.success("Avatar updated");
+                    router.refresh();
+                  } catch (error: any) {
+                    toast.error(`Failed to update avatar: ${error.message}`);
+                  }
+                }}
+              />
+            </div>
             <form onSubmit={handleProfileUpdate} className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">

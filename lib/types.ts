@@ -12,6 +12,8 @@ export type AuthProvider = "email" | "google" | "facebook" | "tiktok" | "oauth";
 export interface Profile {
   id: string;
   email: string;
+  first_name: string | null;
+  last_name: string | null;
   full_name: string | null;
   avatar_url: string | null;
   role: UserRole;
@@ -163,9 +165,10 @@ export interface CalendarEvent {
   event_type: "meeting" | "deadline" | "review" | "other";
   location: string | null;
   attendees: string[];
-  created_by: string;
+  user_id: string;
   created_at: string;
   updated_at: string;
+  is_public: boolean;
 }
 
 export interface ActivityLog {

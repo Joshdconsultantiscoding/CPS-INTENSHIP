@@ -25,52 +25,73 @@ export const getAuthUser = cache(async (): Promise<AuthUser> => {
         redirect("/auth/sign-in");
     }
 
-    const user = await currentUser();
+    // 2. Fetch User first to ensure we have a valid session before DB call
+    try {
+        const user = await currentUser();
 
-    if (!user) {
-        redirect("/auth/sign-in");
-    }
+        if (!user) {
+            console.warn("Clerk user not found for ID:", userId);
+            redirect("/auth/sign-in");
+        }
 
-    const email = user.emailAddresses[0]?.emailAddress || null;
-    const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "agbojoshua2005@gmail.com";
+        // 3. Fetch Role from Supabase (sperately to avoid Promise.all swallowing redirects)
+        let profile = null;
+        try {
+            const adminClient = await createAdminClient();
+            const { data, error } = await adminClient
+                .from("profiles")
+                .select("role")
+                .eq("id", userId)
+                .single();
 
-    // 1. Strict Override for The Admin Email (Security & Identity)
-    if (email && email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+            if (error && error.code !== 'PGRST116') {
+                console.error("Database error in getAuthUser:", error);
+            }
+            profile = data;
+        } catch (dbError) {
+            console.error("Supabase connection failed in getAuthUser (non-fatal):", dbError);
+            // Verify if we should block access or default to intern. 
+            // For now, default to intern to allow access if DB is flaky.
+        }
+
+        const email = user.emailAddresses[0]?.emailAddress || null;
+        const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "agbojoshua2005@gmail.com";
+
+        // 1. Strict Override for The Admin Email (Security & Identity)
+        if (email && email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+            return {
+                id: userId,
+                email: email,
+                full_name: [user.firstName, user.lastName].filter(Boolean).join(" ") || "Admin",
+                avatar_url: user.imageUrl || null,
+                role: "admin",
+                firstName: user.firstName,
+                lastName: user.lastName,
+            };
+        }
+
+
+        // Default to 'intern' if no profile found
+        const dbRole = profile?.role?.toLowerCase();
+        const role = (dbRole === "admin") ? "admin" : "intern";
+
         return {
             id: userId,
             email: email,
-            full_name: [user.firstName, user.lastName].filter(Boolean).join(" ") || "Admin",
+            full_name: [user.firstName, user.lastName].filter(Boolean).join(" ") || "User",
             avatar_url: user.imageUrl || null,
-            role: "admin",
+            role: role,
             firstName: user.firstName,
             lastName: user.lastName,
         };
+    } catch (error: any) {
+        // If it's a redirect error, re-throw it (standard Next.js behavior)
+        if (error?.digest?.startsWith("NEXT_REDIRECT")) throw error;
+
+        console.error("CRITICAL ERROR in getAuthUser:", error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        throw new Error(`Authentication failure: ${errorMessage || "Unknown error"}`);
     }
-
-    // 2. Fetch Role from Supabase for everyone else
-    // We use createAdminClient to bypass RLS, ensuring we can always read the user's role
-    // This is safe because we have already verified the userId via Clerk
-    const supabase = await createAdminClient();
-
-    const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", userId)
-        .single();
-
-    // Default to 'intern' if no profile found
-    const dbRole = profile?.role?.toLowerCase();
-    const role = (dbRole === "admin") ? "admin" : "intern";
-
-    return {
-        id: userId,
-        email: email,
-        full_name: [user.firstName, user.lastName].filter(Boolean).join(" ") || "User",
-        avatar_url: user.imageUrl || null,
-        role: role,
-        firstName: user.firstName,
-        lastName: user.lastName,
-    };
 });
 
 /**

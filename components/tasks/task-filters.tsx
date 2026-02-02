@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -10,8 +9,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { TaskDialog } from "./task-dialog";
 import { Plus, Search } from "lucide-react";
+import Link from "next/link";
 
 interface TaskFiltersProps {
   isAdmin: boolean;
@@ -19,9 +18,7 @@ interface TaskFiltersProps {
   userId: string;
 }
 
-export function TaskFilters({ isAdmin, interns, userId }: TaskFiltersProps) {
-  const [dialogOpen, setDialogOpen] = useState(false);
-
+export function TaskFilters({ isAdmin }: TaskFiltersProps) {
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex flex-1 items-center gap-2">
@@ -58,18 +55,12 @@ export function TaskFilters({ isAdmin, interns, userId }: TaskFiltersProps) {
         </Select>
       </div>
       {isAdmin && (
-        <>
-          <Button onClick={() => setDialogOpen(true)}>
+        <Button asChild>
+          <Link href="/dashboard/tasks/new">
             <Plus className="mr-2 h-4 w-4" />
-            New Task
-          </Button>
-          <TaskDialog
-            open={dialogOpen}
-            onOpenChange={setDialogOpen}
-            interns={interns}
-            userId={userId}
-          />
-        </>
+            Create Task
+          </Link>
+        </Button>
       )}
     </div>
   );

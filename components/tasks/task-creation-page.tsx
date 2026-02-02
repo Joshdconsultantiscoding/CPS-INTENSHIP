@@ -22,10 +22,10 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import type { TaskPriority } from "@/lib/types";
+import { createTaskAction } from "../../app/actions/tasks";
 
 interface TaskCreationPageProps {
     userId: string;
@@ -44,6 +44,7 @@ export function TaskCreationPage({ userId, interns }: TaskCreationPageProps) {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        console.log("[Task Creation] Form submitted");
 
         if (!title.trim()) {
             toast.error("Please enter a task title");
@@ -58,187 +59,182 @@ export function TaskCreationPage({ userId, interns }: TaskCreationPageProps) {
         setLoading(true);
 
         try {
-            const supabase = createClient();
+            console.log("[Task Creation] Calling server action with data:", {
+                title: title.trim(),
+                assignedTo,
+                assignedBy: userId,
+                priority,
+                points: parseInt(points) || 10
+            });
 
-            const taskData = {
+            const result = await createTaskAction({
                 title: title.trim(),
                 description: description.trim() || null,
                 priority,
-                status: "pending" as const,
-                due_date: dueDate ? new Date(dueDate).toISOString() : null,
+                due_date: dueDate || null,
                 assigned_to: assignedTo,
-                assigned_by: userId,
                 points: parseInt(points) || 10,
-            };
+            });
 
-            const { data, error } = await supabase
-                .from("tasks")
-                .insert(taskData)
-                .select()
-                .single();
-
-            if (error) {
-                console.error("Task creation error:", error);
-                toast.error(`Failed to create task: ${error.message}`);
+            if (!result.success) {
+                console.error("[Task Creation] Server action failed:", result.error);
+                toast.error(result.error || "Failed to create task");
                 setLoading(false);
                 return;
             }
 
-            // Create notification for the assignee
-            await supabase.from("notifications").insert({
-                user_id: assignedTo,
-                title: "New Task Assigned",
-                message: `You have been assigned a new task: ${title}`,
-                type: "task",
-                reference_id: data.id,
-                reference_type: "task",
-            });
-
+            console.log("[Task Creation] Task created successfully:", result.taskId);
             toast.success("Task created successfully!");
             router.push("/dashboard/tasks");
             router.refresh();
-        } catch (error) {
-            console.error("Unexpected error:", error);
-            toast.error("An unexpected error occurred");
+        } catch (error: any) {
+            console.error("[Task Creation] Unexpected error:", {
+                error,
+                message: error?.message,
+                stack: error?.stack
+            });
+            toast.error(`An unexpected error occurred: ${error?.message || 'Unknown error'}`);
             setLoading(false);
         }
     };
 
     return (
-        <div className="space-y-6">
-            <div className="flex items-center gap-4">
-                <Button variant="ghost" size="icon" asChild>
-                    <Link href="/dashboard/tasks">
-                        <ArrowLeft className="h-4 w-4" />
-                    </Link>
-                </Button>
-                <div>
-                    <h1 className="text-2xl font-bold tracking-tight">Create New Task</h1>
-                    <p className="text-muted-foreground">
-                        Assign a task to an intern
-                    </p>
+        <div className="flex justify-center">
+            <div className="w-full max-w-4xl space-y-6">
+                <div className="flex items-center gap-4">
+                    <Button variant="ghost" size="icon" asChild>
+                        <Link href="/dashboard/tasks">
+                            <ArrowLeft className="h-4 w-4" />
+                        </Link>
+                    </Button>
+                    <div>
+                        <h1 className="text-2xl font-bold tracking-tight">Create New Task</h1>
+                        <p className="text-muted-foreground">
+                            Assign a task to an intern
+                        </p>
+                    </div>
                 </div>
-            </div>
 
-            <Card className="max-w-2xl">
-                <CardHeader>
-                    <CardTitle>Task Details</CardTitle>
-                    <CardDescription>
-                        Fill in the information below to create a new task.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <form onSubmit={handleSubmit} className="space-y-6">
-                        <div className="space-y-2">
-                            <Label htmlFor="title">
-                                Title <span className="text-destructive">*</span>
-                            </Label>
-                            <Input
-                                id="title"
-                                value={title}
-                                onChange={(e) => setTitle(e.target.value)}
-                                placeholder="Enter task title"
-                                required
-                            />
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label htmlFor="description">Description</Label>
-                            <Textarea
-                                id="description"
-                                value={description}
-                                onChange={(e) => setDescription(e.target.value)}
-                                placeholder="Describe the task in detail..."
-                                rows={4}
-                            />
-                        </div>
-
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Task Details</CardTitle>
+                        <CardDescription>
+                            Fill in the information below to create a new task.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <form onSubmit={handleSubmit} className="space-y-6">
                             <div className="space-y-2">
-                                <Label htmlFor="assignee">
-                                    Assign To <span className="text-destructive">*</span>
+                                <Label htmlFor="title">
+                                    Title <span className="text-destructive">*</span>
                                 </Label>
-                                <Select value={assignedTo} onValueChange={setAssignedTo} required>
-                                    <SelectTrigger id="assignee">
-                                        <SelectValue placeholder="Select intern" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {interns.length === 0 ? (
-                                            <div className="p-2 text-sm text-muted-foreground">
-                                                No active interns found
-                                            </div>
-                                        ) : (
-                                            interns.map((intern) => (
-                                                <SelectItem key={intern.id} value={intern.id}>
-                                                    {intern.full_name || intern.email}
-                                                </SelectItem>
-                                            ))
-                                        )}
-                                    </SelectContent>
-                                </Select>
+                                <Input
+                                    id="title"
+                                    value={title}
+                                    onChange={(e) => setTitle(e.target.value)}
+                                    placeholder="Enter task title"
+                                    required
+                                />
                             </div>
 
                             <div className="space-y-2">
-                                <Label htmlFor="priority">Priority</Label>
-                                <Select
-                                    value={priority}
-                                    onValueChange={(v) => setPriority(v as TaskPriority)}
+                                <Label htmlFor="description">Description</Label>
+                                <Textarea
+                                    id="description"
+                                    value={description}
+                                    onChange={(e) => setDescription(e.target.value)}
+                                    placeholder="Describe the task in detail..."
+                                    rows={4}
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                <div className="space-y-2">
+                                    <Label htmlFor="assignee">
+                                        Assign To <span className="text-destructive">*</span>
+                                    </Label>
+                                    <Select value={assignedTo} onValueChange={setAssignedTo} required>
+                                        <SelectTrigger id="assignee">
+                                            <SelectValue placeholder="Select intern" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {interns.length === 0 ? (
+                                                <div className="p-2 text-sm text-muted-foreground">
+                                                    No active interns found
+                                                </div>
+                                            ) : (
+                                                interns.map((intern) => (
+                                                    <SelectItem key={intern.id} value={intern.id}>
+                                                        {intern.full_name || intern.email}
+                                                    </SelectItem>
+                                                ))
+                                            )}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="priority">Priority</Label>
+                                    <Select
+                                        value={priority}
+                                        onValueChange={(v) => setPriority(v as TaskPriority)}
+                                    >
+                                        <SelectTrigger id="priority">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="low">Low</SelectItem>
+                                            <SelectItem value="medium">Medium</SelectItem>
+                                            <SelectItem value="high">High</SelectItem>
+                                            <SelectItem value="urgent">Urgent</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                <div className="space-y-2">
+                                    <Label htmlFor="dueDate">Due Date</Label>
+                                    <Input
+                                        id="dueDate"
+                                        type="date"
+                                        value={dueDate}
+                                        onChange={(e) => setDueDate(e.target.value)}
+                                        min={new Date().toISOString().split("T")[0]}
+                                    />
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="points">Reward Points</Label>
+                                    <Input
+                                        id="points"
+                                        type="number"
+                                        min="0"
+                                        step="1"
+                                        value={points}
+                                        onChange={(e) => setPoints(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex gap-3 pt-4">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => router.back()}
+                                    disabled={loading}
                                 >
-                                    <SelectTrigger id="priority">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="low">Low</SelectItem>
-                                        <SelectItem value="medium">Medium</SelectItem>
-                                        <SelectItem value="high">High</SelectItem>
-                                        <SelectItem value="urgent">Urgent</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                                    Cancel
+                                </Button>
+                                <Button type="submit" disabled={loading || interns.length === 0}>
+                                    {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    Create Task
+                                </Button>
                             </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                            <div className="space-y-2">
-                                <Label htmlFor="dueDate">Due Date</Label>
-                                <Input
-                                    id="dueDate"
-                                    type="date"
-                                    value={dueDate}
-                                    onChange={(e) => setDueDate(e.target.value)}
-                                    min={new Date().toISOString().split("T")[0]}
-                                />
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="points">Reward Points</Label>
-                                <Input
-                                    id="points"
-                                    type="number"
-                                    min="0"
-                                    step="1"
-                                    value={points}
-                                    onChange={(e) => setPoints(e.target.value)}
-                                />
-                            </div>
-                        </div>
-
-                        <div className="flex gap-3 pt-4">
-                            <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() => router.back()}
-                                disabled={loading}
-                            >
-                                Cancel
-                            </Button>
-                            <Button type="submit" disabled={loading || interns.length === 0}>
-                                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Create Task
-                            </Button>
-                        </div>
-                    </form>
-                </CardContent>
-            </Card>
+                        </form>
+                    </CardContent>
+                </Card>
+            </div>
         </div>
     );
 }

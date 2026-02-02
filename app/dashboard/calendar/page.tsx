@@ -1,6 +1,6 @@
 import { Metadata } from "next";
 import { getAuthUser } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 import { CalendarView } from "@/components/calendar/calendar-view";
 
 export const metadata: Metadata = {
@@ -10,18 +10,19 @@ export const metadata: Metadata = {
 export default async function CalendarPage() {
   // Use Clerk auth
   const user = await getAuthUser();
-  const supabase = await createClient();
+  const supabase = await createAdminClient();
 
   const isAdmin = user.role === "admin";
 
-  // Fetch events
-  const eventsQuery = supabase
+  // Fetch events using Service Role (bypassing RLS issues with Clerk)
+  // We manually filter by user permissions here
+  let eventsQuery = supabase
     .from("calendar_events")
     .select("*")
     .order("start_time", { ascending: true });
 
   if (!isAdmin) {
-    eventsQuery.or(`user_id.eq.${user.id},is_public.eq.true`);
+    eventsQuery = eventsQuery.or(`user_id.eq.${user.id},is_public.eq.true`);
   }
 
   const { data: events } = await eventsQuery;

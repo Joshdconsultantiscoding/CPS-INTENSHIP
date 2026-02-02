@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import type { Profile, Task, DailyReport, Notification } from "@/lib/types";
+import { EventsWidget } from "@/components/dashboard/events-widget";
+import type { Profile, Task, DailyReport, Notification, CalendarEvent } from "@/lib/types";
 import {
   Card,
   CardContent,
@@ -37,6 +38,7 @@ interface InternDashboardProps {
   overdueTasks: number;
   unreadMessages: number;
   notifications: Notification[];
+  events: CalendarEvent[];
 }
 
 export function InternDashboard({
@@ -48,6 +50,7 @@ export function InternDashboard({
   overdueTasks = 0,
   unreadMessages = 0,
   notifications = [],
+  events = [],
 }: InternDashboardProps) {
   const { settings } = usePortalSettings();
   const [mounted, setMounted] = useState(false);
@@ -166,6 +169,11 @@ export function InternDashboard({
           </Card>
         )}
       </div>
+
+      {/* Events Widget - New Addition */}
+      {settings.calendar_enabled && (
+        <EventsWidget events={events} />
+      )}
 
       {/* Quick Stats - Mobile Only */}
       <Card className="sm:hidden">

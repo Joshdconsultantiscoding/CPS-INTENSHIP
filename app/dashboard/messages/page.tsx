@@ -35,7 +35,7 @@ export default async function MessagesPage({
       supabase.from("profiles").select("*").eq("id", user.id).single(),
       supabase.from("profiles").select("id, full_name, email, avatar_url, role, online_status, last_seen_at").neq("id", user.id).order("full_name"),
       supabase.from("channels").select("*").order("created_at", { ascending: false }),
-      supabase.from("messages").select("*, sender:profiles!messages_sender_id_fkey(*)").or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`).is("channel_id", null).order("created_at", { ascending: false }).limit(50),
+      supabase.from("messages").select("*").or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`).is("channel_id", null).order("created_at", { ascending: false }).limit(50),
     ]);
 
     profile = profileRes.data;
@@ -52,7 +52,7 @@ export default async function MessagesPage({
   const conversations = new Map<string, { user: UserType; lastMessage: MessageType; unread: number }>();
 
   recentMessages?.forEach((msg) => {
-    const partnerId = msg.sender_id === user.id ? msg.receiver_id : msg.sender_id;
+    const partnerId = msg.sender_id === user.id ? msg.recipient_id : msg.sender_id;
     if (!partnerId) return;
 
     if (!conversations.has(partnerId)) {
@@ -61,10 +61,10 @@ export default async function MessagesPage({
         conversations.set(partnerId, {
           user: partner,
           lastMessage: msg,
-          unread: msg.receiver_id === user.id && !msg.is_read ? 1 : 0,
+          unread: msg.recipient_id === user.id && !msg.is_read ? 1 : 0,
         });
       }
-    } else if (msg.receiver_id === user.id && !msg.is_read) {
+    } else if (msg.recipient_id === user.id && !msg.is_read) {
       const conv = conversations.get(partnerId)!;
       conv.unread++;
     }
@@ -72,7 +72,7 @@ export default async function MessagesPage({
 
   return (
     <MessagesInterface
-      currentUser={user}
+      currentUser={user as any}
       profile={profile}
       users={users || []}
       channels={channels || []}
