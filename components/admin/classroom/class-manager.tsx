@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 
 import { createClass, updateClass, deleteClass } from "@/actions/classroom-admin";
 
@@ -53,7 +53,6 @@ export function ClassManager({ initialClasses }: ClassManagerProps) {
     const [open, setOpen] = useState(false);
     const [editingClass, setEditingClass] = useState<any>(null);
     const router = useRouter();
-    const { toast } = useToast();
 
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
@@ -82,8 +81,7 @@ export function ClassManager({ initialClasses }: ClassManagerProps) {
         try {
             if (editingClass) {
                 await updateClass(editingClass.id, values.name, values.description || "");
-                toast({
-                    title: "Class updated",
+                toast.success("Class updated", {
                     description: "Initial details updated.",
                 });
                 setOpen(false);
@@ -91,14 +89,12 @@ export function ClassManager({ initialClasses }: ClassManagerProps) {
             } else {
                 const result = await createClass(values.name, values.description || "");
                 if (result.success && result.id) {
-                    toast({
-                        title: "Class created",
+                    toast.success("Class created", {
                         description: "Redirecting to class dashboard...",
                     });
                     router.push(`/dashboard/admin/classroom/classes/${result.id}/edit`);
                 } else {
-                    toast({
-                        title: "Class created",
+                    toast.success("Class created", {
                         description: "The new class has been successfully created.",
                     });
                 }
@@ -107,9 +103,7 @@ export function ClassManager({ initialClasses }: ClassManagerProps) {
             router.refresh();
         } catch (error) {
             console.error(error);
-            toast({
-                variant: "destructive",
-                title: "Error",
+            toast.error("Error", {
                 description: `Failed to ${editingClass ? "update" : "create"} class.`,
             });
         }
@@ -120,16 +114,13 @@ export function ClassManager({ initialClasses }: ClassManagerProps) {
 
         try {
             await deleteClass(id);
-            toast({
-                title: "Class deleted",
+            toast.success("Class deleted", {
                 description: "The class has been permanently removed.",
             });
             router.refresh();
         } catch (error) {
             console.error(error);
-            toast({
-                variant: "destructive",
-                title: "Error",
+            toast.error("Error", {
                 description: "Failed to delete class.",
             });
         }

@@ -49,7 +49,7 @@ export function EventsList({ initialEvents, currentUserId, isAdmin }: EventsList
                 matchesFilter = isBefore(eventDate, now) && !isSameDay(eventDate, now);
                 break;
             case "mine":
-                matchesFilter = event.user_id === currentUserId;
+                matchesFilter = event.user_id === currentUserId || (event.attendees && event.attendees.includes(currentUserId));
                 break;
             case "training":
                 matchesFilter = event.event_type === "training";

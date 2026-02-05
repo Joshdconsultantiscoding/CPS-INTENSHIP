@@ -4,47 +4,48 @@ let timeOffset = 0;
 let lastSync = 0;
 
 /**
- * Fetches the current time from multiple high-availability APIs to ensure sync.
+ * Fetches the current time from multiple high-availability APIs.
+ * Optimism: Returns quickly if already synced or locally reliable.
  */
 export async function syncServerTime() {
-    const apis = [
-        "https://worldtimeapi.org/api/timezone/Africa/Lagos",
-        "https://timeapi.io/api/Time/current/zone?timeZone=Africa/Lagos"
-    ];
-
-    console.log("[TimeSync] Starting sync attempt...");
-
-    for (const url of apis) {
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 4000);
-
-            const response = await fetch(url, {
-                cache: 'no-store',
-                signal: controller.signal
-            });
-            clearTimeout(timeoutId);
-
-            if (response.ok) {
-                const data = await response.json();
-                // Handle different response formats
-                const serverTimeStr = data.datetime || data.dateTime;
-                if (!serverTimeStr) continue;
-
-                const serverTime = new Date(serverTimeStr).getTime();
-                const localTime = Date.now();
-                timeOffset = serverTime - localTime;
-                lastSync = Date.now();
-
-                console.log(`[TimeSync] Success via ${url}. Offset: ${timeOffset}ms. Server: ${serverTimeStr}`);
-                return; // Sync complete
-            }
-        } catch (e) {
-            console.warn(`[TimeSync] Failed to sync with ${url}:`, e);
-        }
+    // Only sync once every 30 minutes to reduce network overhead
+    if (lastSync > 0 && Date.now() - lastSync < 30 * 60 * 1000) {
+        return;
     }
 
-    console.warn("[TimeSync] All APIs failed or timed out. Falling back to system clock.");
+    const apis = [
+        "https://timeapi.io/api/Time/current/zone?timeZone=Africa/Lagos",
+        "https://worldtimeapi.org/api/timezone/Africa/Lagos"
+    ];
+
+    // Attempt sync in background
+    (async () => {
+        for (const url of apis) {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 2000); // Shorter timeout
+
+                const response = await fetch(url, {
+                    next: { revalidate: 3600 }, // Cache if supported by environment
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const serverTimeStr = data.datetime || data.dateTime;
+                    if (!serverTimeStr) continue;
+
+                    const serverTime = new Date(serverTimeStr).getTime();
+                    timeOffset = serverTime - Date.now();
+                    lastSync = Date.now();
+                    return;
+                }
+            } catch (e) {
+                // Silently fail, stick to system clock
+            }
+        }
+    })();
 }
 
 /**

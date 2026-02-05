@@ -1,12 +1,14 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Search, X, Bot, Sparkles, Hash } from "lucide-react";
 import type { Channel, Message, Profile } from "@/lib/types";
+import { motion, AnimatePresence } from "framer-motion";
 import { OnlineIndicator } from "./online-indicator";
 
 interface Conversation {
@@ -38,6 +40,8 @@ interface ListViewProps {
     getInitials: (profile: any) => string;
     formatTime: (date: Date | string) => string;
     getStatus: (id: string) => string;
+    typingUsers?: Map<string, { targetUserId: string; timestamp: number }>;
+    recordingUsers?: Map<string, { targetUserId: string; timestamp: number }>;
 }
 
 export function ListView({
@@ -53,6 +57,8 @@ export function ListView({
     getInitials,
     formatTime,
     getStatus,
+    typingUsers,
+    recordingUsers,
 }: ListViewProps) {
     const filtered = users.filter(
         (u) =>
@@ -90,153 +96,62 @@ export function ListView({
             </div>
 
             {/* Conversations */}
-            <div className="flex-1 overflow-y-auto">
-                {/* AI Assistant */}
-                <button
-                    onClick={() => onOpenChat("ai")}
-                    className="w-full flex items-center gap-4 px-5 py-4 hover:bg-muted/40 active:bg-muted/60 transition-all border-b group"
-                >
-                    <div className="relative shrink-0 transition-transform group-hover:scale-105">
-                        <Avatar className="h-14 w-14 bg-linear-to-tr from-primary via-primary/80 to-primary/60 shadow-md">
-                            <AvatarFallback className="bg-transparent text-white">
-                                <Bot className="h-7 w-7" />
-                            </AvatarFallback>
-                        </Avatar>
-                        <span className="absolute bottom-0 right-0 h-4 w-4 rounded-full bg-green-500 border-[3px] border-background shadow-sm" />
-                    </div>
-                    <div className="flex-1 min-w-0 text-left">
-                        <div className="flex items-center gap-2 mb-0.5">
-                            <span className="font-bold text-base">HG Core</span>
-                            <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-bold bg-primary/10 text-primary border-none">
-                                <Sparkles className="h-3 w-3 mr-0.5" /> AI
-                            </Badge>
-                        </div>
-                        <p className="text-sm text-muted-foreground/80 font-medium truncate">
-                            Your personal assistant
-                        </p>
-                    </div>
-                </button>
-
-                {/* Channels */}
-                {channels.length > 0 && (
-                    <>
-                        <div className="px-5 py-2.5 bg-muted/20">
-                            <span className="text-[11px] font-bold text-muted-foreground/70 uppercase tracking-widest">
-                                Channels
-                            </span>
-                        </div>
-                        {channels.map((channel) => (
-                            <button
-                                key={channel.id}
-                                onClick={() => onOpenChat("channel", channel)}
-                                className="w-full flex items-center gap-4 px-5 py-4 hover:bg-muted/40 active:bg-muted/60 transition-all border-b last:border-none group"
-                            >
-                                <div className="h-14 w-14 rounded-2xl bg-muted/60 flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 group-hover:bg-primary/5">
-                                    <Hash className="h-6 w-6 text-muted-foreground group-hover:text-primary transition-colors" />
-                                </div>
-                                <div className="flex-1 min-w-0 text-left">
-                                    <p className="font-bold text-base group-hover:text-primary transition-colors">{channel.name}</p>
-                                    <p className="text-sm text-muted-foreground/80 font-medium truncate">
-                                        {channel.description || "Active community"}
-                                    </p>
-                                </div>
-                            </button>
-                        ))}
-                    </>
-                )}
-
-                {/* Direct Messages */}
-                <div className="px-5 py-2.5 bg-muted/20">
-                    <span className="text-[11px] font-bold text-muted-foreground/70 uppercase tracking-widest">
-                        Direct Messages
-                    </span>
-                </div>
-
-                {conversations.map((conv) => (
-                    <button
-                        key={conv.user.id}
-                        onClick={() => onOpenChat("user", conv.user)}
-                        className="w-full flex items-center gap-4 px-5 py-4 hover:bg-muted/40 active:bg-muted/60 transition-all border-b last:border-none group"
+            <div className="flex-1 overflow-y-auto scrollbar-hide px-2">
+                <AnimatePresence>
+                    {/* AI Assistant */}
+                    <motion.button
+                        key="ai-assistant-chat"
+                        layout
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        onClick={() => onOpenChat("ai")}
+                        className="w-full flex items-center gap-4 px-4 py-3 mb-2 rounded-xl hover:bg-muted/40 transition-all border border-transparent hover:border-border/40 group relative overflow-hidden"
                     >
-                        <div className="relative shrink-0 transition-transform group-hover:scale-105">
-                            <Avatar className="h-14 w-14 shadow-sm">
-                                <AvatarImage src={conv.user.avatar_url || ""} />
-                                <AvatarFallback className="bg-muted text-muted-foreground text-lg">
-                                    {conv.user.first_name?.[0] || conv.user.full_name?.[0] || conv.user.email[0].toUpperCase()}
-                                    {conv.user.last_name?.[0]}
+                        <div className="relative shrink-0 transition-transform group-hover:scale-105 z-10">
+                            <Avatar className="h-12 w-12 bg-linear-to-tr from-primary via-purple-500 to-pink-500 shadow-lg ring-2 ring-background">
+                                <AvatarFallback className="bg-transparent text-white">
+                                    <Bot className="h-6 w-6" />
                                 </AvatarFallback>
                             </Avatar>
-                            <OnlineIndicator status={getStatus(conv.user.id)} size="lg" />
+                            <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full bg-green-500 border-2 border-background shadow-xs" />
                         </div>
-                        <div className="flex-1 min-w-0 text-left">
-                            <div className="flex items-center justify-between gap-2 mb-0.5">
-                                <span className="font-bold text-base truncate group-hover:text-primary transition-colors">
-                                    {conv.user.first_name || conv.user.last_name
-                                        ? `${conv.user.first_name || ""} ${conv.user.last_name || ""}`.trim()
-                                        : conv.user.full_name || conv.user.email}
-                                </span>
-                                <span className="text-[11px] font-bold text-muted-foreground/60 shrink-0 uppercase">
-                                    {formatTime(
-                                        conv.lastMessage?.created_at || new Date().toISOString()
-                                    )}
-                                </span>
+                        <div className="flex-1 min-w-0 text-left z-10">
+                            <div className="flex items-center gap-2 mb-0.5">
+                                <span className="font-bold text-sm">HG Core</span>
+                                <Badge variant="secondary" className="h-4 px-1 text-[9px] font-bold bg-primary/10 text-primary border-none">
+                                    <Sparkles className="h-2.5 w-2.5 mr-0.5" /> AI
+                                </Badge>
                             </div>
-                            <div className="flex items-center justify-between gap-2">
-                                <p className="text-sm text-muted-foreground/80 font-medium truncate">
-                                    {conv.lastMessage?.content?.startsWith("[CALL_LOG]:")
-                                        ? (() => {
-                                            const parts = conv.lastMessage.content.split(":");
-                                            const type = parts[1];
-                                            const isMissed = parts[2] === "missed";
-                                            return isMissed ? `Missed ${type} call` : `${type.charAt(0).toUpperCase() + type.slice(1)} call`;
-                                        })()
-                                        : (conv.lastMessage?.content || "No messages yet")}
-                                </p>
-                                {conv.unread > 0 && (
-                                    <Badge className="h-5 min-w-5 justify-center rounded-full shrink-0 border-none bg-primary font-bold text-[10px]">
-                                        {conv.unread}
-                                    </Badge>
-                                )}
-                            </div>
+                            <p className="text-xs text-muted-foreground/80 font-medium truncate">
+                                Your personal assistant
+                            </p>
                         </div>
-                    </button>
-                ))}
+                        {/* Hover Gradient */}
+                        <div className="absolute inset-0 bg-linear-to-r from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                    </motion.button>
 
-                {/* Other users */}
-                {filtered
-                    .filter(
-                        (u) =>
-                            !conversations.some((c) => c.user.id === u.id) &&
-                            u.id !== currentUser.id
-                    )
-                    .map((user) => (
-                        <button
-                            key={user.id}
-                            onClick={() => onOpenChat("user", user)}
-                            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/50 active:bg-muted transition-colors"
-                        >
-                            <div className="relative shrink-0">
-                                <Avatar className="h-12 w-12">
-                                    <AvatarImage src={user.avatar_url || ""} />
-                                    <AvatarFallback>
-                                        {user.first_name?.[0] || user.full_name?.[0] || user.email[0].toUpperCase()}
-                                        {user.last_name?.[0]}
-                                    </AvatarFallback>
-                                </Avatar>
-                                <OnlineIndicator status={getStatus(user.id)} size="md" />
+                    {/* Coming Soon Section */}
+                    <motion.div
+                        key="peer-messaging-coming-soon"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="mt-6 px-4"
+                    >
+                        <div className="rounded-xl border border-dashed border-primary/20 bg-primary/5 p-6 text-center">
+                            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-background shadow-sm ring-1 ring-border">
+                                <Sparkles className="h-6 w-6 text-primary" />
                             </div>
-                            <div className="flex-1 min-w-0 text-left">
-                                <p className="font-medium truncate">
-                                    {user.first_name || user.last_name
-                                        ? `${user.first_name || ""} ${user.last_name || ""}`.trim()
-                                        : user.full_name || user.email}
-                                </p>
-                                <p className="text-sm text-muted-foreground capitalize">
-                                    {user.role}
-                                </p>
+                            <h3 className="font-semibold mb-1">Peer Messaging</h3>
+                            <p className="text-sm text-muted-foreground mb-4">
+                                Direct messaging with other interns is coming soon! For now, please use the AI Assistant for support.
+                            </p>
+                            <div className="flex justify-center gap-1 text-xs text-muted-foreground/60">
+                                <span className="px-2 py-1 rounded-md bg-background border">Group Chats</span>
+                                <span className="px-2 py-1 rounded-md bg-background border">File Sharing</span>
                             </div>
-                        </button>
-                    ))}
+                        </div>
+                    </motion.div>
+                </AnimatePresence>
             </div>
         </div>
     );

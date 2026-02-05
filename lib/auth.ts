@@ -1,6 +1,8 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
+import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { redirect } from "next/navigation";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { config } from "@/lib/config";
 import { cache } from "react";
 
 export interface AuthUser {
@@ -55,7 +57,7 @@ export const getAuthUser = cache(async (): Promise<AuthUser> => {
         }
 
         const email = user.emailAddresses[0]?.emailAddress || null;
-        const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "agbojoshua2005@gmail.com";
+        const ADMIN_EMAIL = config.adminEmail;
 
         // 1. Strict Override for The Admin Email (Security & Identity)
         if (email && email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
@@ -86,7 +88,7 @@ export const getAuthUser = cache(async (): Promise<AuthUser> => {
         };
     } catch (error: any) {
         // If it's a redirect error, re-throw it (standard Next.js behavior)
-        if (error?.digest?.startsWith("NEXT_REDIRECT")) throw error;
+        if (isRedirectError(error)) throw error;
 
         console.error("CRITICAL ERROR in getAuthUser:", error);
         const errorMessage = error instanceof Error ? error.message : String(error);

@@ -16,7 +16,7 @@ export function OnlineIndicator({ status, size = "sm" }: OnlineIndicatorProps) {
         return (
             <span
                 className={cn(
-                    "absolute bottom-0 right-0 rounded-full bg-green-500 border-background",
+                    "absolute bottom-0 right-0 rounded-full bg-green-500 border-background shadow-[0_0_0_1px] shadow-white dark:shadow-black animate-pulse",
                     sizeClass,
                     borderClass
                 )}

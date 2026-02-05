@@ -20,6 +20,7 @@ export function WelcomeScreen({ userName, onNext, isReturningUser = false }: Wel
         <AnimatePresence>
             {isVisible && (
                 <motion.div
+                    key="welcome-screen"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0, scale: 1.1 }}

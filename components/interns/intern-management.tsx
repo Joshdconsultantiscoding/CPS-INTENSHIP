@@ -56,7 +56,7 @@ import {
 import { formatDistanceToNow, format } from "date-fns";
 import { useRouter } from "next/navigation";
 import { usePresence } from "ably/react";
-import { useAbly } from "@/providers/ably-provider";
+import { useAbly, useOnlineUsers } from "@/providers/ably-provider";
 
 interface UserStats {
   totalTasks: number;
@@ -109,7 +109,8 @@ export function InternManagement({
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [filter, setFilter] = useState<"all" | "online" | "offline" | "interns" | "admins">("all");
-  const [onlineUsersSet, setOnlineUsersSet] = useState<Set<string>>(new Set());
+  // Use global online users context from Ably provider (single source of truth)
+  const onlineUsersSet = useOnlineUsers();
   const { isConfigured, client: ablyClient } = useAbly();
   const supabase = createClient();
   const router = useRouter();
@@ -220,11 +221,7 @@ export function InternManagement({
 
   return (
     <div className="space-y-6">
-      {/* Ably Presence Sync (Conditional) */}
-      {isConfigured && ablyClient && (
-        <AblyPresenceSync onUpdateOnlineSet={setOnlineUsersSet} />
-      )}
-
+      {/* AblyPresenceSync no longer needed - using global useOnlineUsers hook */}
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight">User Management</h1>
@@ -737,24 +734,4 @@ export function InternManagement({
   );
 }
 
-// Sub-component to safely use Ably hooks only when configured
-function AblyPresenceSync({
-  onUpdateOnlineSet,
-}: {
-  onUpdateOnlineSet: (set: Set<string>) => void;
-}) {
-  const { presenceData } = usePresence({ channelName: "global" });
-
-  useEffect(() => {
-    if (!presenceData) return;
-    const p = new Set<string>();
-    presenceData.forEach((item) => {
-      if (item.clientId) {
-        p.add(item.clientId);
-      }
-    });
-    onUpdateOnlineSet(p);
-  }, [presenceData, onUpdateOnlineSet]);
-
-  return null;
-}
+// AblyPresenceSync no longer needed - using global useOnlineUsers hook from ably-provider

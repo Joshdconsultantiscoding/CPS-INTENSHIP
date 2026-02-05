@@ -21,8 +21,17 @@ export default async function CalendarPage() {
     .select("*")
     .order("start_time", { ascending: true });
 
+  const { data: usersData } = await supabase
+    .from("profiles")
+    .select("id, full_name, email, role")
+    .order("full_name");
+
   if (!isAdmin) {
-    eventsQuery = eventsQuery.or(`user_id.eq.${user.id},is_public.eq.true`);
+    // Interns see:
+    // 1. Public events
+    // 2. Events they created (user_id = me)
+    // 3. Events they are attending (attendees contains me)
+    eventsQuery = eventsQuery.or(`user_id.eq.${user.id},is_public.eq.true,attendees.cs.{${user.id}}`);
   }
 
   const { data: events } = await eventsQuery;
@@ -37,7 +46,12 @@ export default async function CalendarPage() {
           </p>
         </div>
       </div>
-      <CalendarView events={events || []} userId={user.id} isAdmin={isAdmin} />
+      <CalendarView
+        events={events || []}
+        userId={user.id}
+        isAdmin={isAdmin}
+        users={usersData || []}
+      />
     </div>
   );
 }

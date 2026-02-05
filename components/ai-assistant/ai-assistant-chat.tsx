@@ -119,9 +119,9 @@ export function AiAssistantChat() {
           </div>
         ) : (
           <div className="mx-auto max-w-3xl space-y-6 p-6">
-            {messages.map((message) => (
+            {messages.map((message, idx) => (
               <div
-                key={message.id}
+                key={message.id || `ai-msg-${idx}`}
                 className={cn(
                   "flex gap-4",
                   message.role === "user" && "flex-row-reverse"

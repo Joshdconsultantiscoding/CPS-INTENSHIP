@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { Notification } from "@/lib/types";
 import {
@@ -24,9 +25,11 @@ import {
   Check,
   CheckCheck,
 } from "lucide-react";
+import { useAbly } from "@/providers/ably-provider";
 
 interface NotificationListProps {
   notifications: Notification[];
+  userId: string;
 }
 
 const typeIcons = {
@@ -45,8 +48,35 @@ const typeColors = {
   system: "bg-muted text-muted-foreground",
 };
 
-export function NotificationList({ notifications }: NotificationListProps) {
+export function NotificationList({ notifications, userId }: NotificationListProps) {
   const router = useRouter();
+  const { client, isConfigured } = useAbly();
+
+  // Real-time notification subscription via Ably
+  useEffect(() => {
+    if (!client || !isConfigured || !userId) return;
+
+    const channelName = `user-notifications:${userId}`;
+    const channel = client.channels.get(channelName);
+
+    const handleNotification = (message: any) => {
+      const data = message.data;
+      toast(data.title || "New Notification", {
+        description: data.content || data.message,
+        duration: 5000,
+      });
+      // Refresh to show new notification in list
+      router.refresh();
+    };
+
+    channel.subscribe("alert", handleNotification);
+    channel.subscribe("notification", handleNotification);
+
+    return () => {
+      channel.unsubscribe("alert", handleNotification);
+      channel.unsubscribe("notification", handleNotification);
+    };
+  }, [client, isConfigured, userId, router]);
 
   const markAsRead = async (id: string) => {
     const supabase = createClient();
@@ -104,9 +134,8 @@ export function NotificationList({ notifications }: NotificationListProps) {
             return (
               <Card
                 key={notification.id}
-                className={`transition-colors ${
-                  !notification.is_read ? "border-primary/50 bg-primary/5" : ""
-                }`}
+                className={`transition-colors ${!notification.is_read ? "border-primary/50 bg-primary/5" : ""
+                  }`}
               >
                 <CardHeader className="flex flex-row items-start gap-4 space-y-0 pb-2">
                   <div
@@ -147,3 +176,4 @@ export function NotificationList({ notifications }: NotificationListProps) {
     </div>
   );
 }
+

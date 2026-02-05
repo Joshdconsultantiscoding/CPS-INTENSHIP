@@ -14,27 +14,7 @@ async function verifyAdmin() {
 
     const supabase = await createAdminClient();
 
-    // Ensure Admin Profile Exists in DB (to satisfy Foreign Keys)
-    // We trust getAuthUser() validated the identity/email.
-    const { error } = await supabase.from("profiles").upsert({
-        id: user.id,
-        email: user.email || "",
-        full_name: user.full_name || "Admin",
-        avatar_url: user.avatar_url || "",
-        role: "admin",
-        updated_at: new Date().toISOString(),
-    }, { onConflict: "email" });
-
-    if (error) {
-        console.error("Failed to ensure admin profile:", JSON.stringify(error, null, 2));
-        // If it's a FK violation, it confirms our hypothesis.
-        // We throw here to stop execution and see the error in UI if needed, 
-        // but the user wants it fixed "once and for all".
-        // Let's assume the migration fix works and we don't need to throw, 
-        // but if it fails, the next steps will fail anyway.
-        // Better to verify success.
-    }
-
+    // Trusting the sync layer for speed-of-light performance
     return { userId: user.id, supabase };
 }
 

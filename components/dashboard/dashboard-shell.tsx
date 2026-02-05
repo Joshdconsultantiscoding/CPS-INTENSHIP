@@ -8,6 +8,7 @@ import { MobileNav } from "./mobile-nav";
 import { useUser } from "@clerk/nextjs";
 import { Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { config } from "@/lib/config";
 import type { Profile } from "@/lib/types";
 import { type PortalSettings } from "@/hooks/use-portal-settings";
 import { TermsModal } from "@/components/onboarding/terms-modal";
@@ -35,73 +36,47 @@ export function DashboardShell({
 
   // Presence is now handled globally by AblyClientProvider
 
-  // Check Onboarding Progress
+  // Check Onboarding & Fetch Profile
   React.useEffect(() => {
-    async function checkOnboarding() {
+    async function initDashboardData() {
       if (!user?.id) return;
 
       const supabase = createClient();
-
-      // 1. Check Terms
-      const { data: terms } = await supabase
-        .from("terms_acceptances")
-        .select("*")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (!terms) {
-        setOnboardingStatus("terms");
-        return;
-      }
-
-      // 2. Check Onboarding
-      const { data: progress } = await supabase
-        .from("onboarding_progress")
-        .select("*")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (!progress || !progress.is_completed) {
-        setIsReturningUser(false);
-        setOnboardingStatus("welcome");
-      } else {
-        setIsReturningUser(true);
-        setOnboardingStatus("welcome");
-      }
-    }
-
-    if (isLoaded && user) {
-      checkOnboarding();
-    }
-  }, [user, isLoaded]);
-
-  React.useEffect(() => {
-    if (serverProfile) {
-      if (profile !== serverProfile) setProfile(serverProfile);
-      return;
-    }
-
-    async function fetchProfile() {
-      if (!user?.id) return;
-
-      const ADMIN_EMAIL = "agbojoshua2005@gmail.com";
+      const ADMIN_EMAIL = config.adminEmail;
       const isAdminEmail = user?.emailAddresses[0]?.emailAddress?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
 
-      const supabase = createClient();
-      const { data } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .single();
+      // Consolidate all initial checks into parallel requests
+      const [termsRes, progressRes, profileRes] = await Promise.all([
+        supabase.from("terms_acceptances").select("id").eq("user_id", user.id).maybeSingle(),
+        supabase.from("onboarding_progress").select("is_completed").eq("user_id", user.id).maybeSingle(),
+        supabase.from("profiles").select("*").eq("id", user.id).single()
+      ]);
 
-      if (data) {
+      // 1. Handle Terms
+      if (!termsRes.data) {
+        setOnboardingStatus("terms");
+      } else {
+        setSessionTermsAccepted(true);
+      }
+
+      // 2. Handle Onboarding
+      const progress = progressRes.data;
+      if (!progress || !progress.is_completed) {
+        setIsReturningUser(false);
+        if (termsRes.data) setOnboardingStatus("welcome");
+      } else {
+        setIsReturningUser(true);
+        if (termsRes.data) setOnboardingStatus("completed");
+      }
+
+      // 3. Handle Profile
+      if (profileRes.data) {
         if (isAdminEmail) {
-          setProfile({ ...data, role: "admin" });
+          setProfile({ ...profileRes.data, role: "admin" });
         } else {
-          setProfile(data);
+          setProfile(profileRes.data);
         }
       } else if (isAdminEmail) {
-        // Fallback if profile doesn't exist yet but email is admin
         setProfile({
           id: user.id,
           email: user.emailAddresses[0]?.emailAddress || "",
@@ -117,9 +92,11 @@ export function DashboardShell({
     }
 
     if (isLoaded && user) {
-      fetchProfile();
+      initDashboardData();
     }
   }, [user, isLoaded]);
+
+  // Consolidated into the Effect above
 
   const isAdmin = profile?.role === "admin";
   const userId = user?.id || "";

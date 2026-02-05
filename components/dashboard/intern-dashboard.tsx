@@ -53,11 +53,7 @@ export function InternDashboard({
   events = [],
 }: InternDashboardProps) {
   const { settings } = usePortalSettings();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  // No longer blocking initial render with mounted state for speed-of-light performance
 
   const totalTasks = completedTasks + pendingTasks + overdueTasks;
   const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
@@ -70,18 +66,7 @@ export function InternDashboard({
       new Date(r.report_date).toDateString() === new Date().toDateString()
   );
 
-  if (!mounted) {
-    return (
-      <div className="space-y-4 sm:space-y-6 animate-pulse">
-        <div className="h-20 bg-muted rounded-lg" />
-        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-24 bg-muted rounded-lg" />
-          ))}
-        </div>
-      </div>
-    );
-  }
+  // Removed blocking mounted check
 
   return (
     <div className="space-y-4 sm:space-y-6">

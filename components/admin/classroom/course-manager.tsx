@@ -38,7 +38,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 
 import { createCourse, updateCourse, deleteCourse } from "@/actions/classroom-admin";
@@ -61,7 +61,6 @@ export function CourseManager({ initialCourses }: CourseManagerProps) {
     const [open, setOpen] = useState(false);
     const [editingCourse, setEditingCourse] = useState<any>(null);
     const router = useRouter();
-    const { toast } = useToast();
 
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
@@ -105,8 +104,7 @@ export function CourseManager({ initialCourses }: CourseManagerProps) {
         try {
             if (editingCourse) {
                 await updateCourse(editingCourse.id, values);
-                toast({
-                    title: "Course updated",
+                toast.success("Course updated", {
                     description: "Initial details updated.",
                 });
                 setOpen(false);
@@ -114,14 +112,12 @@ export function CourseManager({ initialCourses }: CourseManagerProps) {
             } else {
                 const result = await createCourse(values);
                 if (result.success && result.id) {
-                    toast({
-                        title: "Course created",
+                    toast.success("Course created", {
                         description: "Redirecting to deep editor...",
                     });
                     router.push(`/dashboard/admin/classroom/courses/${result.id}/edit`);
                 } else {
-                    toast({
-                        title: "Course created",
+                    toast.success("Course created", {
                         description: "The course has been successfully created.",
                     });
                 }
@@ -130,9 +126,7 @@ export function CourseManager({ initialCourses }: CourseManagerProps) {
             router.refresh();
         } catch (error) {
             console.error(error);
-            toast({
-                variant: "destructive",
-                title: "Error",
+            toast.error("Error", {
                 description: `Failed to ${editingCourse ? "update" : "create"} course.`,
             });
         }
@@ -143,16 +137,13 @@ export function CourseManager({ initialCourses }: CourseManagerProps) {
 
         try {
             await deleteCourse(id);
-            toast({
-                title: "Course deleted",
+            toast.success("Course deleted", {
                 description: "The course has been removed.",
             });
             router.refresh();
         } catch (error) {
             console.error(error);
-            toast({
-                variant: "destructive",
-                title: "Error",
+            toast.error("Error", {
                 description: "Failed to delete course.",
             });
         }

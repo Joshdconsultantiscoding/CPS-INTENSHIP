@@ -46,15 +46,18 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { CalendarEvent } from "@/lib/types";
+import { CalendarEvent, Profile } from "@/lib/types";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface CalendarViewProps {
   events: CalendarEvent[];
   userId: string;
   isAdmin: boolean;
+  users?: Partial<Profile>[];
 }
 
 const eventTypeColors: Record<string, string> = {
@@ -64,12 +67,13 @@ const eventTypeColors: Record<string, string> = {
   other: "bg-gray-500",
 };
 
-export function CalendarView({ events, userId, isAdmin }: CalendarViewProps) {
+export function CalendarView({ events, userId, isAdmin, users = [] }: CalendarViewProps) {
   const router = useRouter();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedAttendees, setSelectedAttendees] = useState<string[]>([]);
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
@@ -111,12 +115,14 @@ export function CalendarView({ events, userId, isAdmin }: CalendarViewProps) {
         endTime,
         location,
         isPublic,
+        attendees: selectedAttendees,
       });
 
       if (!result.success) throw new Error(result.error);
 
       toast.success("Event created successfully");
       setIsDialogOpen(false);
+      setSelectedAttendees([]); // Reset selection
       router.refresh();
       // Reset form if needed, but Dialog closes so it's fine
     } catch (error: any) {
@@ -286,11 +292,46 @@ export function CalendarView({ events, userId, isAdmin }: CalendarViewProps) {
                     <Input id="location" name="location" />
                   </div>
                   {isAdmin && (
-                    <div className="flex items-center gap-2">
-                      <Switch id="isPublic" name="isPublic" />
-                      <Label htmlFor="isPublic">
-                        Make visible to all interns
-                      </Label>
+                    <div className="space-y-4 border-t pt-4">
+                      <div className="flex items-center gap-2">
+                        <Switch id="isPublic" name="isPublic" />
+                        <Label htmlFor="isPublic">
+                          Make visible to all interns
+                        </Label>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">Assign to specific interns (Visible to them)</Label>
+                        <div className="grid gap-2 border rounded-md p-3 h-32 overflow-y-auto bg-muted/20">
+                          {users && users.length > 0 ? (
+                            users.map((u) => (
+                              <div key={u.id} className="flex items-center gap-2">
+                                <Checkbox
+                                  id={`attendee-${u.id}`}
+                                  checked={selectedAttendees.includes(u.id!)}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      setSelectedAttendees([...selectedAttendees, u.id!]);
+                                    } else {
+                                      setSelectedAttendees(
+                                        selectedAttendees.filter((id) => id !== u.id)
+                                      );
+                                    }
+                                  }}
+                                />
+                                <Label
+                                  htmlFor={`attendee-${u.id}`}
+                                  className="text-sm cursor-pointer"
+                                >
+                                  {u.full_name || u.email}
+                                </Label>
+                              </div>
+                            ))
+                          ) : (
+                            <p className="text-xs text-muted-foreground">No interns found.</p>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   )}
                   <Button type="submit" className="w-full" disabled={isSubmitting}>

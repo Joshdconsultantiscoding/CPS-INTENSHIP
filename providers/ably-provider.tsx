@@ -17,6 +17,50 @@ const AblyContext = createContext<{
     isConfigured: boolean;
 }>({ client: null, status: "initialized", isOffline: false, isConfigured: true });
 
+// NEW: Global online users context for real-time presence tracking
+const OnlineUsersContext = createContext<Set<string>>(new Set());
+export const useOnlineUsers = () => useContext(OnlineUsersContext);
+
+// NEW: Global user activity context (typing, recording)
+export interface UserActivity {
+    typing: Map<string, { targetUserId: string; timestamp: number }>;
+    recording: Map<string, { targetUserId: string; timestamp: number }>;
+}
+
+const UserActivityContext = createContext<UserActivity>({
+    typing: new Map(),
+    recording: new Map()
+});
+export const useUserActivity = () => useContext(UserActivityContext);
+
+// NEW: Unified Hook for checking if a user is online
+// Strategies: 
+// 1. Ably Presence (Fastest, <1s latency)
+// 2. Database `last_active_at` (Fallback, ~1 min latency)
+export function useUnifiedPresence(users: any[]) {
+    // We already have the set of online user IDs from Ably
+    const onlineAblyUsers = useOnlineUsers();
+
+    // Helper to check status
+    const getStatus = useCallback((userId: string) => {
+        // 1. Check Ably Realtime Presence (Primary)
+        if (onlineAblyUsers.has(userId)) return "online";
+
+        // 2. Check Database Fallback (Secondary)
+        const user = users.find(u => u.id === userId);
+        if (user?.last_active_at) {
+            const lastActive = new Date(user.last_active_at).getTime();
+            const now = Date.now();
+            // If active within last 90 seconds, consider online (allowing for heartbeat skew)
+            if (now - lastActive < 90000) return "online";
+        }
+
+        return "offline";
+    }, [onlineAblyUsers, users]);
+
+    return { getStatus };
+}
+
 interface AblyClientProviderProps {
     children: React.ReactNode;
     userId?: string;
@@ -232,9 +276,31 @@ export function AblyClientProvider({ children, userId }: AblyClientProviderProps
         };
     }, [userId, isOffline, isConfigured, getBackoffDelay]);
 
+    // NEW: State for online users
+    const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+
+    // NEW: State for user activity
+    const [userActivity, setUserActivity] = useState<UserActivity>({
+        typing: new Map(),
+        recording: new Map()
+    });
+
+    // Clean up expired Ably presence if network glitched
+    useEffect(() => {
+        const interval = setInterval(() => {
+            // Optional: If we wanted to expire visually stuck users, we could do it here
+            // But Ably's usePresence usually handles this well.
+        }, 10000);
+        return () => clearInterval(interval);
+    }, []);
+
     const content = (
         <AblyContext.Provider value={{ client, status, isOffline, isConfigured }}>
-            {children}
+            <OnlineUsersContext.Provider value={onlineUsers}>
+                <UserActivityContext.Provider value={userActivity}>
+                    {children}
+                </UserActivityContext.Provider>
+            </OnlineUsersContext.Provider>
         </AblyContext.Provider>
     );
 
@@ -244,7 +310,12 @@ export function AblyClientProvider({ children, userId }: AblyClientProviderProps
         return (
             <RootAblyProvider client={client}>
                 <ChannelProvider channelName="global">
-                    {userId && <GlobalPresenceTracker userId={userId} />}
+                    {userId && (
+                        <>
+                            <GlobalPresenceTracker userId={userId} onOnlineUsersChange={setOnlineUsers} />
+                            <GlobalActivityTracker userId={userId} onActivityChange={setUserActivity} />
+                        </>
+                    )}
                     {content}
                 </ChannelProvider>
             </RootAblyProvider>
@@ -255,39 +326,177 @@ export function AblyClientProvider({ children, userId }: AblyClientProviderProps
 }
 
 // Internal component to handle presence registration
-function GlobalPresenceTracker({ userId }: { userId: string }) {
-    // This joins the 'global' presence channel automatically
-    const { updateStatus } = usePresence({ channelName: "global", data: { userId } });
+function GlobalPresenceTracker({ userId, onOnlineUsersChange }: { userId: string; onOnlineUsersChange: (users: Set<string>) => void }) {
+    // This joins the 'global' presence channel automatically and returns presence data
+    const { presenceData, updateStatus } = usePresence({ channelName: "global", data: { userId } });
     const supabase = useRef(createClient());
+    const lastSeenUpdateRef = useRef<string | null>(null);
 
-    // Optional: Synchronize Ably presence state to Supabase profiles occasionally 
-    // for offline access, but we'll primarily trust the Ably state for 'Online' dots.
+    // Sync Ably presence to global context
     useEffect(() => {
-        const updatePrescenceInDB = async () => {
+        const onlineSet = new Set<string>();
+        // CRITICAL: presenceData can be undefined/null when Ably is not connected yet
+        if (presenceData && Array.isArray(presenceData)) {
+            presenceData.forEach((member) => {
+                // Extract userId from data (preferred) or clientId as fallback
+                const memberId = member.data?.userId || member.clientId;
+                if (memberId) onlineSet.add(memberId);
+            });
+        }
+        onOnlineUsersChange(onlineSet);
+    }, [presenceData, onOnlineUsersChange]);
+
+    // Database heartbeat for fallback and last_seen tracking
+    useEffect(() => {
+        const updatePresenceInDB = async () => {
+            const now = new Date().toISOString();
+            lastSeenUpdateRef.current = now;
             await supabase.current
                 .from("profiles")
                 .update({
                     online_status: "online",
-                    last_seen_at: new Date().toISOString()
+                    last_seen_at: now
                 })
                 .eq("id", userId);
         };
 
-        updatePrescenceInDB();
-        const interval = setInterval(updatePrescenceInDB, 60000); // 1-minute database heartbeat
+        const setOfflineInDB = () => {
+            const now = new Date().toISOString();
+            // Use sendBeacon for guaranteed delivery on page close
+            if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
+                const data = JSON.stringify({
+                    userId,
+                    online_status: "offline",
+                    last_seen_at: now
+                });
+                navigator.sendBeacon('/api/presence/offline', data);
+            } else {
+                // Fallback for older browsers
+                supabase.current
+                    .from("profiles")
+                    .update({
+                        online_status: "offline",
+                        last_seen_at: now
+                    })
+                    .eq("id", userId);
+            }
+        };
+
+        updatePresenceInDB();
+        updatePresenceInDB();
+        const interval = setInterval(updatePresenceInDB, 30000); // Increased to 30s for better accuracy without spamming
+
+        // CRITICAL: Handle browser close/refresh with beforeunload
+        const handleBeforeUnload = () => {
+            setOfflineInDB();
+        };
+
+        // Handle visibility change (tab switch)
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                updatePresenceInDB();
+            }
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        document.addEventListener('visibilitychange', handleVisibilityChange);
 
         return () => {
             clearInterval(interval);
-            // Best effort offline update
-            supabase.current
-                .from("profiles")
-                .update({
-                    online_status: "offline",
-                    last_seen_at: new Date().toISOString()
-                })
-                .eq("id", userId);
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            // Best effort cleanup on unmount (HMR, navigation, etc.)
+            setOfflineInDB();
         };
     }, [userId]);
+
+    return null;
+}
+
+// NEW: Tracker for global activity (typing, recording)
+function GlobalActivityTracker({ userId, onActivityChange }: { userId: string; onActivityChange: React.Dispatch<React.SetStateAction<UserActivity>> }) {
+    const { client } = useAbly();
+
+    useEffect(() => {
+        if (!client) return;
+
+        const channel = client.channels.get("global-activity");
+
+        // Maps to store activity state
+        const typingMap = new Map<string, { targetUserId: string; timestamp: number }>();
+        const recordingMap = new Map<string, { targetUserId: string; timestamp: number }>();
+
+        const cleanupExpired = () => {
+            const now = Date.now();
+            let changed = false;
+
+            // Cleanup typing (expires after 3s)
+            for (const [uid, data] of typingMap.entries()) {
+                if (now - data.timestamp > 3000) {
+                    typingMap.delete(uid);
+                    changed = true;
+                }
+            }
+
+            // Cleanup recording (expires after 30s if no update)
+            for (const [uid, data] of recordingMap.entries()) {
+                if (now - data.timestamp > 30000) {
+                    recordingMap.delete(uid);
+                    changed = true;
+                }
+            }
+
+            if (changed) {
+                onActivityChange({
+                    typing: new Map(typingMap),
+                    recording: new Map(recordingMap)
+                });
+            }
+        };
+
+        const handleMessage = (msg: Ably.Message) => {
+            const { userId: senderId, targetUserId, isTyping, isRecording } = msg.data;
+            if (senderId === userId) return; // Ignore self
+
+            const now = Date.now();
+            let changed = false;
+
+            if (msg.name === "typing") {
+                if (isTyping) {
+                    typingMap.set(senderId, { targetUserId, timestamp: now });
+                } else {
+                    typingMap.delete(senderId);
+                }
+                changed = true;
+            } else if (msg.name === "recording") {
+                if (isRecording) {
+                    recordingMap.set(senderId, { targetUserId, timestamp: now });
+                    // Also clear typing if recording starts
+                    if (typingMap.has(senderId)) {
+                        typingMap.delete(senderId);
+                    }
+                } else {
+                    recordingMap.delete(senderId);
+                }
+                changed = true;
+            }
+
+            if (changed) {
+                onActivityChange({
+                    typing: new Map(typingMap),
+                    recording: new Map(recordingMap)
+                });
+            }
+        };
+
+        channel.subscribe(handleMessage);
+        const interval = setInterval(cleanupExpired, 1000);
+
+        return () => {
+            channel.unsubscribe();
+            clearInterval(interval);
+        };
+    }, [client, userId, onActivityChange]);
 
     return null;
 }

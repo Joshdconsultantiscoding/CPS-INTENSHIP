@@ -12,8 +12,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { assignCourseToClass, removeCourseFromClass } from "@/actions/classroom-admin";
+
 import { useRouter } from "next/navigation";
 
 interface ClassCoursesTabProps {
@@ -23,7 +24,6 @@ interface ClassCoursesTabProps {
 }
 
 export function ClassCoursesTab({ classData, classCourses, availableCourses }: ClassCoursesTabProps) {
-    const { toast } = useToast();
     const router = useRouter();
     const [isAssigning, setIsAssigning] = useState<string | null>(null);
     const [isRemoving, setIsRemoving] = useState<string | null>(null);
@@ -36,17 +36,12 @@ export function ClassCoursesTab({ classData, classCourses, availableCourses }: C
         setIsAssigning(courseId);
         try {
             await assignCourseToClass(classData.id, courseId);
-            toast({
-                title: "Course assigned",
+            toast.success("Course assigned", {
                 description: "The course is now available to all interns in this class.",
             });
             router.refresh();
         } catch (error) {
-            toast({
-                variant: "destructive",
-                title: "Error",
-                description: "Failed to assign course.",
-            });
+            toast.error("Failed to assign course.");
         } finally {
             setIsAssigning(null);
         }
@@ -58,17 +53,12 @@ export function ClassCoursesTab({ classData, classCourses, availableCourses }: C
         setIsRemoving(courseId);
         try {
             await removeCourseFromClass(classData.id, courseId);
-            toast({
-                title: "Course removed",
+            toast.success("Course removed", {
                 description: "The curriculum has been updated.",
             });
             router.refresh();
         } catch (error) {
-            toast({
-                variant: "destructive",
-                title: "Error",
-                description: "Failed to remove course.",
-            });
+            toast.error("Failed to remove course.");
         } finally {
             setIsRemoving(null);
         }

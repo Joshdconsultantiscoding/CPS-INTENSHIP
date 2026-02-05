@@ -12,6 +12,7 @@ export interface CreateEventInput {
     endTime?: string;
     location?: string;
     isPublic?: boolean;
+    attendees?: string[];
 }
 
 export async function createEventAction(input: CreateEventInput) {
@@ -68,6 +69,7 @@ export async function createEventAction(input: CreateEventInput) {
                 end_time: input.endTime || null,
                 location: input.location || null,
                 is_public: input.isPublic || false,
+                attendees: input.attendees || [],
             })
             .select()
             .single();
@@ -82,6 +84,94 @@ export async function createEventAction(input: CreateEventInput) {
         return { success: true, event: data };
     } catch (error: any) {
         console.error("[Calendar] Unexpected error:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+export async function deleteEventAction(eventId: string) {
+    try {
+        const user = await getAuthUser();
+        const supabase = await createAdminClient();
+        const isAdmin = user.role === "admin";
+
+        // Fetch event to check ownership
+        const { data: event, error: fetchError } = await supabase
+            .from("calendar_events")
+            .select("user_id")
+            .eq("id", eventId)
+            .single();
+
+        if (fetchError || !event) {
+            return { success: false, error: "Event not found" };
+        }
+
+        if (!isAdmin && event.user_id !== user.id) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const { error: deleteError } = await supabase
+            .from("calendar_events")
+            .delete()
+            .eq("id", eventId);
+
+        if (deleteError) {
+            return { success: false, error: deleteError.message };
+        }
+
+        revalidatePath("/dashboard/calendar");
+        revalidatePath("/dashboard/events");
+        return { success: true };
+    } catch (error: any) {
+        return { success: false, error: error.message };
+    }
+}
+
+export type UpdateEventInput = Partial<CreateEventInput> & { id: string };
+
+export async function updateEventAction(input: UpdateEventInput) {
+    try {
+        const user = await getAuthUser();
+        const supabase = await createAdminClient();
+        const isAdmin = user.role === "admin";
+
+        // Fetch event to check ownership
+        const { data: event, error: fetchError } = await supabase
+            .from("calendar_events")
+            .select("user_id")
+            .eq("id", input.id)
+            .single();
+
+        if (fetchError || !event) {
+            return { success: false, error: "Event not found" };
+        }
+
+        if (!isAdmin && event.user_id !== user.id) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const updateData: any = {};
+        if (input.title) updateData.title = input.title;
+        if (input.description !== undefined) updateData.description = input.description;
+        if (input.eventType) updateData.event_type = input.eventType;
+        if (input.startTime) updateData.start_time = input.startTime;
+        if (input.endTime !== undefined) updateData.end_time = input.endTime; // Allow setting null
+        if (input.location !== undefined) updateData.location = input.location;
+        if (input.isPublic !== undefined) updateData.is_public = input.isPublic;
+        if (input.attendees) updateData.attendees = input.attendees;
+
+        const { error } = await supabase
+            .from("calendar_events")
+            .update(updateData)
+            .eq("id", input.id);
+
+        if (error) {
+            return { success: false, error: error.message };
+        }
+
+        revalidatePath("/dashboard/calendar");
+        revalidatePath("/dashboard/events");
+        return { success: true };
+    } catch (error: any) {
         return { success: false, error: error.message };
     }
 }

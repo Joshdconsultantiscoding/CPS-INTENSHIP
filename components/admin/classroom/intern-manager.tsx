@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
+
 
 import { Button } from "@/components/ui/button";
 import {
@@ -38,8 +39,8 @@ interface InternManagerProps {
 }
 
 export function InternManager({ interns, classes }: InternManagerProps) {
-    const { toast } = useToast();
     const router = useRouter();
+
     const [selectedIntern, setSelectedIntern] = useState<any>(null);
     const [selectedClassId, setSelectedClassId] = useState<string>("");
     const [isAssigning, setIsAssigning] = useState(false);
@@ -59,26 +60,15 @@ export function InternManager({ interns, classes }: InternManagerProps) {
             console.log("Assigning intern:", selectedIntern.id, "to class:", selectedClassId);
             const result = await assignInternToClass(selectedClassId, selectedIntern.id);
             if (result.success) {
-                toast({
-                    title: "Success",
-                    description: result.message,
-                });
+                toast.success(result.message || "Intern assigned successfully");
                 setOpen(false);
                 router.refresh();
             } else {
-                toast({
-                    variant: "destructive",
-                    title: "Assignment Failed",
-                    description: result.message,
-                });
+                toast.error(result.message || "Assignment failed");
             }
         } catch (error) {
             console.error(error);
-            toast({
-                variant: "destructive",
-                title: "Error",
-                description: "Failed to assign intern.",
-            });
+            toast.error("Failed to assign intern.");
         } finally {
             setIsAssigning(false);
         }

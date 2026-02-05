@@ -18,7 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { updateClass } from "@/actions/classroom-admin";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
 const formSchema = z.object({
@@ -32,7 +32,6 @@ interface ClassOverviewTabProps {
 }
 
 export function ClassOverviewTab({ classData }: ClassOverviewTabProps) {
-    const { toast } = useToast();
     const router = useRouter();
 
     const form = useForm<z.infer<typeof formSchema>>({
@@ -47,18 +46,13 @@ export function ClassOverviewTab({ classData }: ClassOverviewTabProps) {
     const onSubmit = async (values: z.infer<typeof formSchema>) => {
         try {
             await updateClass(classData.id, values.name, values.description || "", values.icon_url);
-            toast({
-                title: "Changes saved",
+            toast.success("Changes saved", {
                 description: "Class overview has been updated.",
             });
             router.refresh();
         } catch (error) {
             console.error(error);
-            toast({
-                variant: "destructive",
-                title: "Error",
-                description: "Failed to update class details.",
-            });
+            toast.error("Failed to update class details.");
         }
     };
 

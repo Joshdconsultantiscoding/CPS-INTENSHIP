@@ -22,8 +22,8 @@ export default async function EventsPage() {
         .order("start_time", { ascending: true });
 
     if (!isAdmin) {
-        // Interns see public events OR their own events
-        eventsQuery = eventsQuery.or(`user_id.eq.${user.id},is_public.eq.true`);
+        // Interns see public events OR their own events OR events assigned to them
+        eventsQuery = eventsQuery.or(`user_id.eq.${user.id},is_public.eq.true,attendees.cs.{${user.id}}`);
     }
 
     const { data: events, error } = await eventsQuery;

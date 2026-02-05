@@ -21,8 +21,9 @@ import {
 } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 import { assignInternToClass, removeInternFromClass } from "@/actions/classroom-admin";
-import { useToast } from "@/components/ui/use-toast";
+
 
 interface ClassInternsTabProps {
     classData: any;
@@ -33,7 +34,7 @@ interface ClassInternsTabProps {
 export function ClassInternsTab({ classData, enrollments, availableInterns }: ClassInternsTabProps) {
     const [searchQuery, setSearchQuery] = useState("");
     const [isAssigning, setIsAssigning] = useState<string | null>(null);
-    const { toast } = useToast();
+
 
     // Filter available interns based on search (and exclude already enrolled)
     const enrolledIds = new Set(enrollments.map(e => e.user_id));
@@ -68,18 +69,14 @@ export function ClassInternsTab({ classData, enrollments, availableInterns }: Cl
 
         try {
             await removeInternFromClass(classData.id, userId);
-            toast({
-                title: "Intern removed",
+            toast.success("Intern removed", {
                 description: "Enrollment has been cancelled.",
             });
         } catch (error) {
             console.error(error);
-            toast({
-                variant: "destructive",
-                title: "Error",
-                description: "Failed to remove intern.",
-            });
+            toast.error("Failed to remove intern.");
         }
+
     };
 
     return (

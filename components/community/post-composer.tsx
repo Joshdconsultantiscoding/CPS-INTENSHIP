@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { ImagePlus, Video, Loader2, Send } from "lucide-react";
+import { useState, useRef } from "react";
+import { ImagePlus, Video, Loader2, Send, X } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,30 +22,98 @@ interface PostComposerProps {
     isAdmin: boolean;
 }
 
+interface MediaFile {
+    url: string;
+    type: "image" | "video";
+    name: string;
+}
+
 export function PostComposer({ userId, userAvatar, userName, isAdmin }: PostComposerProps) {
     const [content, setContent] = useState("");
     const [visibility, setVisibility] = useState<"all" | "interns" | "admins">("all");
     const [isPosting, setIsPosting] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
+    const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
+
+    const imageInputRef = useRef<HTMLInputElement>(null);
+    const videoInputRef = useRef<HTMLInputElement>(null);
+
+    const handleFileUpload = async (file: File, type: "image" | "video") => {
+        if (mediaFiles.length >= 4) {
+            toast.error("Maximum 4 media files allowed");
+            return;
+        }
+
+        // Validate file size (10MB max)
+        if (file.size > 10 * 1024 * 1024) {
+            toast.error("File size must be less than 10MB");
+            return;
+        }
+
+        setIsUploading(true);
+        try {
+            const formData = new FormData();
+            formData.append("file", file);
+
+            const response = await fetch("/api/upload", {
+                method: "POST",
+                body: formData,
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || "Upload failed");
+            }
+
+            const data = await response.json();
+            setMediaFiles(prev => [...prev, {
+                url: data.secure_url,
+                type,
+                name: file.name
+            }]);
+            toast.success("Media uploaded!");
+        } catch (error: any) {
+            console.error("Upload error:", error);
+            toast.error(error.message || "Failed to upload media");
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) handleFileUpload(file, "image");
+        e.target.value = ""; // Reset for re-selection
+    };
+
+    const handleVideoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) handleFileUpload(file, "video");
+        e.target.value = "";
+    };
+
+    const removeMedia = (index: number) => {
+        setMediaFiles(prev => prev.filter((_, i) => i !== index));
+    };
 
     const handleSubmit = async () => {
-        if (!content.trim()) {
-            toast.error("Please write something to post");
+        if (!content.trim() && mediaFiles.length === 0) {
+            toast.error("Please write something or add media to post");
             return;
         }
 
         setIsPosting(true);
 
         try {
-            const result = await createPost({
-                content: content.trim(),
-                visibility,
-            });
+            const mediaUrls = mediaFiles.map(m => m.url);
+            const result = await createPost(content.trim(), mediaUrls, visibility);
 
             if (!result.success) {
                 toast.error(result.error || "Failed to create post");
             } else {
                 toast.success("Post created!");
                 setContent("");
+                setMediaFiles([]);
             }
         } catch (error) {
             toast.error("An unexpected error occurred");
@@ -74,25 +142,75 @@ export function PostComposer({ userId, userAvatar, userName, isAdmin }: PostComp
                         value={content}
                         onChange={(e) => setContent(e.target.value)}
                         className="min-h-[80px] resize-none border-0 bg-muted/50 focus-visible:ring-1"
-                        disabled={isPosting}
+                        disabled={isPosting || isUploading}
                     />
+
+                    {/* Media Previews */}
+                    {mediaFiles.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                            {mediaFiles.map((media, index) => (
+                                <div key={index} className="relative group">
+                                    {media.type === "image" ? (
+                                        <img
+                                            src={media.url}
+                                            alt={media.name}
+                                            className="w-20 h-20 object-cover rounded-lg border"
+                                        />
+                                    ) : (
+                                        <video
+                                            src={media.url}
+                                            className="w-20 h-20 object-cover rounded-lg border"
+                                        />
+                                    )}
+                                    <button
+                                        onClick={() => removeMedia(index)}
+                                        className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        title="Remove"
+                                    >
+                                        <X className="w-3 h-3" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
+                            <input
+                                type="file"
+                                ref={imageInputRef}
+                                className="hidden"
+                                accept="image/*"
+                                onChange={handleImageSelect}
+                            />
+                            <input
+                                type="file"
+                                ref={videoInputRef}
+                                className="hidden"
+                                accept="video/*"
+                                onChange={handleVideoSelect}
+                            />
                             <Button
                                 variant="ghost"
                                 size="sm"
-                                className="text-muted-foreground"
-                                disabled={isPosting}
-                                title="Upload image (coming soon)"
+                                className="text-muted-foreground hover:text-primary"
+                                disabled={isPosting || isUploading || mediaFiles.length >= 4}
+                                onClick={() => imageInputRef.current?.click()}
+                                title="Upload image"
                             >
-                                <ImagePlus className="h-4 w-4" />
+                                {isUploading ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                    <ImagePlus className="h-4 w-4" />
+                                )}
                             </Button>
                             <Button
                                 variant="ghost"
                                 size="sm"
-                                className="text-muted-foreground"
-                                disabled={isPosting}
-                                title="Upload video (coming soon)"
+                                className="text-muted-foreground hover:text-primary"
+                                disabled={isPosting || isUploading || mediaFiles.length >= 4}
+                                onClick={() => videoInputRef.current?.click()}
+                                title="Upload video"
                             >
                                 <Video className="h-4 w-4" />
                             </Button>
@@ -115,7 +233,7 @@ export function PostComposer({ userId, userAvatar, userName, isAdmin }: PostComp
                         </div>
                         <Button
                             onClick={handleSubmit}
-                            disabled={!content.trim() || isPosting}
+                            disabled={(!content.trim() && mediaFiles.length === 0) || isPosting || isUploading}
                             size="sm"
                             className="gap-2"
                         >
@@ -132,3 +250,4 @@ export function PostComposer({ userId, userAvatar, userName, isAdmin }: PostComp
         </div>
     );
 }
+

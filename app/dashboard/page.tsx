@@ -5,6 +5,7 @@ import { InternDashboard } from "@/components/dashboard/intern-dashboard";
 import { redirect } from "next/navigation";
 import type { DailyReport, ActivityLog, Task, Notification, CalendarEvent } from "@/lib/types";
 import { AdminVaultGate } from "@/components/dashboard/admin-vault-gate";
+import { config } from "@/lib/config";
 
 export default async function DashboardPage() {
   const user = await getAuthUser();
@@ -47,12 +48,12 @@ export default async function DashboardPage() {
       { data: recentActivityData },
       { data: eventsData }
     ] = (await Promise.all([
-      supabase.from("profiles").select("*", { count: "exact", head: true }).eq("role", "intern"),
-      supabase.from("tasks").select("*", { count: "exact", head: true }).eq("status", "completed"),
-      supabase.from("tasks").select("*", { count: "exact", head: true }).neq("status", "completed"),
-      supabase.from("daily_reports").select("*, user:profiles(full_name, avatar_url), tasks:report_tasks(*)").eq("status", "submitted").order("created_at", { ascending: false }),
-      supabase.from("activity_logs").select("*, user:profiles(full_name, avatar_url)").order("created_at", { ascending: false }).limit(5),
-      supabase.from("calendar_events").select("*").gte("start_time", now).order("start_time", { ascending: true }).limit(5)
+      supabase.from("profiles").select("id", { count: "exact", head: true }).eq("role", "intern"),
+      supabase.from("tasks").select("id", { count: "exact", head: true }).eq("status", "completed"),
+      supabase.from("tasks").select("id", { count: "exact", head: true }).neq("status", "completed"),
+      supabase.from("daily_reports").select("id, status, created_at, user_id, user:profiles(full_name, avatar_url), tasks:report_tasks(id, title, status)").eq("status", "submitted").order("created_at", { ascending: false }),
+      supabase.from("activity_logs").select("id, action, created_at, metadata, user:profiles(full_name, avatar_url)").order("created_at", { ascending: false }).limit(5),
+      supabase.from("calendar_events").select("id, title, start_time, end_time, event_type").gte("start_time", now).order("start_time", { ascending: true }).limit(5)
     ])) as any[];
 
     const recentActivity = (recentActivityData || []) as unknown as ActivityLog[];
@@ -65,7 +66,7 @@ export default async function DashboardPage() {
     const { cookies } = await import("next/headers");
     const cookieStore = await cookies();
     const isVaultUnlocked = cookieStore.get("admin_vault_session")?.value === "unlocked";
-    const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "agbojoshua2005@gmail.com";
+    const ADMIN_EMAIL = config.adminEmail;
 
     // Strict Email Enforcement (Double Check)
     if (user.email !== ADMIN_EMAIL) {
@@ -98,7 +99,7 @@ export default async function DashboardPage() {
     const [{ data: tasks }, { data: reports }, { data: eventsData }] = (await Promise.all([
       supabase.from("tasks").select("*").eq("assigned_to", user.id).order("due_date", { ascending: true }),
       supabase.from("daily_reports").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
-      supabase.from("calendar_events").select("*").or(`is_public.eq.true,user_id.eq.${user.id}`).gte("start_time", nowIso).order("start_time", { ascending: true }).limit(5)
+      supabase.from("calendar_events").select("*").or(`is_public.eq.true,user_id.eq.${user.id},attendees.cs.{${user.id}}`).gte("start_time", nowIso).order("start_time", { ascending: true }).limit(5)
     ])) as any[];
 
     // Calculate stats

@@ -807,7 +807,7 @@ Personal friendships are fine - just keep work matters professional and on-platf
     id: "faq-traveling",
     category: "FAQ",
     title: "Traveling During Internship",
-    keywords: ["travel", "traveling", "trip", "vacation", "location", "remote"],
+    keywords: ["travel", "traveling", "trip", "vacation", "location", "remote", "holiday", "journey", "change location"],
     question: "What if I'm traveling during internship?",
     answer: `Inform your supervisor in advance.
 
@@ -821,12 +821,69 @@ As long as you maintain:
     relatedTopics: ["remote", "flexibility", "communication"]
   },
 
+  // NEW: MESSAGING STATUS
+  {
+    id: "messaging-status",
+    category: "Messaging System",
+    title: "Messaging Feature Status",
+    keywords: ["message", "messaging", "chat", "dm", "talk", "speak", "contact intern", "other interns", "whatsapp", "communication", "group chat", "why can't i chat"],
+    question: "Why can't I message other interns?",
+    answer: `**Messaging System Status: 🚧 COMING SOON**
+
+The peer-to-peer messaging and group chat features are currently **under active development** and will be released in an upcoming update.
+
+**Currently Available:**
+- ✅ **AI Assistant (HG Core):** You can chat with me 24/7 for support, guidance, and answers.
+- 📢 **Announcements:** You can view admin announcements.
+
+**Coming Soon:**
+- 💬 Direct Messages (DM) with other interns
+- 👥 Project Group Chats
+- 🗣️ Voice Notes and Calls
+- 📂 File Sharing
+
+**Why is it limited right now?**
+We are ensuring the messaging infrastructure is secure, scalable, and fully integrated with the accountability tracking system before releasing it to everyone.
+
+*Please use the AI Assistant for any immediate questions or support needs.*`,
+    relatedTopics: ["roadmap", "updates", "features"]
+  },
+
+  // NEW: PLATFORM STATUS
+  {
+    id: "platform-status",
+    category: "Platform Status",
+    title: "Current Platform Progress",
+    keywords: ["progress", "update", "new features", "what works", "status", "version", "beta", "development", "site status", "changelog"],
+    question: "What is the current status of the platform?",
+    answer: `**Current Platform Version: v1.1 (Beta Phase)**
+
+The platform is fully functional for all core internship activities, with some social features rolling out soon.
+
+**✅ Fully Operational:**
+- **Dashboard:** Real-time overview of your status.
+- **Tasks:** Assignment, tracking, and submission workflows.
+- **Daily Reports:** Submission and history tracking.
+- **AI Assistant:** HG Core is online and ready to help.
+- **Profile:** Personal information and stats.
+- **Resources:** Access to learning materials.
+
+**🚧 In Progress / Coming Soon:**
+- **Intern-to-Intern Messaging:** Peer communication features.
+- **Advanced Analytics:** Deeper insights into your performance trends.
+- **Voice/Video Calls:** Integrated meeting tools.
+- **Mobile App:** Dedicated mobile experience (use mobile browser for now).
+
+The engineering team is pushing daily updates to improve performance and add features.`,
+    relatedTopics: ["features", "roadmap", "updates"]
+  },
+
   // CONTACT
   {
     id: "contact-support",
     category: "Support",
     title: "Emergency Contacts",
-    keywords: ["contact", "support", "help", "email", "whatsapp", "phone"],
+    keywords: ["contact", "support", "help", "email", "whatsapp", "phone", "admin", "call", "issue", "problem", "urgent"],
     question: "How do I contact support?",
     answer: `**Platform Support:**
 - Email: cospronos@gmail.com
@@ -847,7 +904,7 @@ For general questions, use HG Core (me!) first.`,
     id: "report-template",
     category: "Templates",
     title: "Daily Report Template",
-    keywords: ["template", "report template", "copy", "format", "sample"],
+    keywords: ["template", "report template", "copy", "format", "sample", "example", "how to write report", "report format"],
     question: "Can you give me a report template?",
     answer: `**Daily Report Template:**
 
@@ -891,7 +948,7 @@ Questions: [List if any]
     id: "daily-checklist",
     category: "Templates",
     title: "Daily Checklist",
-    keywords: ["checklist", "todo", "daily tasks", "what to do", "routine"],
+    keywords: ["checklist", "todo", "daily tasks", "what to do", "routine", "schedule", "plan", "morning routine", "evening routine"],
     question: "What should I do every day?",
     answer: `**Morning:**
 - [ ] Log in by 9 AM
@@ -921,45 +978,53 @@ Questions: [List if any]
 export function searchKnowledge(query: string): KnowledgeEntry[] {
   const normalizedQuery = query.toLowerCase().trim();
   const queryWords = normalizedQuery.split(/\s+/).filter(word => word.length > 2);
-  
+
   // Score each entry based on keyword matches
   const scoredEntries = HG_CORE_KNOWLEDGE.map(entry => {
     let score = 0;
-    
+
     // Check title match
     if (entry.title.toLowerCase().includes(normalizedQuery)) {
-      score += 10;
+      score += 15; // Increased weight for title match
     }
-    
+
     // Check question match
     if (entry.question && entry.question.toLowerCase().includes(normalizedQuery)) {
-      score += 8;
+      score += 12; // Increased weight for question match
     }
-    
+
     // Check keyword matches
     for (const keyword of entry.keywords) {
-      if (normalizedQuery.includes(keyword.toLowerCase())) {
-        score += 5;
+      const k = keyword.toLowerCase();
+      // Exact keyword match
+      if (normalizedQuery.includes(k)) {
+        score += 8;
       }
-      // Check if any query word matches keyword
+
+      // Partial keyword match (word-level)
       for (const word of queryWords) {
-        if (keyword.toLowerCase().includes(word) || word.includes(keyword.toLowerCase())) {
-          score += 2;
+        if (k === word || k.includes(word) || word.includes(k)) {
+          // Boost core keywords
+          if (["message", "chat", "talk", "intern"].some(w => k.includes(w))) {
+            score += 5;
+          } else {
+            score += 3;
+          }
         }
       }
     }
-    
-    // Check answer content for matches
+
+    // Check answer content for matches (lower weight)
     const answerLower = entry.answer.toLowerCase();
     for (const word of queryWords) {
       if (answerLower.includes(word)) {
         score += 1;
       }
     }
-    
+
     return { entry, score };
   });
-  
+
   // Filter entries with score > 0 and sort by score
   return scoredEntries
     .filter(item => item.score > 0)
@@ -973,35 +1038,32 @@ export function getGreeting(): string {
   return `Hello! I'm **HG Core**, your AI Operations Manager.
 
 I'm here to help you succeed in your internship by answering questions about:
-- Platform operations and features
-- Tasks and submissions
-- Daily reports
-- Performance scoring and points
-- Rules and policies
-- Technical challenges and solutions
+- 📢 Platform updates & features
+- 📝 Tasks and daily reports
+- 🏆 Performance scoring and points
+- ⚖️ Rules and policies
+- 🔧 Technical support
 
-I maintain the same standards for everyone - fair, consistent, and data-driven. I won't accept excuses, but I will always help you find solutions.
+I maintain fair, consistent, and data-driven standards. I'm here to support you 24/7.
 
 **How can I assist you today?**
 
-*Tip: Ask me about "daily reports", "points", "tasks", "no power", "warnings", or any other topic!*`;
+*Tip: Ask me about "messaging", "points", "report template", or "platform status"!*`;
 }
 
 // Generate response based on search results
 export function generateResponse(query: string): string {
   const results = searchKnowledge(query);
-  
+
   if (results.length === 0) {
     return `I don't have specific information about "${query}" in my knowledge base.
 
 **Here are some things I can help you with:**
-- Platform features and navigation
-- Task management and submissions
-- Daily report writing
-- Performance scoring and points
-- Rules and policies
-- Technical challenges (no power, no internet)
-- Success habits and tips
+- 🚧 **Messaging Status:** Ask "Why can't I chat?"
+- 📢 **Platform Status:** Ask "What features are working?"
+- 📝 **Daily Reports:** Ask for templates or rules
+- 🏆 **Points:** Ask how to earn or lose points
+- ⚖️ **Rules:** Ask about the no-excuses policy
 
 Try rephrasing your question or ask about one of these topics.
 
@@ -1009,17 +1071,21 @@ For urgent issues not covered here, contact:
 - Email: cospronos@gmail.com
 - WhatsApp: +2349158311526`;
   }
-  
+
   const topResult = results[0];
   let response = `**${topResult.title}**\n\n${topResult.answer}`;
-  
+
   // Add related topics if available
   if (results.length > 1) {
-    response += `\n\n---\n\n**Related topics you might find helpful:**`;
-    for (let i = 1; i < Math.min(results.length, 4); i++) {
-      response += `\n- ${results[i].title}`;
+    response += `\n\n---\n\n**Also relevant:**`;
+    // Only show top 3 related to avoid clutter
+    for (let i = 1; i < Math.min(results.length, 3); i++) {
+      // Don't show if title is very similar
+      if (results[i].title !== topResult.title) {
+        response += `\n- ${results[i].title}`;
+      }
     }
   }
-  
+
   return response;
 }

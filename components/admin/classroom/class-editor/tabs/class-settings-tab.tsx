@@ -10,7 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { deleteClass } from "@/actions/classroom-admin";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
 interface ClassSettingsTabProps {
@@ -18,7 +18,6 @@ interface ClassSettingsTabProps {
 }
 
 export function ClassSettingsTab({ classData }: ClassSettingsTabProps) {
-    const { toast } = useToast();
     const router = useRouter();
 
     const handleDelete = async () => {
@@ -26,17 +25,12 @@ export function ClassSettingsTab({ classData }: ClassSettingsTabProps) {
 
         try {
             await deleteClass(classData.id);
-            toast({
-                title: "Class deleted",
+            toast.success("Class deleted", {
                 description: "The class has been removed successfully.",
             });
             router.push("/dashboard/admin/classroom");
         } catch (error) {
-            toast({
-                variant: "destructive",
-                title: "Error",
-                description: "Failed to delete class.",
-            });
+            toast.error("Failed to delete class.");
         }
     };
 

@@ -1,0 +1,32 @@
+﻿
+> my-v0-project@0.1.0 lint
+> eslint .
+
+node.exe : 'eslint' 
+is not recognized as 
+an internal or 
+external command,
+At line:1 char:1
++ & "C:\Program Files
+\nodejs/node.exe" 
+"C:\Program 
+Files\nodejs/node_mo 
+...
++ ~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~
+    + CategoryInfo   
+           : NotSpe  
+  cified: ('eslint   
+ ' is not...terna    
+l command,:Strin    
+g) [], RemoteExc    
+eption
+    + FullyQualified 
+   ErrorId : Native  
+  CommandError
+ 
+operable program or 
+batch file.
+

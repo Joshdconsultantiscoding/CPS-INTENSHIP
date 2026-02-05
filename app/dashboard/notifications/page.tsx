@@ -27,7 +27,7 @@ export default async function NotificationsPage() {
         </p>
       </div>
 
-      <NotificationList notifications={notifications || []} />
+      <NotificationList notifications={notifications || []} userId={user.id} />
     </div>
   );
 }

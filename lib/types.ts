@@ -99,6 +99,10 @@ export interface Message {
   delivered_at?: string | null;
   created_at: string;
   updated_at?: string;
+  message_type?: string;
+  call_type?: string;
+  call_status?: string;
+  call_duration?: string;
   // Joined fields
   sender?: Partial<Profile> & { id: string; email: string };
   receiver?: Profile;
@@ -162,7 +166,7 @@ export interface CalendarEvent {
   start_time: string;
   end_time: string;
   all_day: boolean;
-  event_type: "meeting" | "deadline" | "review" | "other";
+  event_type: "meeting" | "deadline" | "review" | "training" | "assessment" | "other";
   location: string | null;
   attendees: string[];
   user_id: string;
