@@ -13,8 +13,8 @@ import { redirect } from "next/navigation";
 import { Loader2 } from "lucide-react";
 
 interface EditorPageProps {
-    params: { id: string };
-    searchParams: { tab?: string; lessonId?: string };
+    params: Promise<{ id: string }>;
+    searchParams: Promise<{ tab?: string; lessonId?: string }>;
 }
 
 export default async function CourseEditorPage({ params, searchParams }: EditorPageProps) {

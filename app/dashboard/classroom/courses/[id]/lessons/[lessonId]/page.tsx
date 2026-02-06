@@ -22,12 +22,13 @@ import {
 } from "@/components/ui/accordion";
 
 interface LessonPageProps {
-    params: { id: string; lessonId: string };
+    params: Promise<{ id: string; lessonId: string }>;
 }
 
 export default async function LessonPage({ params }: LessonPageProps) {
     const user = await getAuthUser();
-    const course = await getCourseDetail(params.id);
+    const { id, lessonId } = await params;
+    const course = await getCourseDetail(id);
 
     // Find current lesson
     let currentLesson: any = null;

@@ -13,9 +13,9 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ShieldAlert } from "lucide-react";
 
-export default async function ClassPage({ params }: { params: { id: string } }) {
+export default async function ClassPage({ params }: { params: Promise<{ id: string }> }) {
     const user = await getAuthUser();
-    const classId = params.id;
+    const { id: classId } = await params;
 
     // Fetch details and all assigned classes (for the sidebar)
     const [classDetails, assignedClasses, announcements, members, tasks] = await Promise.all([

@@ -7,7 +7,7 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
-export default async function NicheCommunityPage({ params }: { params: { nicheId: string } }) {
+export default async function NicheCommunityPage({ params }: { params: Promise<{ nicheId: string }> }) {
     const user = await getAuthUser();
     const { nicheId } = await params;
 

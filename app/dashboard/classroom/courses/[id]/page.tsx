@@ -23,12 +23,13 @@ import {
 } from "@/components/ui/accordion";
 
 interface CoursePageProps {
-    params: { id: string };
+    params: Promise<{ id: string }>;
 }
 
 export default async function CourseDetailPage({ params }: CoursePageProps) {
     const user = await getAuthUser();
-    const course = await getCourseDetail(params.id);
+    const { id } = await params;
+    const course = await getCourseDetail(id);
 
     return (
         <div className="container py-8 max-w-5xl mx-auto space-y-8">
