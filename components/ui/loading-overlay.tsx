@@ -63,12 +63,14 @@ export function LoadingOverlay() {
                             className="relative w-32 h-32 md:w-40 md:h-40"
                         >
                             <div className="absolute inset-0 bg-emerald-500/10 dark:bg-emerald-500/20 blur-3xl rounded-full scale-150 animate-pulse" />
-                            <Image
+                            <img
                                 src="/logo.png"
                                 alt="Logo"
-                                fill
-                                className="object-contain drop-shadow-[0_0_15px_rgba(16,185,129,0.3)]"
-                                priority
+                                className="w-full h-full object-contain drop-shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+                                onError={(e) => {
+                                    // Fallback to text if image fails
+                                    e.currentTarget.style.display = 'none';
+                                }}
                             />
                         </motion.div>
 

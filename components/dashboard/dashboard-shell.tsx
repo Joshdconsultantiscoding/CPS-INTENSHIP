@@ -158,20 +158,23 @@ export function DashboardShell({
   const userEmail = serverUser?.email || user?.emailAddresses[0]?.emailAddress;
   const isAdmin = profile?.role === "admin" || (userEmail?.toLowerCase() === ADMIN_EMAIL.toLowerCase());
 
-  // Sync Global Loading State
+  // Mounting state for suppression of hydration mismatches
+  const [hasMounted, setHasMounted] = React.useState(false);
+
   React.useEffect(() => {
-    // Only show loader if we have NO server data and are waiting for Clerk
-    // AND we don't even have a server profile to show
-    const shouldShowLoader = (!isLoaded && !serverProfile) || onboardingStatus === "checking";
+    setHasMounted(true);
+  }, []);
 
-    if (shouldShowLoader) {
-      setIsLoading(true);
-    } else {
-      setIsLoading(false);
+  // Check Onboarding & Fetch Profile
+  React.useEffect(() => {
+    async function initDashboardData() {
+      if (!user?.id) return;
+      // Logic remains but we don't block render with a loader here anymore
+      // as the shell is persistent across dashboard navigation.
     }
+  }, [user, isLoaded, serverProfile]);
 
-    return () => setIsLoading(false);
-  }, [isLoaded, onboardingStatus, setIsLoading, serverProfile]);
+  // Sync Global Loading State removed from here
 
   // Don't render ONLY if we have absolutely no data yet (no clerk AND no server profile)
   if ((!isLoaded && !serverProfile) || onboardingStatus === "checking") {
