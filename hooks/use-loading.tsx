@@ -44,9 +44,12 @@ function LoadingInner({ children }: { children: React.ReactNode }) {
     // We add a tiny delay here because Next.js commits the path change
     // before the new RSC page is fully hydrated.
     useEffect(() => {
+        // Prolonged duration for cinematic effect (min 2s, max 4s)
+        const randomDelay = Math.floor(Math.random() * (4000 - 2000 + 1)) + 2000;
+
         const timer = setTimeout(() => {
             setIsLoading(false);
-        }, 150);
+        }, randomDelay);
         return () => clearTimeout(timer);
     }, [pathname, searchParams]);
 
