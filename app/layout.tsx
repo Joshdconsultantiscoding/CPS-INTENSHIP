@@ -18,6 +18,7 @@ export const metadata: Metadata = {
   },
   description:
     "A comprehensive internship management platform for tracking tasks, daily reports, performance analytics, and team communication.",
+  metadataBase: new URL("https://cps-internship.vercel.app"),
   icons: {
     icon: [
       { url: "/favicon.png", sizes: "32x32", type: "image/png" },
@@ -25,6 +26,28 @@ export const metadata: Metadata = {
       { url: "/favicon.png", sizes: "512x512", type: "image/png" },
     ],
     apple: "/apple-icon.png",
+  },
+  openGraph: {
+    title: "InternHub - Internship Management Platform",
+    description: "A comprehensive internship management platform for tracking tasks, daily reports, performance analytics, and team communication.",
+    url: "https://cps-internship.vercel.app",
+    siteName: "InternHub",
+    images: [
+      {
+        url: "/logo.png",
+        width: 800,
+        height: 800,
+        alt: "InternHub Logo",
+      },
+    ],
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "InternHub - Internship Management Platform",
+    description: "A comprehensive internship management platform for tracking tasks, daily reports, performance analytics, and team communication.",
+    images: ["/logo.png"],
   },
 };
 
