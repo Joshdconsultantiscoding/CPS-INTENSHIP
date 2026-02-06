@@ -36,10 +36,10 @@ export default async function LessonPage({ params }: LessonPageProps) {
     let prevLesson: any = null;
 
     const allLessons = course.course_modules.flatMap((m: any) => m.course_lessons || []);
-    const currentIndex = allLessons.findIndex((l: any) => l.id === params.lessonId);
+    const currentIndex = allLessons.findIndex((l: any) => l.id === lessonId);
 
     if (currentIndex === -1) {
-        redirect(`/dashboard/classroom/courses/${params.id}`);
+        redirect(`/dashboard/classroom/courses/${id}`);
     }
 
     currentLesson = allLessons[currentIndex];
@@ -53,7 +53,7 @@ export default async function LessonPage({ params }: LessonPageProps) {
                 <div className="p-4 border-b flex items-center justify-between bg-muted/30">
                     <h2 className="font-semibold text-sm truncate pr-4">{course.title}</h2>
                     <Button variant="ghost" size="icon" asChild className="h-8 w-8">
-                        <Link href={`/dashboard/classroom/courses/${params.id}`}>
+                        <Link href={`/dashboard/classroom/courses/${id}`}>
                             <ArrowLeft className="h-4 w-4" />
                         </Link>
                     </Button>
@@ -61,7 +61,7 @@ export default async function LessonPage({ params }: LessonPageProps) {
 
                 <div className="flex-1 overflow-y-auto">
                     <Accordion type="multiple" defaultValue={[course.course_modules.find((m: any) =>
-                        m.course_lessons?.some((l: any) => l.id === params.lessonId)
+                        m.course_lessons?.some((l: any) => l.id === lessonId)
                     )?.id]} className="w-full">
                         {course.course_modules.map((module: any, idx: number) => (
                             <AccordionItem key={module.id} value={module.id} className="border-b last:border-b-0">
@@ -71,7 +71,7 @@ export default async function LessonPage({ params }: LessonPageProps) {
                                 <AccordionContent className="pb-2 pt-0">
                                     <div className="space-y-0.5">
                                         {module.course_lessons?.map((lesson: any, lIdx: number) => {
-                                            const isActive = lesson.id === params.lessonId;
+                                            const isActive = lesson.id === lessonId;
                                             const content = (
                                                 <>
                                                     <PlayCircle className={`h-4 w-4 shrink-0 ${isActive ? "text-primary" : (user.role === "admin" ? "text-muted-foreground" : "text-muted-foreground/30")}`} />
@@ -83,7 +83,7 @@ export default async function LessonPage({ params }: LessonPageProps) {
                                                 return (
                                                     <Link
                                                         key={lesson.id}
-                                                        href={`/dashboard/classroom/courses/${params.id}/lessons/${lesson.id}`}
+                                                        href={`/dashboard/classroom/courses/${id}/lessons/${lesson.id}`}
                                                         className={`
                                                             flex items-center gap-3 px-4 py-2.5 text-sm transition-colors border-l-2
                                                             ${isActive
@@ -131,14 +131,14 @@ export default async function LessonPage({ params }: LessonPageProps) {
                             <div className="space-y-1">
                                 <h1 className="text-2xl font-bold tracking-tight">{formatLessonTitle(currentLesson.title, currentIndex)}</h1>
                                 <p className="text-sm text-muted-foreground">
-                                    Module: {course.course_modules.find((m: any) => m.course_lessons?.some((l: any) => l.id === params.lessonId))?.title}
+                                    Module: {course.course_modules.find((m: any) => m.course_lessons?.some((l: any) => l.id === lessonId))?.title}
                                 </p>
                             </div>
 
                             <div className="flex items-center gap-2">
                                 <LessonNavigation
-                                    courseId={params.id}
-                                    currentLessonId={params.lessonId}
+                                    courseId={id}
+                                    currentLessonId={lessonId}
                                     course={course}
                                     userRole={user.role}
                                 />
