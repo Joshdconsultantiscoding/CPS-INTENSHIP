@@ -21,7 +21,7 @@ function LoadingInner({ children }: { children: React.ReactNode }) {
     // Internal state management for the "Grace Period" and "Immediate Sync"
     useEffect(() => {
         let graceTimer: NodeJS.Timeout;
-        const GRACE_PERIOD = 80;
+        const GRACE_PERIOD = 30; // Shorter grace period for snappiness
 
         if (isLoading) {
             graceTimer = setTimeout(() => {
@@ -32,14 +32,22 @@ function LoadingInner({ children }: { children: React.ReactNode }) {
                 if (graceTimer) clearTimeout(graceTimer);
             };
         } else {
-            setShowOverlay(false);
+            // Keep the overlay for a tiny bit longer to avoid flicker
+            const hideTimer = setTimeout(() => {
+                setShowOverlay(false);
+            }, 100);
+            return () => clearTimeout(hideTimer);
         }
     }, [isLoading]);
 
-    // Auto-hide loader on path or search param change (navigation completed)
+    // Auto-hide loader on path or search param change
+    // We add a tiny delay here because Next.js commits the path change
+    // before the new RSC page is fully hydrated.
     useEffect(() => {
-        setIsLoading(false);
-        setShowOverlay(false);
+        const timer = setTimeout(() => {
+            setIsLoading(false);
+        }, 150);
+        return () => clearTimeout(timer);
     }, [pathname, searchParams]);
 
     const showLoader = () => setIsLoading(true);

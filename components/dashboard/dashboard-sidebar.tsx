@@ -132,7 +132,7 @@ export function DashboardSidebar({ userId, profile: initialProfile }: DashboardS
             <SidebarMenuButton size="lg" asChild>
               <Link href="/dashboard">
                 <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-background p-1 overflow-hidden border">
-                  <img src="/assets/favicon/logo.png" alt={portalSettings.company_name} className="size-full object-contain" />
+                  <img src="/logo.png" alt={portalSettings.company_name} className="size-full object-contain" />
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-semibold">{portalSettings.company_name || "InternHub"}</span>
