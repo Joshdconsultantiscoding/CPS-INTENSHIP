@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, Suspense } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
 interface LoadingContextType {
@@ -12,7 +12,7 @@ interface LoadingContextType {
 
 const LoadingContext = createContext<LoadingContextType | undefined>(undefined);
 
-export function LoadingProvider({ children }: { children: React.ReactNode }) {
+function LoadingInner({ children }: { children: React.ReactNode }) {
     const [isLoading, setIsLoading] = useState(false);
     const [showOverlay, setShowOverlay] = useState(false);
     const pathname = usePathname();
@@ -24,8 +24,6 @@ export function LoadingProvider({ children }: { children: React.ReactNode }) {
         const GRACE_PERIOD = 80;
 
         if (isLoading) {
-            // Grace Period: Only show loader if it's still loading after 80ms
-            // This prevents "fishes" or flickers on near-instant actions
             graceTimer = setTimeout(() => {
                 setShowOverlay(true);
             }, GRACE_PERIOD);
@@ -34,7 +32,6 @@ export function LoadingProvider({ children }: { children: React.ReactNode }) {
                 if (graceTimer) clearTimeout(graceTimer);
             };
         } else {
-            // Immediate Sync: Hide absolute-instantly when technical loading finishes
             setShowOverlay(false);
         }
     }, [isLoading]);
@@ -52,6 +49,14 @@ export function LoadingProvider({ children }: { children: React.ReactNode }) {
         <LoadingContext.Provider value={{ isLoading: showOverlay, setIsLoading, showLoader, hideLoader }}>
             {children}
         </LoadingContext.Provider>
+    );
+}
+
+export function LoadingProvider({ children }: { children: React.ReactNode }) {
+    return (
+        <Suspense fallback={null}>
+            <LoadingInner>{children}</LoadingInner>
+        </Suspense>
     );
 }
 
