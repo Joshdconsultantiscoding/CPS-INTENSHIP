@@ -26,6 +26,8 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { Loader2, Gift, Trophy, Star, Medal, Crown, Zap, Award, Target } from "lucide-react";
+import { useAbly } from "@/providers/ably-provider";
+import { createRewardAction, updateRewardAction } from "@/app/actions/rewards";
 
 interface RewardDialogProps {
     open: boolean;
@@ -46,6 +48,7 @@ const iconOptions = [
 
 export function RewardDialog({ open, onOpenChange, reward }: RewardDialogProps) {
     const router = useRouter();
+    const { client: ablyClient } = useAbly();
     const [loading, setLoading] = useState(false);
     const [name, setName] = useState(reward?.name || "");
     const [description, setDescription] = useState(reward?.description || "");
@@ -54,11 +57,24 @@ export function RewardDialog({ open, onOpenChange, reward }: RewardDialogProps) 
 
     const isEditing = !!reward;
 
+    // Sync state with reward prop when it changes
+    React.useEffect(() => {
+        if (reward) {
+            setName(reward.name || "");
+            setDescription(reward.description || "");
+            setPointsRequired(reward.points_required?.toString() || "100");
+            setIcon(reward.icon || "gift");
+        } else {
+            setName("");
+            setDescription("");
+            setPointsRequired("100");
+            setIcon("gift");
+        }
+    }, [reward]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
-
-        const supabase = createClient();
 
         const rewardData = {
             name,
@@ -68,28 +84,33 @@ export function RewardDialog({ open, onOpenChange, reward }: RewardDialogProps) 
             is_active: true,
         };
 
+        let result;
         if (isEditing) {
-            const { error } = await supabase
-                .from("rewards")
-                .update(rewardData)
-                .eq("id", reward.id);
-
-            if (error) {
-                toast.error("Failed to update reward");
-                setLoading(false);
-                return;
-            }
-            toast.success("Reward updated successfully");
+            result = await updateRewardAction(reward.id, rewardData);
         } else {
-            const { error } = await supabase.from("rewards").insert(rewardData);
-            if (error) {
-                toast.error("Failed to create reward");
-                setLoading(false);
-                return;
-            }
-            toast.success("Reward created successfully");
+            result = await createRewardAction(rewardData);
         }
 
+        if (!result.success) {
+            console.error(`Failed to ${isEditing ? "update" : "create"} reward:`, result.error);
+            toast.error(`Failed to ${isEditing ? "update" : "create"} reward: ${result.error}`);
+            setLoading(false);
+            return;
+        }
+
+        const savedReward = result.data;
+
+        // Publish via Ably for real-time sync
+        if (ablyClient && savedReward) {
+            try {
+                const channel = ablyClient.channels.get("rewards:global");
+                await channel.publish(isEditing ? "reward-updated" : "reward-created", { reward: savedReward });
+            } catch (e) {
+                console.warn("Ably publish failed:", e);
+            }
+        }
+
+        toast.success(`Reward ${isEditing ? "updated" : "created"} successfully`);
         setLoading(false);
         onOpenChange(false);
         router.refresh();

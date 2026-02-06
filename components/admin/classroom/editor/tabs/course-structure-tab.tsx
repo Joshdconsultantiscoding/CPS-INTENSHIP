@@ -30,8 +30,20 @@ import {
     deleteLesson
 } from "@/actions/classroom-advanced";
 import { toast } from "sonner";
+import { numberToWords, formatLessonTitle } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+} from "@/components/ui/dialog";
+
+// ... (imports)
+
 
 interface CourseStructureTabProps {
     course: any;
@@ -43,8 +55,7 @@ export function CourseStructureTab({ course }: CourseStructureTabProps) {
     const [isAddingModule, setIsAddingModule] = useState(false);
     const [newModuleTitle, setNewModuleTitle] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [editingModuleId, setEditingModuleId] = useState<string | null>(null);
-    const [editTitle, setEditTitle] = useState("");
+    const [showContinueDialog, setShowContinueDialog] = useState(false);
 
     const handleAddModule = async () => {
         if (!newModuleTitle.trim()) return;
@@ -105,8 +116,14 @@ export function CourseStructureTab({ course }: CourseStructureTabProps) {
         }
     };
 
+    const handleContinue = () => {
+        const params = new URLSearchParams(window.location.search);
+        params.set("tab", "lessons");
+        router.push(`?${params.toString()}`);
+    };
+
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 pb-20">
             <div className="flex items-center justify-between">
                 <div>
                     <h2 className="text-xl font-semibold">Course Structure</h2>
@@ -134,24 +151,11 @@ export function CourseStructureTab({ course }: CourseStructureTabProps) {
                 )}
             </div>
 
-            {isPending && (
-                <div className="flex items-center justify-center p-4 bg-primary/5 rounded-lg border border-primary/10 transition-all animate-in fade-in">
-                    <Loader2 className="h-4 w-4 animate-spin text-primary mr-2" />
-                    <span className="text-xs font-medium text-primary uppercase tracking-wider">Refreshing Course Data...</span>
-                </div>
-            )}
+            {/* ... (loader) */}
 
-            {!course.course_modules || course.course_modules.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed rounded-xl bg-muted/5 transition-all">
-                    <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-6">
-                        <Layers className="h-8 w-8 text-muted-foreground opacity-20" />
-                    </div>
-                    <h3 className="text-lg font-semibold mb-2">Build Your Curriculum</h3>
-                    <p className="text-sm text-muted-foreground text-center max-w-xs mb-8">
-                        Every great course starts with a solid structure. Add your first module using the button above.
-                    </p>
-                </div>
-            ) : (
+            {/* ... (empty state) */}
+
+            {course.course_modules && course.course_modules.length > 0 && (
                 <Accordion type="multiple" className="w-full space-y-4">
                     {course.course_modules.map((module: any, mIdx: number) => (
                         <AccordionItem
@@ -163,7 +167,7 @@ export function CourseStructureTab({ course }: CourseStructureTabProps) {
                                 <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
                                 <AccordionTrigger className="flex-1 py-4 px-2 hover:no-underline font-semibold">
                                     <div className="flex items-center gap-3">
-                                        <span className="text-muted-foreground text-xs uppercase tabular-nums">Module {mIdx + 1}</span>
+                                        <span className="text-muted-foreground text-xs uppercase tabular-nums">Module {numberToWords(mIdx + 1)}</span>
                                         <span>{module.title}</span>
                                     </div>
                                 </AccordionTrigger>
@@ -188,11 +192,11 @@ export function CourseStructureTab({ course }: CourseStructureTabProps) {
                                                 {lIdx + 1}
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-medium truncate">{lesson.title}</p>
+                                                <p className="text-sm font-medium truncate">{formatLessonTitle(lesson.title, lIdx)}</p>
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <Button variant="ghost" size="icon" className="h-7 w-7" asChild>
-                                                    <Link href={`?tab=structure&lessonId=${lesson.id}`}>
+                                                    <Link href={`?tab=lessons&lessonId=${lesson.id}`}>
                                                         <Edit2 className="h-3.5 w-3.5" />
                                                     </Link>
                                                 </Button>
@@ -218,6 +222,39 @@ export function CourseStructureTab({ course }: CourseStructureTabProps) {
                     ))}
                 </Accordion>
             )}
+
+            <div className="fixed bottom-0 left-0 lg:left-64 right-0 p-4 bg-background border-t flex justify-between items-center z-10">
+                <p className="text-xs text-muted-foreground">
+                    Build your structure here. Content is edited in the next step.
+                </p>
+                <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => router.push('/dashboard/admin/classroom')}>
+                        Save & Exit
+                    </Button>
+                    <Button onClick={() => setShowContinueDialog(true)}>
+                        Save & Continue
+                    </Button>
+                </div>
+            </div>
+
+            <Dialog open={showContinueDialog} onOpenChange={setShowContinueDialog}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Structure Saved</DialogTitle>
+                        <DialogDescription>
+                            Your course structure is ready. Would you like to proceed to adding content to your lessons?
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowContinueDialog(false)}>
+                            Keep Editing
+                        </Button>
+                        <Button onClick={handleContinue}>
+                            Proceed to Lessons
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

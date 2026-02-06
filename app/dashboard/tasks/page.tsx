@@ -1,5 +1,5 @@
 import { getAuthUser } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 import { TaskList } from "@/components/tasks/task-list";
 import { TaskFilters } from "@/components/tasks/task-filters";
 import { Button } from "@/components/ui/button";
@@ -15,8 +15,9 @@ export default async function TasksPage() {
   const user = await getAuthUser();
   const isAdmin = user.role === "admin";
 
-  // Use Supabase only for data (not auth)
-  const supabase = await createClient();
+  // Use Admin Client to bypass RLS policies that might hide tasks
+  // This ensures Admins see ALL tasks and Interns see tasks even if status changes affect RLS
+  const supabase = await createAdminClient();
 
   // Get tasks based on role
   let tasksQuery = supabase
@@ -25,6 +26,7 @@ export default async function TasksPage() {
     .order("created_at", { ascending: false });
 
   if (!isAdmin) {
+    // ENFORCE PRIVACY: Filter tasks for non-admins securely here
     tasksQuery = tasksQuery.eq("assigned_to", user.id);
   }
 

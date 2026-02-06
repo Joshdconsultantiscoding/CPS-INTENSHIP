@@ -1,5 +1,8 @@
 "use client";
 
+import { useState, useEffect } from "react";
+import { useAbly } from "@/providers/ably-provider";
+
 import { usePathname, useRouter } from "next/navigation";
 import { useClerk, useUser } from "@clerk/nextjs";
 import type { Profile } from "@/lib/types";
@@ -15,6 +18,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -26,189 +30,85 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  LayoutDashboard,
-  CheckSquare,
-  FileText,
-  MessageSquare,
-  BarChart3,
-  Trophy,
-  Calendar,
-  Settings,
-  LogOut,
-  Briefcase,
-  Users,
-  Users2,
-  Sparkles,
   ChevronUp,
   Bell,
-  CalendarDays, // New icon for Events
-  GraduationCap,
+  Settings,
+  LogOut,
+  Bug,
 } from "lucide-react";
 import { usePortalSettings, type PortalSettings } from "@/hooks/use-portal-settings";
 import Link from "next/link";
+import { internNavItems, adminNavItems } from "@/lib/navigation";
+import { useLoading } from "@/hooks/use-loading";
 
 interface DashboardSidebarProps {
   userId: string;
   profile: Profile | null;
 }
 
-const internNavItems = [
-  {
-    title: "Dashboard",
-    url: "/dashboard",
-    icon: LayoutDashboard,
-  },
-  {
-    title: "Tasks",
-    url: "/dashboard/tasks",
-    icon: CheckSquare,
-  },
-  {
-    title: "Daily Reports",
-    url: "/dashboard/reports",
-    icon: FileText,
-  },
-  {
-    title: "Messages",
-    url: "/dashboard/messages",
-    icon: MessageSquare,
-  },
-  {
-    title: "Community",
-    url: "/dashboard/community",
-    icon: Users2,
-  },
-  {
-    title: "Classroom",
-    url: "/dashboard/classroom",
-    icon: GraduationCap,
-  },
-  {
-    title: "Events",
-    url: "/dashboard/events",
-    icon: CalendarDays,
-  },
-  {
-    title: "Calendar",
-    url: "/dashboard/calendar",
-    icon: Calendar,
-  },
-  {
-    title: "Performance",
-    url: "/dashboard/performance",
-    icon: BarChart3,
-  },
-  {
-    title: "Rewards",
-    url: "/dashboard/rewards",
-    icon: Trophy,
-  },
-  {
-    title: "AI Assistant",
-    url: "/dashboard/assistant",
-    icon: Sparkles,
-  },
-];
-
-const adminNavItems = [
-  {
-    title: "Dashboard",
-    url: "/dashboard",
-    icon: LayoutDashboard,
-  },
-  {
-    title: "Interns",
-    url: "/dashboard/interns",
-    icon: Users,
-  },
-  {
-    title: "Tasks",
-    url: "/dashboard/tasks",
-    icon: CheckSquare,
-  },
-  {
-    title: "Reports",
-    url: "/dashboard/reports",
-    icon: FileText,
-  },
-  {
-    title: "Messages",
-    url: "/dashboard/messages",
-    icon: MessageSquare,
-  },
-  {
-    title: "Community",
-    url: "/dashboard/community",
-    icon: Users2,
-  },
-  {
-    title: "Classroom",
-    url: "/dashboard/classroom",
-    icon: GraduationCap,
-  },
-  {
-    title: "Events",
-    url: "/dashboard/events",
-    icon: CalendarDays,
-  },
-  {
-    title: "Calendar",
-    url: "/dashboard/calendar",
-    icon: Calendar,
-  },
-  {
-    title: "Analytics",
-    url: "/dashboard/analytics",
-    icon: BarChart3,
-  },
-  {
-    title: "Rewards",
-    url: "/dashboard/rewards",
-    icon: Trophy,
-  },
-  {
-    title: "AI Assistant",
-    url: "/dashboard/assistant",
-    icon: Sparkles,
-  },
-  {
-    title: "Portal Settings",
-    url: "/dashboard/admin/portal-settings",
-    icon: Settings,
-  },
-];
-
-export function DashboardSidebar({ userId, profile }: DashboardSidebarProps) {
+export function DashboardSidebar({ userId, profile: initialProfile }: DashboardSidebarProps) {
   const pathname = usePathname();
   const { signOut } = useClerk();
   const { user } = useUser();
   const { settings: portalSettings } = usePortalSettings();
+  const { setOpenMobile, isMobile } = useSidebar();
+  const { client: ablyClient } = useAbly(); // Use global Ably hook
+  const { showLoader } = useLoading();
+
+  // Real-time Profile State
+  const [profile, setProfile] = useState<Profile | null>(initialProfile);
+
+  // Sync with initial props if they change (e.g. server revalidation)
+  useEffect(() => {
+    setProfile(initialProfile);
+  }, [initialProfile]);
+
+  // Listen for real-time profile updates via Ably
+  useEffect(() => {
+    if (!ablyClient || !userId) return;
+
+    const channel = ablyClient.channels.get("global-updates");
+
+    const handleProfileUpdate = (message: any) => {
+      const data = message.data;
+      if (data.userId === userId) {
+        setProfile(prev => prev ? ({ ...prev, ...data }) : null);
+      }
+    };
+
+    channel.subscribe("profile-updated", handleProfileUpdate);
+
+    return () => {
+      channel.unsubscribe("profile-updated", handleProfileUpdate);
+    };
+  }, [ablyClient, userId]);
+
   const isAdmin = profile?.role === "admin";
 
-  const settingKeyMap: Record<string, keyof PortalSettings | null> = {
-    "Dashboard": null,
-    "Interns": null,
-    "Tasks": "tasks_enabled",
-    "Daily Reports": "reports_enabled",
-    "Reports": "reports_enabled",
-    "Messages": "messages_enabled",
-    "Events": "calendar_enabled",
-    "Calendar": "calendar_enabled", // Share restriction with calendar for now, or add new setting later
-    "Analytics": "performance_enabled",
-    "Performance": "performance_enabled",
-    "Rewards": "rewards_enabled",
-    "AI Assistant": "ai_assistant_enabled",
-    "Portal Settings": null,
-  };
-
   const navItems = (isAdmin ? adminNavItems : internNavItems).filter(item => {
+    // These are handled in the Quick Actions section
+    if (item.title === "Notifications" || item.title === "Settings") return false;
+
     if (isAdmin) return true;
-    const settingKey = settingKeyMap[item.title];
+    const settingKey = item.settingKey as keyof PortalSettings | undefined;
     if (settingKey && portalSettings[settingKey] === false) {
       return false;
     }
     return true;
   });
+
+  const handleNavClick = (e: React.MouseEvent, title?: string) => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+    if (title === "Send Feedback") {
+      e.preventDefault();
+      window.dispatchEvent(new CustomEvent("open-bug-report"));
+    } else {
+      // For normal links, show the cinematic loader
+      showLoader();
+    }
+  };
 
   const handleSignOut = async () => {
     await signOut({ redirectUrl: "/auth/sign-in" });
@@ -231,12 +131,8 @@ export function DashboardSidebar({ userId, profile }: DashboardSidebarProps) {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <Link href="/dashboard">
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground overflow-hidden">
-                  {portalSettings.company_logo_url ? (
-                    <img src={portalSettings.company_logo_url} alt={portalSettings.company_name} className="size-full object-cover" />
-                  ) : (
-                    <Briefcase className="size-4" />
-                  )}
+                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-background p-1 overflow-hidden border">
+                  <img src="/assets/favicon/logo.png" alt={portalSettings.company_name} className="size-full object-contain" />
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-semibold">{portalSettings.company_name || "InternHub"}</span>
@@ -265,7 +161,10 @@ export function DashboardSidebar({ userId, profile }: DashboardSidebarProps) {
                     }
                     tooltip={item.title}
                   >
-                    <Link href={item.url}>
+                    <Link
+                      href={item.url}
+                      onClick={(e) => handleNavClick(e, item.title)}
+                    >
                       <item.icon className="size-4" />
                       <span>{item.title}</span>
                     </Link>
@@ -281,7 +180,7 @@ export function DashboardSidebar({ userId, profile }: DashboardSidebarProps) {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild tooltip="Notifications">
-                  <Link href="/dashboard/notifications">
+                  <Link href="/dashboard/notifications" onClick={(e) => handleNavClick(e, "Notifications")}>
                     <Bell className="size-4" />
                     <span>Notifications</span>
                   </Link>
@@ -289,7 +188,7 @@ export function DashboardSidebar({ userId, profile }: DashboardSidebarProps) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild tooltip="Settings">
-                  <Link href="/dashboard/settings">
+                  <Link href="/dashboard/settings" onClick={(e) => handleNavClick(e, "Settings")}>
                     <Settings className="size-4" />
                     <span>Settings</span>
                   </Link>
@@ -300,6 +199,14 @@ export function DashboardSidebar({ userId, profile }: DashboardSidebarProps) {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
+        <SidebarMenu className="px-2">
+          <SidebarMenuItem>
+            <div className="flex flex-col items-center justify-center py-2 text-[10px] text-muted-foreground/50 font-medium tracking-wider uppercase border-t border-sidebar-border/50 mb-2">
+              <span className="opacity-80">v1.0.1</span>
+              <span className="text-[8px] opacity-60">PWA Upgrade Pending</span>
+            </div>
+          </SidebarMenuItem>
+        </SidebarMenu>
         <SidebarMenu>
           <SidebarMenuItem>
             <DropdownMenu>
@@ -358,7 +265,7 @@ export function DashboardSidebar({ userId, profile }: DashboardSidebarProps) {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
-                  <Link href="/dashboard/settings">
+                  <Link href="/dashboard/settings" onClick={(e) => handleNavClick(e)}>
                     <Settings className="mr-2 size-4" />
                     Settings
                   </Link>

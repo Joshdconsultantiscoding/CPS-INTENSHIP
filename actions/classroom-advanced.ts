@@ -3,6 +3,8 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { getAuthUser } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
+import { ensureProfileSync } from "@/lib/profile-sync";
+import { numberToWords } from "@/lib/utils";
 
 async function verifyAdmin() {
     const user = await getAuthUser();
@@ -11,18 +13,12 @@ async function verifyAdmin() {
     }
     const supabase = await createAdminClient();
 
-    // Ensure Admin Profile Exists in DB (to satisfy Foreign Keys & RLS)
-    await supabase.from("profiles").upsert({
-        id: user.id,
-        email: user.email || "",
-        full_name: user.full_name || "Admin",
-        avatar_url: user.avatar_url || "",
-        role: "admin",
-        updated_at: new Date().toISOString(),
-    }, { onConflict: "email" });
+    // Ensure Admin Profile Exists Safely (Don't overwrite custom avatars)
+    await ensureProfileSync(user, supabase);
 
     return { userId: user.id, supabase };
 }
+
 
 export async function getCourseForEditor(courseId: string) {
     try {
@@ -83,6 +79,7 @@ export async function getCourseForEditor(courseId: string) {
 
                 const safeQuestions = questions || [];
 
+                // Attach questions to lessons
                 assembledModules.forEach(module => {
                     module.course_lessons = lessons.filter(l => l.module_id === module.id) || [];
                     module.course_lessons.forEach((l: any) => {
@@ -91,6 +88,37 @@ export async function getCourseForEditor(courseId: string) {
                 });
             }
         }
+
+        // 2b. Fetch Module & Course Level Questions for the Editor
+        // We need to fetch questions where module_id IN moduleIds OR course_id = courseId.
+        // Doing this in parallel to lesson fetching might be cleaner, but let's append it here for safety.
+
+        // Fetch Course Level Questions
+        const { data: courseQuestions } = await supabase
+            .from("course_questions")
+            .select("*")
+            .eq("course_id", courseId)
+            .order("order_index", { ascending: true });
+
+        // Fetch Module Level Questions
+        let moduleQuestions: any[] = [];
+        if (assembledModules.length > 0) {
+            const { data: mq } = await supabase
+                .from("course_questions")
+                .select("*")
+                .in("module_id", assembledModules.map(m => m.id))
+                .order("order_index", { ascending: true });
+            moduleQuestions = mq || [];
+        }
+
+        // Attach to Course
+        (course as any).course_questions = courseQuestions || [];
+
+        // Attach to Modules
+        assembledModules.forEach(module => {
+            module.course_questions = moduleQuestions.filter(q => q.module_id === module.id) || [];
+        });
+
 
         // 3. Fetch assignments
         const { data: assignments, error: assignmentsError } = await supabase
@@ -120,19 +148,91 @@ export async function getCourseForEditor(courseId: string) {
 export async function updateCourseAdvanced(id: string, data: any) {
     const { supabase } = await verifyAdmin();
 
+    // Sanitize JSONB fields if necessary, or just pass data directly if it's clean.
+    // Ensure numbers are numbers, etc.
+    const cleanData = { ...data };
+    if (cleanData.price) cleanData.price = parseFloat(cleanData.price);
+
     const { error } = await supabase
         .from("courses")
-        .update(data)
+        .update(cleanData)
         .eq("id", id);
 
     if (error) {
         console.error("Error updating course advanced:", error);
-        throw new Error("Failed to update course");
+        throw new Error("Failed to update course: " + error.message);
     }
 
+    revalidatePath(`/dashboard/admin/classroom`);
     revalidatePath(`/dashboard/admin/classroom/courses/${id}/edit`);
     return { success: true };
 }
+
+// --- ASSIGNMENTS ---
+
+export async function assignCourseToUser(courseId: string, userId: string) {
+    const { supabase } = await verifyAdmin();
+
+    const { error } = await supabase.from("course_assignments").insert({
+        course_id: courseId,
+        user_id: userId,
+        assigned_at: new Date().toISOString()
+    });
+
+    if (error) {
+        // Ignore duplicate key errors if already assigned
+        if (error.code === '23505') return { success: true };
+        throw new Error("Failed to assign course to user");
+    }
+
+    revalidatePath(`/dashboard/admin/classroom/courses/${courseId}/edit`);
+    return { success: true };
+}
+
+export async function unassignCourseFromUser(courseId: string, userId: string) {
+    const { supabase } = await verifyAdmin();
+
+    const { error } = await supabase.from("course_assignments").delete().match({
+        course_id: courseId,
+        user_id: userId
+    });
+
+    if (error) throw new Error("Failed to unassign course from user");
+
+    revalidatePath(`/dashboard/admin/classroom/courses/${courseId}/edit`);
+    return { success: true };
+}
+
+export async function assignCourseToClass(courseId: string, classId: string) {
+    const { supabase } = await verifyAdmin();
+
+    // 1. Get all students in the class
+    const { data: students, error: fetchError } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("class_id", classId);
+
+    if (fetchError) throw new Error("Failed to fetch class students");
+    if (!students || students.length === 0) return { success: true, count: 0 };
+
+    // 2. Prepare bulk insert
+    const assignments = students.map(s => ({
+        course_id: courseId,
+        user_id: s.id,
+        assigned_at: new Date().toISOString()
+    }));
+
+    // 3. Upsert to handle duplicates
+    const { error: insertError } = await supabase
+        .from("course_assignments")
+        .upsert(assignments, { onConflict: 'course_id, user_id' });
+
+    if (insertError) throw new Error("Failed to assign course to class");
+
+    revalidatePath(`/dashboard/admin/classroom/courses/${courseId}/edit`);
+    return { success: true, count: students.length };
+}
+
 
 // --- MODULES ---
 
@@ -146,10 +246,12 @@ export async function createModule(courseId: string, title: string) {
         .eq("course_id", courseId);
 
     const maxOrder = modules?.reduce((max, m) => Math.max(max, m.order_index || 0), -1) ?? -1;
+    const moduleNumber = maxOrder + 2;
+    const defaultTitle = `MODULE ${numberToWords(moduleNumber)}`;
 
     const { error } = await supabase.from("course_modules").insert({
         course_id: courseId,
-        title,
+        title: !title || ["new module", "new", ""].includes(title.trim().toLowerCase()) ? "New Module" : title,
         order_index: maxOrder + 1
     });
 
@@ -186,10 +288,12 @@ export async function createLesson(moduleId: string, courseId: string, title: st
         .eq("module_id", moduleId);
 
     const maxOrder = lessons?.reduce((max, l) => Math.max(max, l.order_index || 0), -1) ?? -1;
+    const lessonNumber = maxOrder + 2;
+    const defaultTitle = `LESSON ${numberToWords(lessonNumber)}`;
 
     const { error } = await supabase.from("course_lessons").insert({
         module_id: moduleId,
-        title,
+        title: !title || ["new lesson", "new", ""].includes(title.trim().toLowerCase()) ? "New Lesson" : title,
         order_index: maxOrder + 1,
         content: "",
         video_url: ""
@@ -203,7 +307,10 @@ export async function createLesson(moduleId: string, courseId: string, title: st
 export async function updateLessonAdvanced(id: string, courseId: string, data: any) {
     const { supabase } = await verifyAdmin();
     const { error } = await supabase.from("course_lessons").update(data).eq("id", id);
-    if (error) throw new Error("Failed to update lesson");
+    if (error) {
+        console.error("Error updating lesson:", error);
+        throw new Error("Failed to update lesson: " + error.message);
+    }
     revalidatePath(`/dashboard/admin/classroom/courses/${courseId}/edit`);
     return { success: true };
 }
@@ -218,26 +325,41 @@ export async function deleteLesson(id: string, courseId: string) {
 
 // --- QUESTIONS ---
 
-export async function createQuestion(lessonId: string, courseId: string, type: string) {
+export async function createQuestion(
+    contextId: string,
+    courseId: string,
+    type: string,
+    contextType: 'course' | 'module' | 'lesson' = 'lesson'
+) {
     const { supabase } = await verifyAdmin();
+
+    // Determine column to check for ordering
+    const foreignKeyColumn = contextType === 'course' ? 'course_id' : (contextType === 'module' ? 'module_id' : 'lesson_id');
 
     // Get max order_index
     const { data: questions } = await supabase
         .from("course_questions")
         .select("order_index")
-        .eq("lesson_id", lessonId);
+        .eq(foreignKeyColumn, contextId);
 
     const maxOrder = questions?.reduce((max, q) => Math.max(max, q.order_index || 0), -1) ?? -1;
 
-    const { error } = await supabase.from("course_questions").insert({
-        lesson_id: lessonId,
+    // Construct insert payload
+    const payload: any = {
         type: type,
         question_text: "New Question",
         order_index: maxOrder + 1,
         options: type === 'mcq' ? ["Option 1", "Option 2"] : (type === 'boolean' ? ["True", "False"] : []),
         correct_answers: [],
         is_required: false
-    });
+    };
+
+    // Set the correct foreign key
+    if (contextType === 'course') payload.course_id = contextId;
+    else if (contextType === 'module') payload.module_id = contextId;
+    else payload.lesson_id = contextId;
+
+    const { error } = await supabase.from("course_questions").insert(payload);
 
     if (error) throw new Error("Failed to create question");
     revalidatePath(`/dashboard/admin/classroom/courses/${courseId}/edit`);
@@ -257,5 +379,43 @@ export async function deleteQuestion(id: string, courseId: string) {
     const { error } = await supabase.from("course_questions").delete().eq("id", id);
     if (error) throw new Error("Failed to delete question");
     revalidatePath(`/dashboard/admin/classroom/courses/${courseId}/edit`);
+    return { success: true };
+}
+
+export async function issueCertificate(data: {
+    userId: string;
+    courseId: string;
+    type: 'system' | 'upload';
+    customUrl?: string | null;
+}) {
+    const { supabase } = await verifyAdmin();
+
+    const certificateUrl = data.type === 'system'
+        ? `/api/certificates/generate?u=${data.userId}&c=${data.courseId}` // Placeholder for generation API
+        : data.customUrl;
+
+    const { error } = await supabase.from("certificates").insert({
+        user_id: data.userId,
+        course_id: data.courseId,
+        certificate_url: certificateUrl,
+        is_uploaded: data.type === 'upload',
+        issued_at: new Date().toISOString()
+    });
+
+    if (error) throw new Error("Failed to issue certificate");
+
+    // Notify Intern
+    const { data: course } = await supabase.from("courses").select("title").eq("id", data.courseId).single();
+
+    await supabase.from("notifications").insert({
+        user_id: data.userId,
+        title: "Certificate Issued! 🎓",
+        message: `Congratulations! Your certificate for "${course?.title}" has been issued. You can view it in your dashboard.`,
+        notification_type: 'success',
+        reference_type: 'certificate',
+        reference_id: data.courseId
+    });
+
+    revalidatePath("/dashboard/admin/classroom/performance");
     return { success: true };
 }

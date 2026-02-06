@@ -14,6 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Loader2, Settings, Save, Building2 } from "lucide-react";
+import { useLoading } from "@/hooks/use-loading";
 import { Input } from "@/components/ui/input";
 import { ImageUpload } from "@/components/ui/image-upload";
 
@@ -45,10 +46,16 @@ export default function PortalSettingsPage() {
   const [settings, setSettings] = useState<PortalSettings>(defaultSettings);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const { setIsLoading } = useLoading();
 
   useEffect(() => {
     loadSettings();
   }, []);
+
+  useEffect(() => {
+    setIsLoading(loading);
+    return () => setIsLoading(false);
+  }, [loading, setIsLoading]);
 
   const loadSettings = async () => {
     const supabase = createClient();
@@ -91,11 +98,7 @@ export default function PortalSettingsPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return null;
   }
 
   return (

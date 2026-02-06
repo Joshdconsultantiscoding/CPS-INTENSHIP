@@ -26,12 +26,13 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
-import { RealTimeStatsSync } from "@/components/dashboard/real-time-stats-sync";
+
 
 interface AdminDashboardProps {
   totalInterns: number;
   pendingReports: DailyReport[];
   completedTasks: number;
+  inProgressTasks: number;
   pendingTasks: number;
   recentActivity: ActivityLog[];
   events: CalendarEvent[];
@@ -41,16 +42,16 @@ export function AdminDashboard({
   totalInterns,
   pendingReports,
   completedTasks,
+  inProgressTasks,
   pendingTasks,
   recentActivity,
   events,
 }: AdminDashboardProps) {
-  const totalTasks = completedTasks + pendingTasks;
+  const totalTasks = completedTasks + inProgressTasks + pendingTasks;
   const taskCompletionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <RealTimeStatsSync />
       {/* Welcome Section - Mobile Optimized */}
       <div className="flex flex-col gap-3">
         <div>
@@ -86,7 +87,7 @@ export function AdminDashboard({
       </div>
 
       {/* Stats Grid - Mobile: 2 cols */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
         <Card className="p-3 sm:p-0">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 p-0 sm:p-6 sm:pb-2">
             <CardTitle className="text-xs sm:text-sm font-medium">Total Interns</CardTitle>
@@ -108,6 +109,18 @@ export function AdminDashboard({
             <div className="text-xl sm:text-2xl font-bold">{pendingReports.length}</div>
             <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">
               To review
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="p-3 sm:p-0">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-0 sm:p-6 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium">In Progress</CardTitle>
+            <Clock className="h-4 w-4 text-muted-foreground hidden sm:block" />
+          </CardHeader>
+          <CardContent className="p-0 pt-2 sm:p-6 sm:pt-0">
+            <div className="text-xl sm:text-2xl font-bold">{inProgressTasks}</div>
+            <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">
+              Active tasks
             </p>
           </CardContent>
         </Card>

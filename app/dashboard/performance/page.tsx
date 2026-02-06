@@ -31,10 +31,10 @@ export default async function PerformancePage() {
     .select("status, completed_at, created_at, points")
     .eq("assigned_to", user.id);
 
-  // Get report stats
+  // Get report stats - select all fields needed for charts
   const { data: reports } = await supabase
     .from("daily_reports")
-    .select("report_date, status, mood, hours_worked")
+    .select("*")
     .eq("user_id", user.id)
     .order("report_date", { ascending: false })
     .limit(30);
@@ -65,6 +65,7 @@ export default async function PerformancePage() {
         totalTasks={totalTasks}
         totalPoints={totalPoints}
         submittedReports={submittedReports}
+        userId={user.id}
       />
     </div>
   );

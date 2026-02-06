@@ -3,6 +3,9 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { Toaster } from "@/components/ui/sonner";
+import { LoadingProvider } from "@/hooks/use-loading";
+import { LoadingOverlay } from "@/components/ui/loading-overlay";
+import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
 
 const geist = Geist({ subsets: ["latin"] });
@@ -15,6 +18,10 @@ export const metadata: Metadata = {
   },
   description:
     "A comprehensive internship management platform for tracking tasks, daily reports, performance analytics, and team communication.",
+  icons: {
+    icon: "/assets/favicon/logo.png",
+    apple: "/assets/favicon/logo.png",
+  },
 };
 
 export const viewport: Viewport = {
@@ -35,9 +42,14 @@ export default function RootLayout({
     <ClerkProvider>
       <html lang="en" suppressHydrationWarning>
         <body className={`${geist.className} antialiased`}>
-          {children}
-          <Toaster richColors position="top-right" />
-          <Analytics />
+          <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+            <LoadingProvider>
+              {children}
+              <LoadingOverlay />
+              <Toaster richColors position="top-right" />
+              <Analytics />
+            </LoadingProvider>
+          </ThemeProvider>
         </body>
       </html>
     </ClerkProvider>

@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react"
+import React, { useEffect } from "react"
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -37,6 +37,8 @@ import {
   Plus,
 } from "lucide-react";
 import { RewardDialog } from "./reward-dialog";
+import { useAbly } from "@/providers/ably-provider";
+import { deleteRewardAction } from "@/app/actions/rewards";
 
 interface RewardsOverviewProps {
   profile: Profile | null;
@@ -66,30 +68,81 @@ const rewardIcons: Record<string, React.ReactNode> = {
 
 export function RewardsOverview({
   profile,
-  rewards,
+  rewards: initialRewards,
   achievements,
   leaderboard,
   isAdmin,
   userId,
 }: RewardsOverviewProps) {
   const router = useRouter();
+  const { client: ablyClient } = useAbly();
+  const [rewards, setRewards] = useState<Reward[]>(initialRewards);
   const [claiming, setClaiming] = useState<string | null>(null);
   const [isRewardDialogOpen, setIsRewardDialogOpen] = useState(false);
   const [editingReward, setEditingReward] = useState<Reward | undefined>(undefined);
 
+  // Real-time subscription for rewards changes
+  useEffect(() => {
+    if (!ablyClient) return;
+
+    const channel = ablyClient.channels.get("rewards:global");
+
+    const handleRewardCreated = (message: any) => {
+      const newReward = message.data.reward as Reward;
+      setRewards((prev) => [...prev, newReward].sort((a, b) => a.points_required - b.points_required));
+      if (!isAdmin) {
+        toast.info(`New reward available: ${newReward.name}`);
+      }
+    };
+
+    const handleRewardUpdated = (message: any) => {
+      const updatedReward = message.data.reward as Reward;
+      setRewards((prev) =>
+        prev.map((r) => (r.id === updatedReward.id ? updatedReward : r))
+      );
+    };
+
+    const handleRewardDeleted = (message: any) => {
+      const deletedId = message.data.rewardId as string;
+      setRewards((prev) => prev.filter((r) => r.id !== deletedId));
+    };
+
+    channel.subscribe("reward-created", handleRewardCreated);
+    channel.subscribe("reward-updated", handleRewardUpdated);
+    channel.subscribe("reward-deleted", handleRewardDeleted);
+
+    return () => {
+      channel.unsubscribe("reward-created", handleRewardCreated);
+      channel.unsubscribe("reward-updated", handleRewardUpdated);
+      channel.unsubscribe("reward-deleted", handleRewardDeleted);
+    };
+  }, [ablyClient, isAdmin]);
+
   const handleDeleteReward = async (rewardId: string) => {
     if (!confirm("Are you sure you want to delete this reward?")) return;
 
-    const supabase = createClient();
-    const { error } = await supabase.from("rewards").delete().eq("id", rewardId);
+    const result = await deleteRewardAction(rewardId);
 
-    if (error) {
-      toast.error("Failed to delete reward");
+    if (!result.success) {
+      console.error("Failed to delete reward:", result.error);
+      toast.error(`Failed to delete reward: ${result.error}`);
       return;
     }
 
+    // Update local state immediately
+    setRewards((prev) => prev.filter((r) => r.id !== rewardId));
+
+    // Publish deletion via Ably for real-time sync
+    if (ablyClient) {
+      try {
+        const channel = ablyClient.channels.get("rewards:global");
+        await channel.publish("reward-deleted", { rewardId });
+      } catch (e) {
+        console.warn("Ably publish failed:", e);
+      }
+    }
+
     toast.success("Reward deleted successfully");
-    router.refresh();
   };
 
   const userPoints = profile?.total_points || 0;

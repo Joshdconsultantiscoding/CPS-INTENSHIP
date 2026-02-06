@@ -13,13 +13,14 @@ export const metadata = {
 };
 
 export default async function ClassroomPage() {
-    const user = await getAuthUser();
+    const [user, assignedClasses] = await Promise.all([
+        getAuthUser(),
+        getStudentClasses()
+    ]);
 
     if (user.role === "admin") {
         redirect("/dashboard/admin/classroom");
     }
-
-    const assignedClasses = await getStudentClasses();
 
     return (
         <div className="flex flex-col md:flex-row h-full min-h-[calc(100vh-4rem)]">

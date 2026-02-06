@@ -1,5 +1,5 @@
 import { getAuthUser } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 import { ReportList } from "@/components/reports/report-list";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -10,23 +10,24 @@ export const metadata = {
 };
 
 export default async function ReportsPage() {
-  // Use Clerk auth
   const user = await getAuthUser();
-  const supabase = await createClient();
-
+  const supabase = await createAdminClient();
   const isAdmin = user.role === "admin";
 
-  // Get reports based on role
-  let reportsQuery = supabase
+  let query = supabase
     .from("daily_reports")
     .select("*, user:profiles!daily_reports_user_id_fkey(*), reviewer:profiles!daily_reports_reviewed_by_fkey(*)")
     .order("report_date", { ascending: false });
 
   if (!isAdmin) {
-    reportsQuery = reportsQuery.eq("user_id", user.id);
+    query = query.eq("user_id", user.id);
   }
 
-  const { data: reports } = await reportsQuery;
+  const { data: reports, error } = await query;
+
+  if (error) {
+    console.error("Reports fetch error:", error);
+  }
 
   // Check if today's report exists (for interns)
   const today = new Date().toISOString().split("T")[0];

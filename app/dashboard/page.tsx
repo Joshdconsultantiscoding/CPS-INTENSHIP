@@ -1,5 +1,5 @@
 import { getAuthUser } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 import { AdminDashboard } from "@/components/dashboard/admin-dashboard";
 import { InternDashboard } from "@/components/dashboard/intern-dashboard";
 import { redirect } from "next/navigation";
@@ -9,7 +9,7 @@ import { config } from "@/lib/config";
 
 export default async function DashboardPage() {
   const user = await getAuthUser();
-  const supabase = await createClient();
+  const supabase = await createAdminClient(); // Use admin client to bypass RLS
 
   // Convert AuthUser to Profile type expected by components
   const profile = {
@@ -43,14 +43,16 @@ export default async function DashboardPage() {
     const [
       { count: internCount },
       { count: completedTasksCount },
-      { count: pendingTasksCount },
+      { count: inProgressTasksCount },
+      { count: todoTasksCount },
       { data: pendingReports },
       { data: recentActivityData },
       { data: eventsData }
     ] = (await Promise.all([
       supabase.from("profiles").select("id", { count: "exact", head: true }).eq("role", "intern"),
       supabase.from("tasks").select("id", { count: "exact", head: true }).eq("status", "completed"),
-      supabase.from("tasks").select("id", { count: "exact", head: true }).neq("status", "completed"),
+      supabase.from("tasks").select("id", { count: "exact", head: true }).eq("status", "in_progress"),
+      supabase.from("tasks").select("id", { count: "exact", head: true }).eq("status", "pending"),
       supabase.from("daily_reports").select("id, status, created_at, user_id, user:profiles(full_name, avatar_url), tasks:report_tasks(id, title, status)").eq("status", "submitted").order("created_at", { ascending: false }),
       supabase.from("activity_logs").select("id, action, created_at, metadata, user:profiles(full_name, avatar_url)").order("created_at", { ascending: false }).limit(5),
       supabase.from("calendar_events").select("id, title, start_time, end_time, event_type").gte("start_time", now).order("start_time", { ascending: true }).limit(5)
@@ -88,7 +90,8 @@ export default async function DashboardPage() {
         totalInterns={internCount || 0}
         pendingReports={typedReports}
         completedTasks={completedTasksCount || 0}
-        pendingTasks={pendingTasksCount || 0}
+        inProgressTasks={inProgressTasksCount || 0}
+        pendingTasks={todoTasksCount || 0}
         recentActivity={recentActivity}
         events={events}
       />

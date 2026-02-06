@@ -1,5 +1,6 @@
 import { getAuthUser } from "@/lib/auth";
 import { getCourseDetail } from "@/actions/classroom-student";
+import { numberToWords, formatLessonTitle } from "@/lib/utils";
 import { VideoPlayer } from "@/components/classroom/video-player";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +13,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { LessonNavigation } from "@/components/classroom/lesson-navigation";
 import {
     Accordion,
     AccordionContent,
@@ -62,28 +64,51 @@ export default async function LessonPage({ params }: LessonPageProps) {
                     )?.id]} className="w-full">
                         {course.course_modules.map((module: any, idx: number) => (
                             <AccordionItem key={module.id} value={module.id} className="border-b last:border-b-0">
-                                <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/50 text-xs font-semibold uppercase tracking-wider text-muted-foreground transition-colors text-left">
-                                    <span className="truncate">{idx + 1}. {module.title}</span>
+                                <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/50 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors text-left">
+                                    <span className="truncate">{numberToWords(idx + 1)}. {module.title}</span>
                                 </AccordionTrigger>
                                 <AccordionContent className="pb-2 pt-0">
                                     <div className="space-y-0.5">
-                                        {module.course_lessons?.map((lesson: any) => {
+                                        {module.course_lessons?.map((lesson: any, lIdx: number) => {
                                             const isActive = lesson.id === params.lessonId;
+                                            const content = (
+                                                <>
+                                                    <PlayCircle className={`h-4 w-4 shrink-0 ${isActive ? "text-primary" : (user.role === "admin" ? "text-muted-foreground" : "text-muted-foreground/30")}`} />
+                                                    <span className="truncate">{formatLessonTitle(lesson.title, lIdx)}</span>
+                                                </>
+                                            );
+
+                                            if (user.role === "admin") {
+                                                return (
+                                                    <Link
+                                                        key={lesson.id}
+                                                        href={`/dashboard/classroom/courses/${params.id}/lessons/${lesson.id}`}
+                                                        className={`
+                                                            flex items-center gap-3 px-4 py-2.5 text-sm transition-colors border-l-2
+                                                            ${isActive
+                                                                ? "bg-primary/5 border-primary text-primary font-medium"
+                                                                : "border-transparent hover:bg-muted text-muted-foreground"
+                                                            }
+                                                        `}
+                                                    >
+                                                        {content}
+                                                    </Link>
+                                                );
+                                            }
+
                                             return (
-                                                <Link
+                                                <div
                                                     key={lesson.id}
-                                                    href={`/dashboard/classroom/courses/${params.id}/lessons/${lesson.id}`}
                                                     className={`
                                                         flex items-center gap-3 px-4 py-2.5 text-sm transition-colors border-l-2
                                                         ${isActive
                                                             ? "bg-primary/5 border-primary text-primary font-medium"
-                                                            : "border-transparent hover:bg-muted text-muted-foreground"
+                                                            : "border-transparent text-muted-foreground/50"
                                                         }
                                                     `}
                                                 >
-                                                    <PlayCircle className={`h-4 w-4 shrink-0 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
-                                                    <span className="truncate">{lesson.title}</span>
-                                                </Link>
+                                                    {content}
+                                                </div>
                                             );
                                         })}
                                     </div>
@@ -103,29 +128,19 @@ export default async function LessonPage({ params }: LessonPageProps) {
                     <div className="space-y-6">
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-6">
                             <div className="space-y-1">
-                                <h1 className="text-2xl font-bold tracking-tight">{currentLesson.title}</h1>
+                                <h1 className="text-2xl font-bold tracking-tight">{formatLessonTitle(currentLesson.title, currentIndex)}</h1>
                                 <p className="text-sm text-muted-foreground">
                                     Module: {course.course_modules.find((m: any) => m.course_lessons?.some((l: any) => l.id === params.lessonId))?.title}
                                 </p>
                             </div>
 
                             <div className="flex items-center gap-2">
-                                {prevLesson && (
-                                    <Button variant="outline" size="sm" asChild>
-                                        <Link href={`/dashboard/classroom/courses/${params.id}/lessons/${prevLesson.id}`}>
-                                            <ChevronLeft className="mr-2 h-4 w-4" />
-                                            Prev
-                                        </Link>
-                                    </Button>
-                                )}
-                                {nextLesson && (
-                                    <Button size="sm" asChild>
-                                        <Link href={`/dashboard/classroom/courses/${params.id}/lessons/${nextLesson.id}`}>
-                                            Next Lesson
-                                            <ChevronRight className="ml-2 h-4 w-4" />
-                                        </Link>
-                                    </Button>
-                                )}
+                                <LessonNavigation
+                                    courseId={params.id}
+                                    currentLessonId={params.lessonId}
+                                    course={course}
+                                    userRole={user.role}
+                                />
                             </div>
                         </div>
 

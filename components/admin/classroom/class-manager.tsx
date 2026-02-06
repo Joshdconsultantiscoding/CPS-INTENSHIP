@@ -66,7 +66,7 @@ export function ClassManager({ initialClasses }: ClassManagerProps) {
     useEffect(() => {
         if (editingClass) {
             form.reset({
-                name: editingClass.name,
+                name: editingClass.name || "",
                 description: editingClass.description || "",
             });
         } else {

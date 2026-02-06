@@ -1,6 +1,9 @@
 "use client";
 
+import { useState, useEffect, useCallback } from "react";
 import type { Profile, PerformanceScore, DailyReport } from "@/lib/types";
+import { useAbly } from "@/providers/ably-provider";
+import { getInternPerformanceData } from "@/app/actions/analytics";
 import {
   Card,
   CardContent,
@@ -43,18 +46,74 @@ interface PerformanceOverviewProps {
   totalTasks: number;
   totalPoints: number;
   submittedReports: number;
+  userId: string; // Added for real-time refetch
 }
 
 export function PerformanceOverview({
-  profile,
-  scores,
-  tasks,
-  reports,
-  completedTasks,
-  totalTasks,
-  totalPoints,
-  submittedReports,
+  profile: initialProfile,
+  scores: initialScores,
+  tasks: initialTasks,
+  reports: initialReports,
+  completedTasks: initialCompletedTasks,
+  totalTasks: initialTotalTasks,
+  totalPoints: initialTotalPoints,
+  submittedReports: initialSubmittedReports,
+  userId,
 }: PerformanceOverviewProps) {
+  // State for real-time updates
+  const [profile, setProfile] = useState(initialProfile);
+  const [scores, setScores] = useState(initialScores);
+  const [tasks, setTasks] = useState(initialTasks);
+  const [reports, setReports] = useState(initialReports);
+  const [completedTasks, setCompletedTasks] = useState(initialCompletedTasks);
+  const [totalTasks, setTotalTasks] = useState(initialTotalTasks);
+  const [totalPoints, setTotalPoints] = useState(initialTotalPoints);
+  const [submittedReports, setSubmittedReports] = useState(initialSubmittedReports);
+
+  const { client, isConfigured } = useAbly();
+
+  // Refetch data from server
+  const refetchData = useCallback(async () => {
+    try {
+      const data = await getInternPerformanceData(userId);
+      setProfile(data.profile);
+      setScores(data.scores);
+      setTasks(data.tasks);
+      setReports(data.reports);
+      setCompletedTasks(data.completedTasks);
+      setTotalTasks(data.totalTasks);
+      setTotalPoints(data.totalPoints);
+      setSubmittedReports(data.submittedReports);
+    } catch (error) {
+      console.error("Failed to refetch performance data:", error);
+    }
+  }, [userId]);
+
+  // Subscribe to real-time events
+  useEffect(() => {
+    if (!client || !isConfigured) return;
+
+    const channel = client.channels.get("global-updates");
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const handleUpdate = (message: any) => {
+      // Refetch if the event is for this user or is a global event
+      const targetUserId = message?.data?.userId || message?.data?.task?.assigned_to;
+      if (!targetUserId || targetUserId === userId) {
+        refetchData();
+      }
+    };
+
+    channel.subscribe("task-created", handleUpdate);
+    channel.subscribe("task-updated", handleUpdate);
+    channel.subscribe("report-submitted", handleUpdate);
+    channel.subscribe("profile-updated", handleUpdate);
+
+    return () => {
+      channel.unsubscribe();
+    };
+  }, [client, isConfigured, userId, refetchData]);
+
   const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
   // Prepare chart data for tasks over time

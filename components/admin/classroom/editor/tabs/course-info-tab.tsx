@@ -46,8 +46,13 @@ interface CourseInfoTabProps {
     course: any;
 }
 
+import { useRouter } from "next/navigation";
+
+// ... (imports)
+
 export function CourseInfoTab({ course }: CourseInfoTabProps) {
     const [isSaving, setIsSaving] = useState(false);
+    const router = useRouter();
 
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
@@ -69,9 +74,19 @@ export function CourseInfoTab({ course }: CourseInfoTabProps) {
     async function onSubmit(values: z.infer<typeof formSchema>) {
         setIsSaving(true);
         try {
-            await updateCourseAdvanced(course.id, values);
-            toast.success("Course information updated successfully!");
+            const result = await updateCourseAdvanced(course.id, values);
+            if (result && result.success) {
+                toast.success("Course information updated successfully!");
+                router.refresh();
+                // Redirect to Modules tab after short delay to allow toast to be seen
+                setTimeout(() => {
+                    const params = new URLSearchParams(window.location.search);
+                    params.set("tab", "modules");
+                    router.push(`?${params.toString()}`);
+                }, 1000);
+            }
         } catch (error: any) {
+            console.error("Update error:", error);
             toast.error(error.message || "Failed to update course.");
         } finally {
             setIsSaving(false);

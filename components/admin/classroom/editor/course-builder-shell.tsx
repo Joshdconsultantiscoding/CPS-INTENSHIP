@@ -49,16 +49,23 @@ export function CourseBuilderShell({ course, children }: CourseBuilderShellProps
 
     const calculateProgress = () => {
         let score = 0;
-        const total = 6;
+        const total = 5; // Reduced from 6, removing Title since it's required for creation.
 
-        if (course.title) score++;
-        if (course.description || course.short_description) score++;
+        // 1. Basic Info (Description)
+        if (course.description && course.description.length > 10) score++;
+
+        // 2. Visuals (Thumbnail or Cover)
         if (course.thumbnail_url || course.cover_image_url) score++;
-        if (course.course_modules?.length > 0) score++;
 
+        // 3. Structure (At least one module)
+        if (course.course_modules && course.course_modules.length > 0) score++;
+
+        // 4. Content (At least one lesson content)
+        // We check if total lessons > 0, implying they started adding content.
         const totalLessons = course.course_modules?.reduce((acc: number, m: any) => acc + (m.course_lessons?.length || 0), 0) || 0;
-        if (totalLessons >= 3) score++;
+        if (totalLessons > 0) score++;
 
+        // 5. Published
         if (course.status === 'published') score++;
 
         return Math.round((score / total) * 100);
@@ -97,16 +104,12 @@ export function CourseBuilderShell({ course, children }: CourseBuilderShellProps
                             <span className="hidden sm:inline">Preview</span>
                         </Link>
                     </Button>
-                    <Button size="sm" disabled={isSaving}>
-                        {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                        <span className="hidden sm:inline">Save Changes</span>
-                        <span className="sm:hidden text-xs">Save</span>
-                    </Button>
+                    {/* Save button removed as it was dormant. Use the specific save buttons in each tab instead. */}
                 </div>
-            </header>
+            </header >
 
             {/* Mobile Tabs Wrapper */}
-            <div className="lg:hidden border-b bg-card overflow-x-auto no-scrollbar scroll-smooth">
+            < div className="lg:hidden border-b bg-card overflow-x-auto no-scrollbar scroll-smooth" >
                 <div className="flex px-4 items-center h-12 w-max">
                     {tabs.map((tab) => {
                         const Icon = tab.icon;
@@ -129,7 +132,7 @@ export function CourseBuilderShell({ course, children }: CourseBuilderShellProps
                         );
                     })}
                 </div>
-            </div>
+            </div >
 
             <div className="flex-1 flex overflow-hidden">
                 {/* Desktop Sidebar */}
@@ -182,6 +185,6 @@ export function CourseBuilderShell({ course, children }: CourseBuilderShellProps
                     </div>
                 </main>
             </div>
-        </div>
+        </div >
     );
 }

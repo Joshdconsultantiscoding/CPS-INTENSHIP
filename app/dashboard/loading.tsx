@@ -1,46 +1,29 @@
-import { Skeleton } from "@/components/ui/skeleton";
+"use client";
 
+import { useEffect } from "react";
+import { useLoading } from "@/hooks/use-loading";
+
+/**
+ * DashboardLoading component
+ * This replaces the default grey skeletons with the cinematic global loader
+ * during route transitions.
+ */
 export default function DashboardLoading() {
-    return (
-        <div className="flex flex-col space-y-6 p-6">
-            {/* Header skeleton */}
-            <div className="flex items-center justify-between">
-                <div className="space-y-2">
-                    <Skeleton className="h-8 w-48" />
-                    <Skeleton className="h-4 w-72" />
-                </div>
-                <Skeleton className="h-10 w-32" />
-            </div>
+    const { setIsLoading } = useLoading();
 
-            {/* Stats cards skeleton */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                {[1, 2, 3, 4].map((i) => (
-                    <div key={i} className="rounded-xl border bg-card p-6">
-                        <Skeleton className="h-4 w-24 mb-2" />
-                        <Skeleton className="h-8 w-16" />
-                    </div>
-                ))}
-            </div>
+    useEffect(() => {
+        // Show cinematic loader when Next.js navigation starts
+        setIsLoading(true);
 
-            {/* Main content skeleton */}
-            <div className="grid gap-4 md:grid-cols-7">
-                <div className="col-span-4 rounded-xl border bg-card p-6">
-                    <Skeleton className="h-6 w-32 mb-4" />
-                    <div className="space-y-3">
-                        {[1, 2, 3, 4, 5].map((i) => (
-                            <Skeleton key={i} className="h-12 w-full" />
-                        ))}
-                    </div>
-                </div>
-                <div className="col-span-3 rounded-xl border bg-card p-6">
-                    <Skeleton className="h-6 w-28 mb-4" />
-                    <div className="space-y-3">
-                        {[1, 2, 3].map((i) => (
-                            <Skeleton key={i} className="h-16 w-full" />
-                        ))}
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
+        // Cleanup: Ensuring loader hides when this component unmounts
+        // (meaning the target page has loaded)
+        return () => {
+            // We use a small delay in the provider's own useEffect for better transition
+            // but we can also explicitly signal here.
+            // However, the provider already handles path changes.
+        };
+    }, [setIsLoading]);
+
+    // Return null so the global LoadingOverlay in the root layout takes center stage
+    return null;
 }

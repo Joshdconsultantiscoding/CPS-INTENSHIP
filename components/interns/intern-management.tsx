@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -100,6 +100,15 @@ interface InternManagementProps {
   currentUserId: string;
 }
 
+// Helper to check if user was active recently (fallback when Ably presence is unavailable)
+function isRecentlyActive(lastActiveAt: string | null): boolean {
+  if (!lastActiveAt) return false;
+  const lastActive = new Date(lastActiveAt).getTime();
+  const now = Date.now();
+  // Consider online if active within 90 seconds (allowing for heartbeat skew)
+  return (now - lastActive) < 90000;
+}
+
 export function InternManagement({
   users: initialUsers,
   userStats,
@@ -109,17 +118,32 @@ export function InternManagement({
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [filter, setFilter] = useState<"all" | "online" | "offline" | "interns" | "admins">("all");
-  // Use global online users context from Ably provider (single source of truth)
-  const onlineUsersSet = useOnlineUsers();
+
+  // Use global online users context from Ably provider
+  const ablyOnlineUsers = useOnlineUsers();
   const { isConfigured, client: ablyClient } = useAbly();
   const supabase = createClient();
   const router = useRouter();
+
+  // HYBRID ONLINE DETECTION: Use Ably presence first, fall back to database last_active_at
+  const isUserOnline = useCallback((user: UserProfile): boolean => {
+    // 1. Check Ably real-time presence first (most accurate)
+    if (ablyOnlineUsers.has(user.id)) {
+      return true;
+    }
+
+    // 2. Fallback to database last_active_at (updated every 30 seconds by heartbeat)
+    // This catches cases where Ably isn't configured or user's connection is delayed
+    return isRecentlyActive(user.last_active_at);
+  }, [ablyOnlineUsers]);
 
   // Presence is now handled by the AblyPresenceSync sub-component below
   // which is only rendered if Ably is configured.
 
   // Secondary subscription for profile data updates (names, points, etc.)
+  // We use BOTH Supabase Realtime (if available) and Ably (for guaranteed delivery)
   useEffect(() => {
+    // 1. Supabase Postgres Changes
     const profileSubscription = supabase
       .channel("profile-management-updates")
       .on(
@@ -139,14 +163,29 @@ export function InternManagement({
       )
       .subscribe();
 
+    // 2. Ably Global Updates (Bypasses RLS issues)
+    let ablyChannel: any = null;
+    if (ablyClient) {
+      ablyChannel = ablyClient.channels.get("global-updates");
+      ablyChannel.subscribe("profile-updated", (message: any) => {
+        const { userId, ...updates } = message.data;
+        setUsers((prev) =>
+          prev.map((u) =>
+            u.id === userId ? { ...u, ...updates } : u
+          )
+        );
+      });
+    }
+
     return () => {
       profileSubscription.unsubscribe();
+      if (ablyChannel) ablyChannel.unsubscribe();
     };
-  }, [supabase]);
+  }, [supabase, ablyClient]);
 
   // Filter users
   const filteredUsers = users.filter((user) => {
-    const isActuallyOnline = onlineUsersSet.has(user.id);
+    const isActuallyOnline = isUserOnline(user);
     const matchesSearch =
       user.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.first_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -172,7 +211,7 @@ export function InternManagement({
 
   // Stats
   const totalUsers = users.length;
-  const onlineUsersCount = users.filter((u) => onlineUsersSet.has(u.id)).length;
+  const onlineUsersCount = users.filter((u) => isUserOnline(u)).length;
   const totalInterns = users.filter((u) => u.role === "intern").length;
   const totalAdmins = users.filter((u) => u.role === "admin").length;
 
@@ -189,8 +228,8 @@ export function InternManagement({
     }
   };
 
-  const getOnlineStatusBadge = (status: string, lastSeen: string | null) => {
-    if (status === "online") {
+  const getOnlineStatusBadge = (isOnline: boolean, lastSeen: string | null) => {
+    if (isOnline) {
       return (
         <Badge className="bg-green-500/10 text-green-600 border-green-500/20">
           <span className="mr-1.5 h-2 w-2 rounded-full bg-green-500 animate-pulse" />
@@ -198,14 +237,7 @@ export function InternManagement({
         </Badge>
       );
     }
-    if (status === "away") {
-      return (
-        <Badge className="bg-yellow-500/10 text-yellow-600 border-yellow-500/20">
-          <span className="mr-1.5 h-2 w-2 rounded-full bg-yellow-500" />
-          Away
-        </Badge>
-      );
-    }
+    // Not online - show last seen time
     return (
       <Badge variant="secondary" className="text-muted-foreground">
         <span className="mr-1.5 h-2 w-2 rounded-full bg-gray-400" />
@@ -364,7 +396,7 @@ export function InternManagement({
                                 {user.last_name?.[0]}
                               </AvatarFallback>
                             </Avatar>
-                            {onlineUsersSet.has(user.id) && (
+                            {isUserOnline(user) && (
                               <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 border-2 border-background" />
                             )}
                           </div>
@@ -381,7 +413,7 @@ export function InternManagement({
                         </div>
                       </TableCell>
                       <TableCell>
-                        {getOnlineStatusBadge(onlineUsersSet.has(user.id) ? "online" : user.online_status, user.last_seen_at)}
+                        {getOnlineStatusBadge(isUserOnline(user), user.last_seen_at)}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
@@ -496,14 +528,14 @@ export function InternManagement({
                 {/* Profile Header */}
                 <div className="flex items-start gap-4">
                   <div className="relative">
-                    <Avatar className="h-20 w-20">
+                    <Avatar>
                       <AvatarImage src={selectedUser.avatar_url || undefined} />
                       <AvatarFallback className="text-2xl">
                         {selectedUser.first_name?.[0] || selectedUser.full_name?.[0] || selectedUser.email[0].toUpperCase()}
                         {selectedUser.last_name?.[0]}
                       </AvatarFallback>
                     </Avatar>
-                    {onlineUsersSet.has(selectedUser.id) && (
+                    {isUserOnline(selectedUser) && (
                       <span className="absolute bottom-1 right-1 h-4 w-4 rounded-full bg-green-500 border-2 border-background" />
                     )}
                   </div>
@@ -515,7 +547,7 @@ export function InternManagement({
                     </h3>
                     <p className="text-muted-foreground">{selectedUser.email}</p>
                     <div className="flex items-center gap-2 mt-2">
-                      {getOnlineStatusBadge(onlineUsersSet.has(selectedUser.id) ? "online" : selectedUser.online_status, selectedUser.last_seen_at)}
+                      {getOnlineStatusBadge(isUserOnline(selectedUser), selectedUser.last_seen_at)}
                       <Badge variant={selectedUser.role === "admin" ? "default" : "secondary"}>
                         {selectedUser.role}
                       </Badge>

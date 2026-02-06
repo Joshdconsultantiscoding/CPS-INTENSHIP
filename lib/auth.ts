@@ -36,13 +36,13 @@ export const getAuthUser = cache(async (): Promise<AuthUser> => {
             redirect("/auth/sign-in");
         }
 
-        // 3. Fetch Role from Supabase (sperately to avoid Promise.all swallowing redirects)
+        // 3. Fetch Full Profile from Supabase
         let profile = null;
         try {
             const adminClient = await createAdminClient();
             const { data, error } = await adminClient
                 .from("profiles")
-                .select("role")
+                .select("*")
                 .eq("id", userId)
                 .single();
 
@@ -52,8 +52,6 @@ export const getAuthUser = cache(async (): Promise<AuthUser> => {
             profile = data;
         } catch (dbError) {
             console.error("Supabase connection failed in getAuthUser (non-fatal):", dbError);
-            // Verify if we should block access or default to intern. 
-            // For now, default to intern to allow access if DB is flaky.
         }
 
         const email = user.emailAddresses[0]?.emailAddress || null;
@@ -64,14 +62,13 @@ export const getAuthUser = cache(async (): Promise<AuthUser> => {
             return {
                 id: userId,
                 email: email,
-                full_name: [user.firstName, user.lastName].filter(Boolean).join(" ") || "Admin",
-                avatar_url: user.imageUrl || null,
+                full_name: profile?.full_name || [user.firstName, user.lastName].filter(Boolean).join(" ") || "Admin",
+                avatar_url: profile?.avatar_url || user.imageUrl || null,
                 role: "admin",
-                firstName: user.firstName,
-                lastName: user.lastName,
+                firstName: profile?.first_name || user.firstName,
+                lastName: profile?.last_name || user.lastName,
             };
         }
-
 
         // Default to 'intern' if no profile found
         const dbRole = profile?.role?.toLowerCase();
@@ -80,17 +77,21 @@ export const getAuthUser = cache(async (): Promise<AuthUser> => {
         return {
             id: userId,
             email: email,
-            full_name: [user.firstName, user.lastName].filter(Boolean).join(" ") || "User",
-            avatar_url: user.imageUrl || null,
+            full_name: profile?.full_name || [user.firstName, user.lastName].filter(Boolean).join(" ") || "User",
+            avatar_url: profile?.avatar_url || user.imageUrl || null,
             role: role,
-            firstName: user.firstName,
-            lastName: user.lastName,
+            firstName: profile?.first_name || user.firstName,
+            lastName: profile?.last_name || user.lastName,
         };
     } catch (error: any) {
         // If it's a redirect error, re-throw it (standard Next.js behavior)
         if (isRedirectError(error)) throw error;
 
-        console.error("CRITICAL ERROR in getAuthUser:", error);
+        console.error("CRITICAL ERROR in getAuthUser:", {
+            message: error.message,
+            stack: error.stack,
+            error
+        });
         const errorMessage = error instanceof Error ? error.message : String(error);
         throw new Error(`Authentication failure: ${errorMessage || "Unknown error"}`);
     }

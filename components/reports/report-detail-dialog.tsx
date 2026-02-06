@@ -28,6 +28,7 @@ import {
   Loader2,
   Star,
 } from "lucide-react";
+import { reviewDailyReport } from "@/app/actions/reports";
 
 interface ReportDetailDialogProps {
   report: DailyReport | null;
@@ -59,34 +60,21 @@ export function ReportDetailDialog({
 
   const handleSubmitFeedback = async () => {
     setLoading(true);
-    const supabase = createClient();
 
-    const { error } = await supabase
-      .from("daily_reports")
-      .update({
-        admin_feedback: feedback,
-        admin_rating: adminRating,
-        status: "reviewed",
-        reviewed_at: new Date().toISOString(),
-        reviewed_by: userId,
-      })
-      .eq("id", report.id);
+    const response = await reviewDailyReport({
+      reportId: report.id,
+      reviewerId: userId,
+      feedback: feedback,
+      rating: adminRating,
+      internId: report.user_id,
+      reportDate: report.report_date
+    });
 
-    if (error) {
-      toast.error("Failed to submit feedback");
+    if (!response.success) {
+      toast.error(response.error || "Failed to submit feedback");
       setLoading(false);
       return;
     }
-
-    // Notify the intern
-    await supabase.from("notifications").insert({
-      user_id: report.user_id,
-      title: "Report Reviewed",
-      message: `Your daily report for ${format(new Date(report.report_date), "MMM d")} has been reviewed. Rating: ${adminRating}/5 stars.`,
-      type: "report",
-      reference_id: report.id,
-      reference_type: "daily_report",
-    });
 
     toast.success("Feedback submitted successfully");
     setLoading(false);

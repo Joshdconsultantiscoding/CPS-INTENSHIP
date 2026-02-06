@@ -21,6 +21,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { Loader2, Smile, Meh, Frown, ThumbsUp, ThumbsDown } from "lucide-react";
+import { saveDailyReport } from "@/app/actions/reports";
 
 interface ReportFormProps {
   userId: string;
@@ -123,44 +124,21 @@ export function ReportForm({ userId, tasks }: ReportFormProps) {
       updated_at: new Date().toISOString(),
     };
 
-    // Use upsert to handle both insert and update
-    const { data, error } = await supabase
-      .from("daily_reports")
-      .upsert(reportId ? { id: reportId, ...reportData } : reportData)
-      .select()
-      .single();
+    // Use Server Action instead of client-side upsert
+    const response = await saveDailyReport({
+      id: reportId,
+      ...reportData
+    });
 
-    if (error) {
-      console.error("Report operation error:", error);
-      toast.error(error.message || "Failed to save report");
+    if (!response.success) {
+      console.error("Report operation error:", response.error);
+      toast.error(response.error || "Failed to save report");
       setLoading(false);
       return;
     }
 
-    if (data) {
-      setReportId(data.id);
-    }
-
-    // Update streak if submitted
-    if (status === "submitted") {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("current_streak, longest_streak")
-        .eq("id", userId)
-        .single();
-
-      if (profile) {
-        const newStreak = (profile.current_streak || 0) + 1;
-        const longestStreak = Math.max(newStreak, profile.longest_streak || 0);
-
-        await supabase
-          .from("profiles")
-          .update({
-            current_streak: newStreak,
-            longest_streak: longestStreak,
-          })
-          .eq("id", userId);
-      }
+    if (response.data) {
+      setReportId(response.data.id);
     }
 
     toast.success(

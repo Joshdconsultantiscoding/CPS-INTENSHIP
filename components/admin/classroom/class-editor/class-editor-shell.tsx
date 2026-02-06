@@ -21,6 +21,7 @@ import { ClassCommunicationTab } from "./tabs/class-communication-tab";
 import { ClassCoursesTab } from "./tabs/class-courses-tab";
 import { ClassTasksTab } from "./tabs/class-tasks-tab";
 import { ClassSettingsTab } from "./tabs/class-settings-tab";
+import { MonitoringTab } from "./tabs/monitoring-tab";
 
 interface ClassEditorShellProps {
     classData: any;
@@ -28,6 +29,8 @@ interface ClassEditorShellProps {
     classCourses: any[];
     availableInterns: any[];
     availableCourses: any[];
+    classTasks?: any[];
+    announcements?: any[];
 }
 
 export function ClassEditorShell({
@@ -35,7 +38,9 @@ export function ClassEditorShell({
     enrollments,
     classCourses,
     availableInterns,
-    availableCourses
+    availableCourses,
+    classTasks = [],
+    announcements = []
 }: ClassEditorShellProps) {
     const [activeTab, setActiveTab] = useState("overview");
 
@@ -45,6 +50,7 @@ export function ClassEditorShell({
         { id: "communication", label: "Communication", icon: MessageSquare },
         { id: "courses", label: "Assigned Courses", icon: BookOpen },
         { id: "tasks", label: "Tasks & Activities", icon: CheckSquare },
+        { id: "monitoring", label: "Monitoring", icon: LayoutDashboard },
         { id: "settings", label: "Settings", icon: Settings },
     ];
 
@@ -61,7 +67,7 @@ export function ClassEditorShell({
                     />
                 );
             case "communication":
-                return <ClassCommunicationTab classData={classData} />;
+                return <ClassCommunicationTab classData={classData} announcements={announcements} />;
             case "courses":
                 return (
                     <ClassCoursesTab
@@ -71,9 +77,11 @@ export function ClassEditorShell({
                     />
                 );
             case "tasks":
-                return <ClassTasksTab />;
+                return <ClassTasksTab classId={classData.id} initialTasks={classTasks} />;
             case "settings":
                 return <ClassSettingsTab classData={classData} />;
+            case "monitoring":
+                return <MonitoringTab classId={classData.id} />;
             default:
                 return null;
         }
@@ -98,10 +106,6 @@ export function ClassEditorShell({
                     <Button variant="outline" size="sm" className="hidden xs:flex">
                         <span className="hidden sm:inline">Preview as Intern</span>
                         <span className="sm:hidden text-xs">Preview</span>
-                    </Button>
-                    <Button size="sm">
-                        <span className="hidden sm:inline">Save Changes</span>
-                        <span className="sm:hidden text-xs">Save</span>
                     </Button>
                 </div>
             </div>

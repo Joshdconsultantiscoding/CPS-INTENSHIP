@@ -30,6 +30,8 @@ export default async function ClassEditPage({ params }: ClassEditPageProps) {
                     classCourses={details.classCourses}
                     availableInterns={allInterns || []}
                     availableCourses={allCourses || []}
+                    announcements={details.announcements}
+                    classTasks={details.classTasks}
                 />
             </div>
         );

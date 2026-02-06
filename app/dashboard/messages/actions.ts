@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { getAuthUser } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
+import { ensureProfileSync } from "@/lib/profile-sync";
 
 /** Mark messages as delivered when recipient fetches (for delivery ticks). */
 export async function markDeliveredAction(messageIds: string[]) {
@@ -73,24 +74,15 @@ export async function sendMessageAction(
             throw new Error("Message content or attachment required");
         }
 
-        // Ensure Profile Exists to prevent foreign key constraint violation
-        const { error: upsertError } = await supabase.from("profiles").upsert({
-            id: user.id,
-            email: user.email || "",
-            full_name: user.full_name,
-            avatar_url: user.avatar_url,
-            role: user.role,
-            updated_at: new Date().toISOString(),
-        }, { onConflict: "id" });
+        // Ensure Profile Exists Safely (Don't overwrite custom avatars)
+        const syncResult = await ensureProfileSync(user, supabase);
 
-        if (upsertError) {
-            console.error("Profile Upsert Failed in SendMessage:", upsertError);
+        if (!syncResult.success) {
+            console.error("Profile Sync Failed in SendMessage:", syncResult.error);
 
-            // Handle "Duplicate Key Value" (Email collision with different ID)
-            if (upsertError.code === '23505' && user.email) {
-                console.log(`[SendMessage] Email collision detected for: ${user.email}`);
-
-                // Get the stale profile
+            // Handle specific migration case if it was a duplicate key (ID collision)
+            if (syncResult.error?.includes("duplicate key") && user.email) {
+                // Specific migration logic for email collisions
                 const { data: staleProfile } = await supabase
                     .from("profiles")
                     .select("id")
@@ -104,7 +96,7 @@ export async function sendMessageAction(
                     // Step 1: Create NEW profile with Clerk ID first (before updating refs)
                     const { error: createErr } = await supabase.from("profiles").insert({
                         id: user.id,
-                        email: `migrated_${Date.now()}@temp.local`, // Temp email to avoid conflict
+                        email: `migrated_${Date.now()}@temp.local`,
                         full_name: user.full_name,
                         avatar_url: user.avatar_url,
                         role: user.role,

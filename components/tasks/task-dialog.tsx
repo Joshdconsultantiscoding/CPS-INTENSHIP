@@ -24,7 +24,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 
@@ -61,8 +60,6 @@ export function TaskDialog({
     e.preventDefault();
     setLoading(true);
 
-    const supabase = createClient();
-
     const taskData = {
       title,
       description: description || null,
@@ -70,48 +67,48 @@ export function TaskDialog({
       status,
       due_date: dueDate ? new Date(dueDate).toISOString() : null,
       assigned_to: assignedTo,
-      assigned_by: userId,
       points: parseInt(points) || 10,
     };
 
-    if (isEditing) {
-      const { error } = await supabase
-        .from("tasks")
-        .update(taskData)
-        .eq("id", task.id);
-
-      if (error) {
-        toast.error("Failed to update task");
-        setLoading(false);
-        return;
-      }
-
-      toast.success("Task updated successfully");
-    } else {
-      const { error } = await supabase.from("tasks").insert(taskData);
-
-      if (error) {
-        toast.error("Failed to create task");
-        setLoading(false);
-        return;
-      }
-
-      // Create notification for the assignee
-      if (assignedTo) {
-        await supabase.from("notifications").insert({
-          user_id: assignedTo,
-          title: "New Task Assigned",
-          message: `You have been assigned a new task: ${title}`,
-          type: "task",
+    try {
+      if (isEditing) {
+        const { updateTaskAction } = await import("@/app/actions/tasks");
+        const result = await updateTaskAction({
+          id: task.id,
+          ...taskData
         });
+
+        if (!result.success) {
+          toast.error(result.error || "Failed to update task");
+          setLoading(false);
+          return;
+        }
+
+        toast.success("Task updated successfully");
+      } else {
+        const { createTaskAction } = await import("@/app/actions/tasks");
+        const result = await createTaskAction({
+          ...taskData,
+          assigned_to: assignedTo,
+        });
+
+        if (!result.success) {
+          toast.error(result.error || "Failed to create task");
+          setLoading(false);
+          return;
+        }
+
+        toast.success("Task created successfully");
       }
 
-      toast.success("Task created successfully");
+      setLoading(false);
+      onOpenChange(false);
+      router.refresh();
+    } catch (error) {
+      console.error("Task Operation Error:", error);
+      toast.error("An unexpected error occurred");
+      setLoading(false);
     }
-
-    setLoading(false);
-    onOpenChange(false);
-    router.refresh();
   };
 
   return (

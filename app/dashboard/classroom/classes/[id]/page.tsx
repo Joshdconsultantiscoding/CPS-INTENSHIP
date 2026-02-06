@@ -2,7 +2,8 @@ import {
     getClassDetails,
     getStudentClasses,
     getClassAnnouncements,
-    getClassMembers
+    getClassMembers,
+    getClassTasks
 } from "@/actions/classroom-student";
 import { getAuthUser } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
@@ -17,11 +18,12 @@ export default async function ClassPage({ params }: { params: { id: string } }) 
     const classId = params.id;
 
     // Fetch details and all assigned classes (for the sidebar)
-    const [classDetails, assignedClasses, announcements, members] = await Promise.all([
+    const [classDetails, assignedClasses, announcements, members, tasks] = await Promise.all([
         getClassDetails(classId),
         getStudentClasses(),
         getClassAnnouncements(classId),
-        getClassMembers(classId)
+        getClassMembers(classId),
+        getClassTasks(classId)
     ]);
 
     // Access Control Check
@@ -57,13 +59,14 @@ export default async function ClassPage({ params }: { params: { id: string } }) 
             <ClassroomSidebar
                 assignedClasses={assignedClasses}
                 activeClassId={classId}
-                activeClassName={classDetails.name}
+                activeClassName={(classDetails as any).name}
             />
             <div className="flex-1 overflow-auto bg-muted/5">
                 <ClassDashboard
                     classDetails={classDetails}
                     announcements={announcements}
                     members={members}
+                    tasks={tasks}
                 />
             </div>
         </div>

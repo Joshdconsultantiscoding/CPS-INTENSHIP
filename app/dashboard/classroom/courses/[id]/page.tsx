@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { getAuthUser } from "@/lib/auth";
 import { getCourseDetail } from "@/actions/classroom-student";
+import { numberToWords, formatLessonTitle } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -70,8 +71,8 @@ export default async function CourseDetailPage({ params }: CoursePageProps) {
                                     <AccordionItem key={module.id} value={module.id} className={idx === course.course_modules.length - 1 ? "border-b-0" : ""}>
                                         <AccordionTrigger className="px-6 hover:no-underline hover:bg-muted/50 transition-colors py-4">
                                             <div className="flex items-center gap-3 text-left">
-                                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-bold">
-                                                    {idx + 1}
+                                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-[10px] font-bold">
+                                                    {numberToWords(idx + 1)}
                                                 </div>
                                                 <div>
                                                     <span className="font-semibold">{module.title}</span>
@@ -83,15 +84,14 @@ export default async function CourseDetailPage({ params }: CoursePageProps) {
                                         </AccordionTrigger>
                                         <AccordionContent className="px-6 pb-4 pt-0">
                                             <div className="space-y-1 pt-2">
-                                                {module.course_lessons?.map((lesson: any) => (
-                                                    <Link
+                                                {module.course_lessons?.map((lesson: any, lIdx: number) => (
+                                                    <div
                                                         key={lesson.id}
-                                                        href={`/dashboard/classroom/courses/${course.id}/lessons/${lesson.id}`}
-                                                        className="flex items-center justify-between p-3 rounded-md hover:bg-muted transition-colors group cursor-pointer"
+                                                        className="flex items-center justify-between p-3 rounded-md transition-colors group"
                                                     >
                                                         <div className="flex items-center gap-3">
-                                                            <PlayCircle className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                                                            <span className="text-sm font-medium">{lesson.title}</span>
+                                                            <PlayCircle className="h-4 w-4 text-muted-foreground" />
+                                                            <span className="text-sm font-medium">{formatLessonTitle(lesson.title, lIdx)}</span>
                                                         </div>
                                                         <div className="flex items-center gap-4">
                                                             <span className="text-xs text-muted-foreground">
@@ -99,7 +99,7 @@ export default async function CourseDetailPage({ params }: CoursePageProps) {
                                                             </span>
                                                             <div className="h-4 w-4 rounded-full border border-muted-foreground/30" />
                                                         </div>
-                                                    </Link>
+                                                    </div>
                                                 ))}
                                             </div>
                                         </AccordionContent>

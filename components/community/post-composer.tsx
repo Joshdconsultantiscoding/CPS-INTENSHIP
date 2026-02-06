@@ -20,6 +20,7 @@ interface PostComposerProps {
     userAvatar?: string | null;
     userName?: string | null;
     isAdmin: boolean;
+    nicheId?: string;
 }
 
 interface MediaFile {
@@ -28,9 +29,10 @@ interface MediaFile {
     name: string;
 }
 
-export function PostComposer({ userId, userAvatar, userName, isAdmin }: PostComposerProps) {
+export function PostComposer({ userId, userAvatar, userName, isAdmin, nicheId }: PostComposerProps) {
     const [content, setContent] = useState("");
     const [visibility, setVisibility] = useState<"all" | "interns" | "admins">("all");
+    const [category, setCategory] = useState<'urgent' | 'high_priority' | 'brainstorm' | 'normal'>('normal');
     const [isPosting, setIsPosting] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
@@ -106,7 +108,7 @@ export function PostComposer({ userId, userAvatar, userName, isAdmin }: PostComp
 
         try {
             const mediaUrls = mediaFiles.map(m => m.url);
-            const result = await createPost(content.trim(), mediaUrls, visibility);
+            const result = await createPost(content.trim(), mediaUrls, visibility, nicheId, category);
 
             if (!result.success) {
                 toast.error(result.error || "Failed to create post");
@@ -215,20 +217,38 @@ export function PostComposer({ userId, userAvatar, userName, isAdmin }: PostComp
                                 <Video className="h-4 w-4" />
                             </Button>
                             {isAdmin && (
-                                <Select
-                                    value={visibility}
-                                    onValueChange={(v) => setVisibility(v as typeof visibility)}
-                                    disabled={isPosting}
-                                >
-                                    <SelectTrigger className="w-[120px] h-8 text-xs">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">Everyone</SelectItem>
-                                        <SelectItem value="interns">Interns Only</SelectItem>
-                                        <SelectItem value="admins">Admins Only</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                                <div className="flex gap-2">
+                                    <Select
+                                        value={visibility}
+                                        onValueChange={(v) => setVisibility(v as typeof visibility)}
+                                        disabled={isPosting}
+                                    >
+                                        <SelectTrigger className="w-[110px] h-8 text-xs rounded-lg">
+                                            <SelectValue placeholder="Visibility" />
+                                        </SelectTrigger>
+                                        <SelectContent className="rounded-xl">
+                                            <SelectItem value="all">Everyone</SelectItem>
+                                            <SelectItem value="interns">Interns</SelectItem>
+                                            <SelectItem value="admins">Admins</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+
+                                    <Select
+                                        value={category}
+                                        onValueChange={(v) => setCategory(v as typeof category)}
+                                        disabled={isPosting}
+                                    >
+                                        <SelectTrigger className={`w-[130px] h-8 text-xs rounded-lg font-bold ${category !== 'normal' ? 'bg-zinc-900 text-white' : ''}`}>
+                                            <SelectValue placeholder="Type" />
+                                        </SelectTrigger>
+                                        <SelectContent className="rounded-xl">
+                                            <SelectItem value="normal">Normal Post</SelectItem>
+                                            <SelectItem value="urgent">🚨 Urgent</SelectItem>
+                                            <SelectItem value="high_priority">🔥 High Priority</SelectItem>
+                                            <SelectItem value="brainstorm">💡 Brainstorm</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
                             )}
                         </div>
                         <Button

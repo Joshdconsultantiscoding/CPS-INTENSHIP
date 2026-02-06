@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useAbly } from "@/providers/ably-provider";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,35 @@ export function TaskCreationPage({ userId, interns }: TaskCreationPageProps) {
     const [dueDate, setDueDate] = useState("");
     const [assignedTo, setAssignedTo] = useState("");
     const [points, setPoints] = useState("10");
+
+    // Real-time Interns State (for Dropdowns)
+    const [localInterns, setLocalInterns] = useState(interns);
+    const { client: ablyClient } = useAbly();
+
+    // Listen for real-time profile updates via Ably
+    useEffect(() => {
+        if (!ablyClient) return;
+
+        const channel = ablyClient.channels.get("global-updates");
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const handleProfileUpdate = (message: any) => {
+            const data = message.data;
+            setLocalInterns((prev) =>
+                prev.map((intern) =>
+                    intern.id === data.userId
+                        ? { ...intern, ...data, full_name: `${data.first_name} ${data.last_name}`.trim() }
+                        : intern
+                )
+            );
+        };
+
+        channel.subscribe("profile-updated", handleProfileUpdate);
+
+        return () => {
+            channel.unsubscribe("profile-updated", handleProfileUpdate);
+        };
+    }, [ablyClient]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -158,12 +188,12 @@ export function TaskCreationPage({ userId, interns }: TaskCreationPageProps) {
                                             <SelectValue placeholder="Select intern" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {interns.length === 0 ? (
+                                            {localInterns.length === 0 ? (
                                                 <div className="p-2 text-sm text-muted-foreground">
                                                     No active interns found
                                                 </div>
                                             ) : (
-                                                interns.map((intern) => (
+                                                localInterns.map((intern) => (
                                                     <SelectItem key={intern.id} value={intern.id}>
                                                         {intern.full_name || intern.email}
                                                     </SelectItem>

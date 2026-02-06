@@ -1,5 +1,8 @@
 "use client";
 
+import { useState, useEffect } from "react";
+import { useAbly } from "@/providers/ably-provider";
+
 import type { Profile } from "@/lib/types";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
@@ -12,6 +15,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { usePathname } from "next/navigation";
+import { ModeToggle } from "@/components/mode-toggle";
 
 interface DashboardHeaderProps {
   userId: string;
@@ -32,16 +36,48 @@ const pathTitles: Record<string, string> = {
   "/dashboard/assistant": "AI Assistant",
   "/dashboard/interns": "Interns",
   "/dashboard/notifications": "Notifications",
-  "/dashboard/community": "Community",
+  "/dashboard/community": "Communities",
   "/dashboard/settings": "Settings",
   "/dashboard/classroom": "Classroom",
   "/dashboard/classroom/courses": "Course Marketplace",
   "/dashboard/admin/classroom": "Class Management Center",
   "/dashboard/admin/portal-settings": "Portal Settings",
+  "/dashboard/admin/community": "Communities",
 };
 
-export function DashboardHeader({ profile }: DashboardHeaderProps) {
+
+export function DashboardHeader({ userId, profile: initialProfile }: DashboardHeaderProps) {
   const pathname = usePathname();
+  const { client: ablyClient } = useAbly();
+
+  // Real-time Profile State
+  const [profile, setProfile] = useState<Profile | null>(initialProfile);
+
+  // Sync with initial props
+  useEffect(() => {
+    setProfile(initialProfile);
+  }, [initialProfile]);
+
+  // Listen for real-time profile updates via Ably
+  useEffect(() => {
+    if (!ablyClient || !userId) return;
+
+    const channel = ablyClient.channels.get("global-updates");
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const handleProfileUpdate = (message: any) => {
+      const data = message.data;
+      if (data.userId === userId) {
+        setProfile((prev) => prev ? ({ ...prev, ...data }) : null);
+      }
+    };
+
+    channel.subscribe("profile-updated", handleProfileUpdate);
+
+    return () => {
+      channel.unsubscribe("profile-updated", handleProfileUpdate);
+    };
+  }, [ablyClient, userId]);
 
   // Custom logic for dynamic or deep paths
   const getDynamicTitle = (path: string) => {
@@ -58,6 +94,7 @@ export function DashboardHeader({ profile }: DashboardHeaderProps) {
     if (path.includes("/reports/")) return "Report Details";
     if (path.includes("/classroom/courses/") && path !== "/dashboard/classroom/courses") return "Course Details";
     if (path.includes("/classroom/lessons/")) return "Learning Session";
+    if (path.startsWith("/dashboard/community/")) return "Communities";
 
     return "Dashboard";
   };
@@ -67,7 +104,7 @@ export function DashboardHeader({ profile }: DashboardHeaderProps) {
   return (
     <header className="sticky top-0 z-40 flex h-14 sm:h-16 shrink-0 items-center gap-2 border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60 px-3 sm:px-4">
       <SidebarTrigger className="-ml-1 h-9 w-9 touch-target" />
-      <Separator orientation="vertical" className="mr-2 h-4" />
+      <Separator orientation="vertical" className="mr-2 h-4 hidden md:block" />
       <Breadcrumb className="flex-1 min-w-0">
         <BreadcrumbList>
           <BreadcrumbItem className="hidden sm:block">
@@ -94,6 +131,9 @@ export function DashboardHeader({ profile }: DashboardHeaderProps) {
           )}
         </BreadcrumbList>
       </Breadcrumb>
+      <div className="ml-auto flex items-center gap-2">
+        <ModeToggle />
+      </div>
     </header>
   );
 }

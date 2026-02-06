@@ -35,7 +35,9 @@ import { formatDistanceToNow, format } from "date-fns";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { useAbly } from "@/providers/ably-provider";
 import { TaskDialog } from "./task-dialog";
+import { updateTaskStatusAction } from "@/app/actions/tasks";
 
 interface TaskListProps {
   tasks: Task[];
@@ -63,6 +65,77 @@ export function TaskList({ tasks, isAdmin, userId, interns }: TaskListProps) {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [mounted, setMounted] = useState(false);
 
+  // Real-time Interns State (for Dropdowns)
+  const [localInterns, setLocalInterns] = useState(interns);
+  // Real-time Tasks State
+  const [localTasks, setLocalTasks] = useState(tasks);
+  const { client: ablyClient } = useAbly();
+
+  useEffect(() => {
+    setLocalInterns(interns);
+  }, [interns]);
+
+  useEffect(() => {
+    setLocalTasks(tasks);
+  }, [tasks]);
+
+  // Listen for real-time updates via Ably
+  useEffect(() => {
+    if (!ablyClient) return;
+
+    const channel = ablyClient.channels.get("global-updates");
+
+    // Profile Updates
+    const handleProfileUpdate = (message: any) => {
+      const data = message.data;
+      setLocalInterns((prev) =>
+        prev.map((intern) =>
+          intern.id === data.userId
+            ? { ...intern, ...data, full_name: `${data.first_name} ${data.last_name}`.trim() }
+            : intern
+        )
+      );
+    };
+
+    // Task Creation Updates
+    const handleTaskCreated = (message: any) => {
+      const newTask = message.data.task;
+      if (!newTask) return;
+
+      // Add to list if I am Admin OR if I am the assignee
+      const shouldAdd = isAdmin || newTask.assigned_to === userId;
+
+      if (shouldAdd) {
+        setLocalTasks((prev) => {
+          // Prevent duplicates
+          if (prev.some(t => t.id === newTask.id)) return prev;
+          return [newTask, ...prev];
+        });
+        toast.success(`New task received: ${newTask.title}`);
+      }
+    };
+
+    // Task Status Updates
+    const handleTaskUpdated = (message: any) => {
+      const updatedTask = message.data.task;
+      if (!updatedTask) return;
+
+      setLocalTasks((prev) =>
+        prev.map((t) => (t.id === updatedTask.id ? { ...t, ...updatedTask } : t))
+      );
+    };
+
+    channel.subscribe("profile-updated", handleProfileUpdate);
+    channel.subscribe("task-created", handleTaskCreated);
+    channel.subscribe("task-updated", handleTaskUpdated);
+
+    return () => {
+      channel.unsubscribe("profile-updated", handleProfileUpdate);
+      channel.unsubscribe("task-created", handleTaskCreated);
+      channel.unsubscribe("task-updated", handleTaskUpdated);
+    };
+  }, [ablyClient, isAdmin, userId]);
+
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -78,38 +151,43 @@ export function TaskList({ tasks, isAdmin, userId, interns }: TaskListProps) {
     );
   }
 
-  const pendingTasks = tasks.filter((t) => t.status === "pending");
-  const inProgressTasks = tasks.filter((t) => t.status === "in_progress");
-  const completedTasks = tasks.filter((t) => t.status === "completed");
+  const pendingTasks = localTasks.filter((t) => t.status === "pending");
+  const inProgressTasks = localTasks.filter((t) => t.status === "in_progress");
+  const completedTasks = localTasks.filter((t) => t.status === "completed");
 
   const updateTaskStatus = async (taskId: string, status: string) => {
-    const supabase = createClient();
-    const updates: Record<string, unknown> = { status };
+    try {
+      const result = await updateTaskStatusAction({
+        taskId,
+        status: status as any
+      });
 
-    if (status === "completed") {
-      updates.completed_at = new Date().toISOString();
-    }
-
-    const { error } = await supabase.from("tasks").update(updates).eq("id", taskId);
-
-    if (error) {
-      toast.error("Failed to update task status");
-    } else {
-      toast.success("Task status updated");
-      router.refresh();
+      if (!result.success) {
+        toast.error(result.error || "Failed to update task status");
+      } else {
+        toast.success("Task status updated");
+        // router.refresh() handles the server-side state, 
+        // while Ably handles the local state for immediate feedback
+        router.refresh();
+      }
+    } catch (error) {
+      toast.error("An unexpected error occurred");
     }
   };
 
   const approveReward = async (taskId: string) => {
-    const supabase = createClient();
-    const { error } = await supabase.from("tasks").update({ approval_status: 'approved' }).eq("id", taskId);
+    try {
+      const { approveTaskRewardAction } = await import("@/app/actions/tasks");
+      const result = await approveTaskRewardAction(taskId);
 
-    if (error) {
-      console.error("Reward Approval Error:", error);
-      toast.error(`Failed to approve reward: ${error.message}`);
-    } else {
-      toast.success("Reward approved & points awarded");
-      router.refresh();
+      if (!result.success) {
+        toast.error(result.error || "Failed to approve reward");
+      } else {
+        toast.success("Reward approved & points awarded");
+        router.refresh();
+      }
+    } catch (error) {
+      toast.error("An unexpected error occurred");
     }
   };
 
@@ -166,7 +244,7 @@ export function TaskList({ tasks, isAdmin, userId, interns }: TaskListProps) {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {task.status !== "completed" && (
+                {!isAdmin && task.status !== "completed" && (
                   <>
                     {task.status === "pending" && (
                       <DropdownMenuItem onClick={() => updateTaskStatus(task.id, "in_progress")}>
@@ -247,7 +325,7 @@ export function TaskList({ tasks, isAdmin, userId, interns }: TaskListProps) {
     <>
       <Tabs defaultValue="all" className="w-full">
         <TabsList>
-          <TabsTrigger value="all">All ({tasks.length})</TabsTrigger>
+          <TabsTrigger value="all">All ({localTasks.length})</TabsTrigger>
           <TabsTrigger value="pending">Pending ({pendingTasks.length})</TabsTrigger>
           <TabsTrigger value="in_progress">
             In Progress ({inProgressTasks.length})
@@ -257,7 +335,7 @@ export function TaskList({ tasks, isAdmin, userId, interns }: TaskListProps) {
           </TabsTrigger>
         </TabsList>
         <TabsContent value="all" className="mt-4">
-          {tasks.length === 0 ? (
+          {localTasks.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <CheckCircle2 className="h-12 w-12 text-muted-foreground" />
@@ -271,7 +349,7 @@ export function TaskList({ tasks, isAdmin, userId, interns }: TaskListProps) {
             </Card>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {tasks.map((task) => (
+              {localTasks.map((task) => (
                 <TaskCard key={task.id} task={task} />
               ))}
             </div>
@@ -304,7 +382,7 @@ export function TaskList({ tasks, isAdmin, userId, interns }: TaskListProps) {
         <TaskDialog
           open={!!editingTask}
           onOpenChange={(open) => !open && setEditingTask(null)}
-          interns={interns}
+          interns={localInterns}
           userId={userId}
           task={editingTask}
         />

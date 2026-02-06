@@ -1,6 +1,9 @@
 "use client";
 
+import { useState, useEffect, useCallback } from "react";
 import type { Profile, Task, DailyReport, PerformanceScore } from "@/lib/types";
+import { useAbly } from "@/providers/ably-provider";
+import { getAdminAnalyticsData } from "@/app/actions/analytics";
 import {
   Card,
   CardContent,
@@ -48,11 +51,51 @@ interface AdminAnalyticsProps {
 const COLORS = ["var(--color-chart-1)", "var(--color-chart-2)", "var(--color-chart-3)", "var(--color-chart-4)"];
 
 export function AdminAnalytics({
-  interns,
-  tasks,
-  reports,
-  performanceScores,
+  interns: initialInterns,
+  tasks: initialTasks,
+  reports: initialReports,
+  performanceScores: initialPerformanceScores,
 }: AdminAnalyticsProps) {
+  // State for real-time updates
+  const [interns, setInterns] = useState(initialInterns);
+  const [tasks, setTasks] = useState(initialTasks);
+  const [reports, setReports] = useState(initialReports);
+  const [performanceScores, setPerformanceScores] = useState(initialPerformanceScores);
+
+  const { client, isConfigured } = useAbly();
+
+  // Refetch data from server
+  const refetchData = useCallback(async () => {
+    try {
+      const data = await getAdminAnalyticsData();
+      setInterns(data.interns);
+      setTasks(data.tasks);
+      setReports(data.reports);
+      setPerformanceScores(data.performanceScores);
+    } catch (error) {
+      console.error("Failed to refetch admin analytics data:", error);
+    }
+  }, []);
+
+  // Subscribe to real-time events
+  useEffect(() => {
+    if (!client || !isConfigured) return;
+
+    const channel = client.channels.get("global-updates");
+
+    const handleUpdate = () => {
+      refetchData();
+    };
+
+    channel.subscribe("task-created", handleUpdate);
+    channel.subscribe("task-updated", handleUpdate);
+    channel.subscribe("report-submitted", handleUpdate);
+    channel.subscribe("profile-updated", handleUpdate);
+
+    return () => {
+      channel.unsubscribe();
+    };
+  }, [client, isConfigured, refetchData]);
   const completedTasks = tasks.filter((t) => t.status === "completed").length;
   const pendingTasks = tasks.filter((t) => t.status === "pending" || t.status === "in_progress").length;
   const overdueTasks = tasks.filter(

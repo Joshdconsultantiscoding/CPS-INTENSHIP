@@ -27,8 +27,14 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { updateCourseAdvanced } from "@/actions/classroom-advanced";
+import {
+    updateCourseAdvanced,
+    assignCourseToUser,
+    unassignCourseFromUser,
+    assignCourseToClass
+} from "@/actions/classroom-advanced";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 interface SettingsTabProps {
     course: any;
@@ -37,9 +43,11 @@ interface SettingsTabProps {
 }
 
 export function SettingsTab({ course, interns, classes }: SettingsTabProps) {
+    const router = useRouter();
     const [isSaving, setIsSaving] = useState(false);
     const [assignmentType, setAssignmentType] = useState(course.assignment_type || "global");
     const [status, setStatus] = useState(course.status || "draft");
+    const [price, setPrice] = useState(course.price || 0);
 
     const handleSaveSettings = async () => {
         setIsSaving(true);
@@ -47,13 +55,47 @@ export function SettingsTab({ course, interns, classes }: SettingsTabProps) {
             await updateCourseAdvanced(course.id, {
                 assignment_type: assignmentType,
                 status: status,
-                is_published: status === "published"
+                is_published: status === "published",
+                price: price
             });
             toast.success("Course settings updated!");
+            router.refresh();
         } catch (error: any) {
             toast.error(error.message);
         } finally {
             setIsSaving(false);
+        }
+    };
+
+    const handleAssignUser = async (userId: string) => {
+        try {
+            await assignCourseToUser(course.id, userId);
+            toast.success("Intern assigned");
+            router.refresh();
+        } catch (error: any) {
+            toast.error(error.message);
+        }
+    };
+
+    const handleUnassignUser = async (userId: string) => {
+        try {
+            await unassignCourseFromUser(course.id, userId);
+            toast.success("Intern unassigned");
+            router.refresh();
+        } catch (error: any) {
+            toast.error(error.message);
+        }
+    };
+
+    const handleAssignClass = async (classId: string) => {
+        try {
+            const res = await assignCourseToClass(course.id, classId);
+            if (res.success) {
+                toast.success(`Class assigned (${res.count} students)`);
+                router.refresh();
+            }
+        } catch (error: any) {
+            toast.error(error.message);
         }
     };
 
@@ -106,7 +148,7 @@ export function SettingsTab({ course, interns, classes }: SettingsTabProps) {
                     </CardContent>
                 </Card>
 
-                {/* Pricing (Placeholder/Basic) */}
+                {/* Pricing */}
                 <Card>
                     <CardHeader>
                         <CardTitle className="text-lg flex items-center gap-2">
@@ -121,11 +163,22 @@ export function SettingsTab({ course, interns, classes }: SettingsTabProps) {
                                 <Label>Free Course</Label>
                                 <p className="text-xs text-muted-foreground">Interns can enroll for free.</p>
                             </div>
-                            <Switch checked={course.price === 0} disabled />
+                            <Switch
+                                checked={price === 0}
+                                onCheckedChange={(checked) => setPrice(checked ? 0 : 10)}
+                            />
                         </div>
                         <div className="space-y-2">
                             <Label>Price (USD)</Label>
-                            <Input type="number" defaultValue={course.price || 0} disabled />
+                            <Input
+                                type="number"
+                                value={price}
+                                onChange={(e) => {
+                                    const val = e.target.value === "" ? 0 : parseFloat(e.target.value);
+                                    setPrice(val);
+                                }}
+                                disabled={price === 0}
+                            />
                         </div>
                     </CardContent>
                 </Card>
@@ -151,7 +204,12 @@ export function SettingsTab({ course, interns, classes }: SettingsTabProps) {
                                         return (
                                             <div key={intern.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted transition-colors text-sm">
                                                 <span className="truncate flex-1">{intern.full_name} ({intern.email})</span>
-                                                <Button size="sm" variant={isAssigned ? "destructive" : "outline"} className="h-7 text-[10px]">
+                                                <Button
+                                                    size="sm"
+                                                    variant={isAssigned ? "destructive" : "outline"}
+                                                    className="h-7 text-[10px]"
+                                                    onClick={() => isAssigned ? handleUnassignUser(intern.id) : handleAssignUser(intern.id)}
+                                                >
                                                     {isAssigned ? "Remove" : "Assign"}
                                                 </Button>
                                             </div>
@@ -166,7 +224,12 @@ export function SettingsTab({ course, interns, classes }: SettingsTabProps) {
                                     {classes.map((c) => (
                                         <div key={c.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted transition-colors text-sm">
                                             <span className="truncate flex-1 font-medium">{c.name}</span>
-                                            <Button size="sm" variant="outline" className="h-7 text-[10px]">
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="h-7 text-[10px]"
+                                                onClick={() => handleAssignClass(c.id)}
+                                            >
                                                 Assign All
                                             </Button>
                                         </div>

@@ -64,8 +64,8 @@ export function AnalyticsTab({ course }: AnalyticsTabProps) {
             </div>
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                {stats.map((stat, i) => (
-                    <Card key={i}>
+                {stats.map((stat) => (
+                    <Card key={stat.title}>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                             <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
                             <div className={`${stat.bg} p-2 rounded-lg`}>
@@ -122,16 +122,16 @@ export function AnalyticsTab({ course }: AnalyticsTabProps) {
                             </div>
                         ) : (
                             <div className="space-y-4">
-                                {course.course_assignments?.slice(0, 5).map((enrollment: any) => (
-                                    <div key={enrollment.id} className="flex items-center justify-between text-sm">
+                                {course.course_assignments?.slice(0, 5).map((enrollment: any, idx: number) => (
+                                    <div key={enrollment.id || enrollment.user_id || `enrollment-${idx}`} className="flex items-center justify-between text-sm">
                                         <div className="flex items-center gap-2">
                                             <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary">
                                                 ID
                                             </div>
-                                            <span>User {enrollment.user_id.slice(0, 8)}...</span>
+                                            <span>User {enrollment.user_id?.slice(0, 8) || "Unknown"}...</span>
                                         </div>
                                         <span className="text-xs text-muted-foreground">
-                                            {new Date(enrollment.assigned_at).toLocaleDateString()}
+                                            {enrollment.assigned_at ? new Date(enrollment.assigned_at).toLocaleDateString() : "N/A"}
                                         </span>
                                     </div>
                                 ))}

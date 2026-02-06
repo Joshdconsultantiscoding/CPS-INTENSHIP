@@ -1,5 +1,5 @@
 import { getAuthUser } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 import { InternManagement } from "@/components/interns/intern-management";
 
 export const metadata = {
@@ -9,7 +9,7 @@ export const metadata = {
 export default async function InternsPage() {
   // Use Clerk auth instead of Supabase
   const user = await getAuthUser();
-  const supabase = await createClient();
+  const supabase = await createAdminClient(); // Use admin client to bypass RLS
 
   // Only admin can access this page
   if (user.role !== "admin") {
@@ -26,10 +26,10 @@ export default async function InternsPage() {
     .select("*")
     .order("created_at", { ascending: false });
 
-  // Get task stats
+  // Get task stats - use correct column name 'assigned_to'
   const { data: tasks } = await supabase
     .from("tasks")
-    .select("assignee_id, status, created_at, due_date");
+    .select("assigned_to, status, created_at, due_date");
 
   // Get report stats  
   const { data: reports } = await supabase
@@ -52,7 +52,7 @@ export default async function InternsPage() {
   const now = new Date();
 
   allUsers?.forEach((u) => {
-    const userTasks = tasks?.filter((t) => t.assignee_id === u.id) || [];
+    const userTasks = tasks?.filter((t) => t.assigned_to === u.id) || [];
     const userReports = reports?.filter((r) => r.user_id === u.id) || [];
 
     const productivityRatings = userReports
@@ -68,8 +68,8 @@ export default async function InternsPage() {
         t.due_date && new Date(t.due_date) < now && t.status !== "completed"
       ).length,
       totalReports: userReports.length,
-      approvedReports: userReports.filter((r) => r.status === "approved").length,
-      pendingReports: userReports.filter((r) => r.status === "pending").length,
+      approvedReports: userReports.filter((r) => r.status === "reviewed").length,
+      pendingReports: userReports.filter((r) => r.status === "submitted" || r.status === "draft").length,
       avgProductivity: productivityRatings.length > 0
         ? Math.round(productivityRatings.reduce((a, b) => a + b, 0) / productivityRatings.length)
         : 0,

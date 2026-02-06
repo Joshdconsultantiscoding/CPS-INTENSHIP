@@ -3,69 +3,62 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import {
-  LayoutDashboard,
-  CheckSquare,
-  MessageSquare,
-  User,
-  MoreHorizontal,
-  Users,
-  FileText,
-  BarChart3,
-} from "lucide-react";
+import { MoreHorizontal } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { internNavItems, adminNavItems } from "@/lib/navigation";
+import { useLoading } from "@/hooks/use-loading";
+import { usePortalSettings, type PortalSettings } from "@/hooks/use-portal-settings";
 
 interface MobileNavProps {
   isAdmin: boolean;
 }
 
-const internNavItems = [
-  { title: "Home", url: "/dashboard", icon: LayoutDashboard },
-  { title: "Tasks", url: "/dashboard/tasks", icon: CheckSquare },
-  { title: "Messages", url: "/dashboard/messages", icon: MessageSquare },
-  { title: "Profile", url: "/dashboard/settings", icon: User },
-];
-
-const adminNavItems = [
-  { title: "Home", url: "/dashboard", icon: LayoutDashboard },
-  { title: "Interns", url: "/dashboard/interns", icon: Users },
-  { title: "Reports", url: "/dashboard/reports", icon: FileText },
-  { title: "Messages", url: "/dashboard/messages", icon: MessageSquare },
-];
-
-const internMoreItems = [
-  { title: "Daily Reports", url: "/dashboard/reports", icon: FileText },
-  { title: "Calendar", url: "/dashboard/calendar" },
-  { title: "Performance", url: "/dashboard/performance" },
-  { title: "Rewards", url: "/dashboard/rewards" },
-  { title: "AI Assistant", url: "/dashboard/assistant" },
-  { title: "Settings", url: "/dashboard/settings" },
-];
-
-const adminMoreItems = [
-  { title: "Tasks", url: "/dashboard/tasks", icon: CheckSquare },
-  { title: "Calendar", url: "/dashboard/calendar" },
-  { title: "Analytics", url: "/dashboard/analytics", icon: BarChart3 },
-  { title: "Rewards", url: "/dashboard/rewards" },
-  { title: "AI Assistant", url: "/dashboard/assistant" },
-  { title: "Portal Settings", url: "/dashboard/admin/portal-settings" },
-  { title: "Settings", url: "/dashboard/settings" },
-];
-
 export function MobileNav({ isAdmin }: MobileNavProps) {
   const pathname = usePathname();
-  const navItems = isAdmin ? adminNavItems : internNavItems;
-  const moreItems = isAdmin ? adminMoreItems : internMoreItems;
+  const { settings: portalSettings } = usePortalSettings();
+  const { showLoader } = useLoading();
+
+  // Define which items should be in the primary bottom bar
+  const primaryTitles = isAdmin
+    ? ["Home", "Dashboard", "Interns", "Reports", "Messages"]
+    : ["Home", "Dashboard", "Tasks", "Messages"];
+
+  // Get full list of nav items and filter by portal settings
+  const allItems = (isAdmin ? adminNavItems : internNavItems).filter(item => {
+    if (isAdmin) return true;
+    const settingKey = item.settingKey as keyof PortalSettings | undefined;
+    if (settingKey && portalSettings[settingKey] === false) {
+      return false;
+    }
+    return true;
+  });
+
+  // Items for the bottom bar (limited to 4 to leave room for "More")
+  const primaryNavItems = allItems
+    .filter(item => primaryTitles.includes(item.title))
+    .slice(0, 4);
+
+  // Everything else goes to "More"
+  const moreItems = allItems.filter(item => !primaryNavItems.some(p => p.title === item.title));
+
+  const handleNavClick = (e: React.MouseEvent, title: string) => {
+    if (title === "Send Feedback") {
+      window.dispatchEvent(new CustomEvent("open-bug-report"));
+    } else {
+      // For normal links, show the cinematic loader
+      showLoader();
+    }
+  };
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 safe-area-inset">
       <div className="flex items-center justify-around h-16 px-2">
-        {navItems.map((item) => {
+        {primaryNavItems.map((item) => {
           const isActive = pathname === item.url ||
             (item.url !== "/dashboard" && pathname.startsWith(item.url));
 
@@ -73,6 +66,7 @@ export function MobileNav({ isAdmin }: MobileNavProps) {
             <Link
               key={item.title}
               href={item.url}
+              onClick={(e) => handleNavClick(e, item.title)}
               className={cn(
                 "flex flex-col items-center justify-center gap-0.5 flex-1 h-full touch-target transition-colors",
                 isActive
@@ -81,7 +75,7 @@ export function MobileNav({ isAdmin }: MobileNavProps) {
               )}
             >
               <item.icon className={cn("h-5 w-5", isActive && "text-primary")} />
-              <span className="text-[10px] font-medium">{item.title}</span>
+              <span className="text-[10px] font-medium">{item.title === "Dashboard" ? "Home" : item.title}</span>
             </Link>
           );
         })}
@@ -99,12 +93,17 @@ export function MobileNav({ isAdmin }: MobileNavProps) {
           <DropdownMenuContent
             align="end"
             side="top"
-            className="w-48 mb-2"
+            className="w-56 mb-2 rounded-xl p-1 shadow-2xl border-zinc-200"
           >
             {moreItems.map((item) => (
-              <DropdownMenuItem key={item.title} asChild>
-                <Link href={item.url} className="w-full cursor-pointer">
-                  {item.title}
+              <DropdownMenuItem key={item.title} asChild className="rounded-lg focus:bg-zinc-100 focus:text-zinc-900 py-2.5">
+                <Link
+                  href={item.url}
+                  onClick={(e) => handleNavClick(e, item.title)}
+                  className="w-full cursor-pointer flex items-center gap-3"
+                >
+                  <item.icon className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-medium text-sm">{item.title}</span>
                 </Link>
               </DropdownMenuItem>
             ))}
@@ -114,3 +113,4 @@ export function MobileNav({ isAdmin }: MobileNavProps) {
     </nav>
   );
 }
+

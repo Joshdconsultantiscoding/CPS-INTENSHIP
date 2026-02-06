@@ -48,16 +48,13 @@ export function ClassInternsTab({ classData, enrollments, availableInterns }: Cl
         setIsAssigning(userId);
         try {
             await assignInternToClass(classData.id, userId);
-            toast({
-                title: "Intern assigned",
+            toast.success("Intern assigned", {
                 description: "The intern has been added to this class.",
             });
         } catch (error) {
             console.error(error);
-            toast({
-                variant: "destructive",
-                title: "Error",
-                description: "Failed to assign intern.",
+            toast.error("Failed to assign intern", {
+                description: "Please check your connection and try again.",
             });
         } finally {
             setIsAssigning(null);

@@ -79,11 +79,11 @@ export function CourseManager({ initialCourses }: CourseManagerProps) {
     useEffect(() => {
         if (editingCourse) {
             form.reset({
-                title: editingCourse.title,
+                title: editingCourse.title || "",
                 description: editingCourse.description || "",
-                price: Number(editingCourse.price),
-                assignment_type: editingCourse.assignment_type,
-                is_published: editingCourse.is_published,
+                price: Number(editingCourse.price) || 0,
+                assignment_type: editingCourse.assignment_type || "global",
+                is_published: !!editingCourse.is_published,
                 level: editingCourse.level || "beginner",
                 duration_minutes: editingCourse.duration_minutes || 0,
             });
@@ -151,13 +151,6 @@ export function CourseManager({ initialCourses }: CourseManagerProps) {
 
     const handleEdit = (course: any) => {
         setEditingCourse(course);
-        form.reset({
-            title: course.title,
-            description: course.description || "",
-            price: course.price,
-            assignment_type: course.assignment_type,
-            is_published: course.is_published,
-        });
         setOpen(true);
     };
 
@@ -165,13 +158,6 @@ export function CourseManager({ initialCourses }: CourseManagerProps) {
         setOpen(isOpen);
         if (!isOpen) {
             setEditingCourse(null);
-            form.reset({
-                title: "",
-                description: "",
-                price: 0,
-                assignment_type: "global",
-                is_published: false,
-            });
         }
     };
 

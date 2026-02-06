@@ -14,11 +14,25 @@ import { type PortalSettings } from "@/hooks/use-portal-settings";
 import { TermsModal } from "@/components/onboarding/terms-modal";
 import { WelcomeScreen } from "@/components/onboarding/welcome-screen";
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
+import { BugReportFab } from "@/components/bug-reports/bug-report-fab";
+import { RealTimeStatsSync } from "./real-time-stats-sync";
+import { useLoading } from "@/hooks/use-loading";
 
 interface DashboardShellProps {
   children: React.ReactNode;
   serverProfile?: Profile | null;
   serverSettings?: PortalSettings;
+  serverOnboarding?: {
+    hasAcceptedTerms: boolean;
+    isCompleted: boolean;
+  };
+  serverUser?: {
+    id: string;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+    imageUrl: string;
+  };
 }
 
 type OnboardingState = "checking" | "terms" | "welcome" | "flow" | "completed";
@@ -27,12 +41,25 @@ export function DashboardShell({
   children,
   serverProfile,
   serverSettings,
+  serverOnboarding,
+  serverUser
 }: DashboardShellProps) {
   const { user, isLoaded } = useUser();
   const [profile, setProfile] = React.useState<Profile | null>(serverProfile || null);
-  const [onboardingStatus, setOnboardingStatus] = React.useState<OnboardingState>("checking");
-  const [sessionTermsAccepted, setSessionTermsAccepted] = React.useState(false);
-  const [isReturningUser, setIsReturningUser] = React.useState(false);
+
+  // Initialize state from server data if available
+  const [onboardingStatus, setOnboardingStatus] = React.useState<OnboardingState>(() => {
+    if (serverOnboarding) {
+      if (!serverOnboarding.hasAcceptedTerms) return "terms";
+      if (!serverOnboarding.isCompleted) return "welcome";
+      return "completed";
+    }
+    return "checking";
+  });
+
+  const [sessionTermsAccepted, setSessionTermsAccepted] = React.useState(false); // Alway false on mount to force per-session check for interns
+  const [isReturningUser, setIsReturningUser] = React.useState(serverOnboarding?.isCompleted || false);
+  const { setIsLoading } = useLoading();
 
   // Presence is now handled globally by AblyClientProvider
 
@@ -45,38 +72,65 @@ export function DashboardShell({
       const ADMIN_EMAIL = config.adminEmail;
       const isAdminEmail = user?.emailAddresses[0]?.emailAddress?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
 
-      // Consolidate all initial checks into parallel requests
-      const [termsRes, progressRes, profileRes] = await Promise.all([
-        supabase.from("terms_acceptances").select("id").eq("user_id", user.id).maybeSingle(),
-        supabase.from("onboarding_progress").select("is_completed").eq("user_id", user.id).maybeSingle(),
-        supabase.from("profiles").select("*").eq("id", user.id).single()
-      ]);
+      // Use server data where possible, only fetch what's missing
+      const checks = [];
 
-      // 1. Handle Terms
-      if (!termsRes.data) {
-        setOnboardingStatus("terms");
-      } else {
-        setSessionTermsAccepted(true);
+      if (!serverProfile) {
+        checks.push(supabase.from("profiles").select("*").eq("id", user.id).single());
       }
 
+      if (!serverOnboarding) {
+        checks.push(supabase.from("terms_acceptances").select("user_id").eq("user_id", user.id).maybeSingle());
+        checks.push(supabase.from("onboarding_progress").select("is_completed").eq("user_id", user.id).maybeSingle());
+      }
+
+      const results = await Promise.all(checks);
+      let profileRes = null;
+      let termsRes = null;
+      let progressRes = null;
+
+      if (!serverProfile) {
+        profileRes = results[0];
+        if (!serverOnboarding) {
+          termsRes = results[1];
+          progressRes = results[2];
+        }
+      } else if (!serverOnboarding) {
+        termsRes = results[0];
+        progressRes = results[1];
+      }
+
+      // 1. Handle Terms
+      if (termsRes) {
+        if (!termsRes.data) {
+          setOnboardingStatus("terms");
+        }
+      }
+      // Note: We no longer setSessionTermsAccepted(true) here because it's per-session.
+      // Acceptance is tracked by the local state and updated via the TermsModal onAccepted callback.
+
       // 2. Handle Onboarding
-      const progress = progressRes.data;
-      if (!progress || !progress.is_completed) {
-        setIsReturningUser(false);
-        if (termsRes.data) setOnboardingStatus("welcome");
-      } else {
-        setIsReturningUser(true);
-        if (termsRes.data) setOnboardingStatus("completed");
+      if (progressRes) {
+        const progress = progressRes.data;
+        if (!progress || !progress.is_completed) {
+          setIsReturningUser(false);
+          if (termsRes?.data || serverOnboarding?.hasAcceptedTerms) {
+            setOnboardingStatus("welcome");
+          }
+        } else {
+          setIsReturningUser(true);
+          setOnboardingStatus("completed");
+        }
       }
 
       // 3. Handle Profile
-      if (profileRes.data) {
+      if (profileRes?.data) {
         if (isAdminEmail) {
           setProfile({ ...profileRes.data, role: "admin" });
         } else {
           setProfile(profileRes.data);
         }
-      } else if (isAdminEmail) {
+      } else if (isAdminEmail && !profile) {
         setProfile({
           id: user.id,
           email: user.emailAddresses[0]?.emailAddress || "",
@@ -94,27 +148,50 @@ export function DashboardShell({
     if (isLoaded && user) {
       initDashboardData();
     }
-  }, [user, isLoaded]);
+  }, [user, isLoaded, serverProfile]);
 
-  // Consolidated into the Effect above
+  const userId = serverUser?.id || profile?.id || user?.id || "";
 
-  const isAdmin = profile?.role === "admin";
-  const userId = user?.id || "";
+  // Consolidate admin check to use profile or serverUser primarily for instant rendering
+  const ADMIN_EMAIL = config.adminEmail;
+  const userEmail = serverUser?.email || user?.emailAddresses[0]?.emailAddress;
+  const isAdmin = profile?.role === "admin" || (userEmail?.toLowerCase() === ADMIN_EMAIL.toLowerCase());
 
-  // Don't render until loaded to prevent hydration mismatch
-  if (!isLoaded || onboardingStatus === "checking") {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
+  // Sync Global Loading State
+  React.useEffect(() => {
+    // Only show loader if we have NO server data and are waiting for Clerk
+    // AND we don't even have a server profile to show
+    const shouldShowLoader = (!isLoaded && !serverProfile) || onboardingStatus === "checking";
+
+    if (shouldShowLoader) {
+      setIsLoading(true);
+    } else {
+      setIsLoading(false);
+    }
+
+    return () => setIsLoading(false);
+  }, [isLoaded, onboardingStatus, setIsLoading, serverProfile]);
+
+  // Don't render ONLY if we have absolutely no data yet (no clerk AND no server profile)
+  if ((!isLoaded && !serverProfile) || onboardingStatus === "checking") {
+    return null; // The global LoadingOverlay in root layout will handle the UI
   }
 
   // Terms must be accepted once per session for interns
   const showTerms = !sessionTermsAccepted && !isAdmin;
 
   if (showTerms) {
-    return <TermsModal userId={userId} onAccepted={() => setSessionTermsAccepted(true)} />;
+    return (
+      <TermsModal
+        userId={userId}
+        onAccepted={() => {
+          setSessionTermsAccepted(true);
+          if (onboardingStatus === "terms") {
+            setOnboardingStatus(serverOnboarding?.isCompleted ? "completed" : "welcome");
+          }
+        }}
+      />
+    );
   }
 
   if (onboardingStatus === "welcome") {
@@ -139,6 +216,7 @@ export function DashboardShell({
 
   return (
     <SidebarProvider defaultOpen={false}>
+      <RealTimeStatsSync />
       <DashboardSidebar userId={userId} profile={profile} />
       <SidebarInset className="flex flex-col min-h-screen">
         <DashboardHeader userId={userId} profile={profile} />
@@ -147,6 +225,7 @@ export function DashboardShell({
         </main>
       </SidebarInset>
       <MobileNav isAdmin={isAdmin} />
+      <BugReportFab userId={userId} role={profile?.role || 'intern'} />
     </SidebarProvider>
   );
 }

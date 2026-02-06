@@ -583,31 +583,33 @@ export function ChatView({
                     />
                 ) : (
                     <div className="flex items-end gap-2 max-w-5xl mx-auto">
-                        <div className="flex items-center gap-1">
-                            <input type="file" id="file-upload-photo" className="hidden" accept="image/*" aria-label="Upload photo" onChange={(e) => { const f = e.target.files?.[0]; if (f) setAttachmentPreview({ file: f, type: "image" }); e.target.value = ""; }} />
-                            <input type="file" id="file-upload-video" className="hidden" accept="video/*" aria-label="Upload video" onChange={(e) => { const f = e.target.files?.[0]; if (f) setAttachmentPreview({ file: f, type: "video" }); e.target.value = ""; }} />
-                            <input type="file" id="file-upload-audio" className="hidden" accept="audio/*" aria-label="Upload audio" onChange={(e) => { const f = e.target.files?.[0]; if (f) setAttachmentPreview({ file: f, type: "audio" }); e.target.value = ""; }} />
-                            <input type="file" id="file-upload-doc" className="hidden" accept=".pdf,.doc,.docx,.txt" aria-label="Upload document" onChange={(e) => { const f = e.target.files?.[0]; if (f) setAttachmentPreview({ file: f, type: "file" }); e.target.value = ""; }} />
+                        {!isAIChat && (
+                            <div className="flex items-center gap-1">
+                                <input type="file" id="file-upload-photo" className="hidden" accept="image/*" aria-label="Upload photo" onChange={(e) => { const f = e.target.files?.[0]; if (f) setAttachmentPreview({ file: f, type: "image" }); e.target.value = ""; }} />
+                                <input type="file" id="file-upload-video" className="hidden" accept="video/*" aria-label="Upload video" onChange={(e) => { const f = e.target.files?.[0]; if (f) setAttachmentPreview({ file: f, type: "video" }); e.target.value = ""; }} />
+                                <input type="file" id="file-upload-audio" className="hidden" accept="audio/*" aria-label="Upload audio" onChange={(e) => { const f = e.target.files?.[0]; if (f) setAttachmentPreview({ file: f, type: "audio" }); e.target.value = ""; }} />
+                                <input type="file" id="file-upload-doc" className="hidden" accept=".pdf,.doc,.docx,.txt" aria-label="Upload document" onChange={(e) => { const f = e.target.files?.[0]; if (f) setAttachmentPreview({ file: f, type: "file" }); e.target.value = ""; }} />
 
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button type="button" variant="ghost" size="icon" className="h-10 w-10 text-muted-foreground hover:bg-black/5 dark:hover:bg-white/5 rounded-full" disabled={isUploading}>
-                                        <Plus className="h-5 w-5" />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="start" className="w-48">
-                                    <DropdownMenuItem onClick={() => document.getElementById("file-upload-photo")?.click()}><ImageIcon className="h-4 w-4 mr-2" /> Photo</DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => document.getElementById("file-upload-video")?.click()}><Video className="h-4 w-4 mr-2" /> Video</DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => document.getElementById("file-upload-audio")?.click()}><Music className="h-4 w-4 mr-2" /> Audio</DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => document.getElementById("file-upload-doc")?.click()}><FileText className="h-4 w-4 mr-2" /> Document</DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => setShowPollModal(true)}><BarChart2 className="h-4 w-4 mr-2" /> Poll</DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button type="button" variant="ghost" size="icon" className="h-10 w-10 text-muted-foreground hover:bg-black/5 dark:hover:bg-white/5 rounded-full" disabled={isUploading}>
+                                            <Plus className="h-5 w-5" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="start" className="w-48">
+                                        <DropdownMenuItem onClick={() => document.getElementById("file-upload-photo")?.click()}><ImageIcon className="h-4 w-4 mr-2" /> Photo</DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => document.getElementById("file-upload-video")?.click()}><Video className="h-4 w-4 mr-2" /> Video</DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => document.getElementById("file-upload-audio")?.click()}><Music className="h-4 w-4 mr-2" /> Audio</DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => document.getElementById("file-upload-doc")?.click()}><FileText className="h-4 w-4 mr-2" /> Document</DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => setShowPollModal(true)}><BarChart2 className="h-4 w-4 mr-2" /> Poll</DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
 
-                            <Button type="button" variant="ghost" size="icon" className="h-10 w-10 text-muted-foreground hover:bg-black/5 dark:hover:bg-white/5 rounded-full" onClick={() => document.getElementById("file-upload-photo")?.click()} disabled={isUploading} title="Attach image">
-                                <Paperclip className="h-5 w-5" />
-                            </Button>
-                        </div>
+                                <Button type="button" variant="ghost" size="icon" className="h-10 w-10 text-muted-foreground hover:bg-black/5 dark:hover:bg-white/5 rounded-full" onClick={() => document.getElementById("file-upload-photo")?.click()} disabled={isUploading} title="Attach image">
+                                    <Paperclip className="h-5 w-5" />
+                                </Button>
+                            </div>
+                        )}
 
                         <div className="flex-1 relative flex items-center bg-white dark:bg-[#2a3942] rounded-lg shadow-sm border border-black/5 dark:border-white/5 pr-2">
                             <textarea
@@ -624,10 +626,12 @@ export function ChatView({
                             <Button onClick={() => onSendMessage()} size="icon" className="h-11 w-11 rounded-full shrink-0 bg-[#00a884] hover:bg-[#008f72] shadow-md transition-all active:scale-95">
                                 <Send className="h-5 w-5 text-white" />
                             </Button>
-                        ) : (
+                        ) : !isAIChat ? (
                             <Button type="button" variant="ghost" size="icon" className="h-11 w-11 rounded-full shrink-0 text-muted-foreground hover:bg-black/5" onClick={() => { setIsRecording(true); onRecordingStart?.(); }}>
                                 <Mic className="h-6 w-6" />
                             </Button>
+                        ) : (
+                            <div className="w-11" /> // Maintain balance when no content in AI chat
                         )}
                     </div>
                 )}

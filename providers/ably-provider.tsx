@@ -219,22 +219,20 @@ export function AblyClientProvider({ children, userId }: AblyClientProviderProps
                     toast.success("Real-time sync restored", { duration: 2000 });
                 }
             }
-            else if (newState === "failed" || newState === "suspended") {
-                // CIRCUIT BREAKER: If we hit failed/suspended, it often means key/network issues
-                // We should stop trying to avoid the infinite loop error the user sees
-                console.warn(`Ably connection ${newState}. Disabling real-time.`);
-
-                // Explicitly close to stop internal retries
-                ablyClient.close();
-                globalAblyClient = null;
-
-                setIsConfigured(false); // Disable for this session
+            else if (newState === "failed") {
+                console.error("Ably connection FATAL failure.");
+                setIsConfigured(false);
                 setClient(null);
-
-                toast.error("Real-time unavailable. Detailed live updates disabled.", {
-                    id: "ably-error",
-                    duration: 5000
-                });
+                toast.error("Real-time service failed. Using fallback polling.");
+            }
+            else if (newState === "suspended") {
+                console.warn("Ably connection suspended - attempting background recovery...");
+                // Don't close or disable yet, let Ably try to recover
+                // But notify user if it persists
+                if (reconnectAttempts.current > 3) {
+                    toast.warning("Real-time sync is lagging due to network.", { id: "ably-lag" });
+                }
+                reconnectAttempts.current++;
             }
         };
 
