@@ -1,4 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/server";
+export const dynamic = "force-dynamic";
+
 
 import { PerformanceDashboard } from "@/components/admin/classroom/performance-dashboard";
 import {

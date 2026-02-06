@@ -1,4 +1,6 @@
 import { getBugReports } from "@/actions/bug-reports";
+export const dynamic = "force-dynamic";
+
 import { BugReportsList } from "@/components/bug-reports/admin/bug-reports-list";
 import {
     Card,
