@@ -19,8 +19,8 @@ export const metadata: Metadata = {
   description:
     "A comprehensive internship management platform for tracking tasks, daily reports, performance analytics, and team communication.",
   icons: {
-    icon: "/assets/favicon/logo.png",
-    apple: "/assets/favicon/logo.png",
+    icon: "/favicon.png",
+    apple: "/favicon.png",
   },
 };
 

@@ -43,7 +43,7 @@ export function LoadingOverlay() {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    transition={{ duration: 0.2, ease: "easeOut" }}
+                    transition={{ duration: 0.15, ease: "easeOut" }}
                     className="fixed inset-0 z-100 flex flex-col items-center justify-center bg-white/90 dark:bg-zinc-950/80 backdrop-blur-xl"
                 >
                     <div className="relative flex flex-col items-center max-w-md px-8 text-center space-y-12">
@@ -64,7 +64,7 @@ export function LoadingOverlay() {
                         >
                             <div className="absolute inset-0 bg-emerald-500/10 dark:bg-emerald-500/20 blur-3xl rounded-full scale-150 animate-pulse" />
                             <Image
-                                src="/kblogo.png"
+                                src="/logo.png"
                                 alt="Logo"
                                 fill
                                 className="object-contain drop-shadow-[0_0_15px_rgba(16,185,129,0.3)]"
