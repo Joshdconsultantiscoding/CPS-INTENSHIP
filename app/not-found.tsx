@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
+export const dynamic = "force-dynamic";
+
 export default function NotFound() {
     return (
         <div className="flex h-screen flex-col items-center justify-center bg-background text-foreground">
