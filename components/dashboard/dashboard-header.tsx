@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/breadcrumb";
 import { usePathname } from "next/navigation";
 import { ModeToggle } from "@/components/mode-toggle";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 
 interface DashboardHeaderProps {
   userId: string;
@@ -131,7 +132,19 @@ export function DashboardHeader({ userId, profile: initialProfile }: DashboardHe
           )}
         </BreadcrumbList>
       </Breadcrumb>
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ml-auto flex items-center gap-3">
+        {/* Version Badge & PWA Status */}
+        <div className="flex flex-col items-end justify-center">
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary/5 border border-primary/10">
+            <span className="text-[10px] font-bold tracking-tight text-primary/80">v1.0.1</span>
+          </div>
+          <span className="text-[8px] uppercase tracking-widest font-bold text-muted-foreground/40 mt-0.5 hidden sm:block">
+            PWA Sync Pending
+          </span>
+        </div>
+
+        <Separator orientation="vertical" className="h-4 mx-1" />
+        <NotificationBell />
         <ModeToggle />
       </div>
     </header>

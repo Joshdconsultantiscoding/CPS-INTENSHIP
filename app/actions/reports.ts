@@ -3,6 +3,8 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
+import { createNotification } from "@/lib/notifications/notification-service";
+import { config } from "@/lib/config";
 
 export async function saveDailyReport(data: {
     id?: string | null;
@@ -49,7 +51,7 @@ export async function saveDailyReport(data: {
             throw new Error(reportError.message);
         }
 
-        // 2. Handle Streak logic if submitted
+        // 3. Handle Streak logic if submitted
         if (data.status === "submitted") {
             const { data: profile, error: profileError } = await supabase
                 .from("profiles")
@@ -70,6 +72,31 @@ export async function saveDailyReport(data: {
                     })
                     .eq("id", data.user_id);
             }
+
+            // 4. Notify Admins if submitted
+            const { data: admins } = await supabase
+                .from("profiles")
+                .select("id")
+                .eq("role", "admin");
+
+            if (admins) {
+                const adminIds = admins.map(a => a.id);
+                const { data: sender } = await supabase.from("profiles").select("full_name, email").eq("id", data.user_id).single();
+                const senderName = sender?.full_name || sender?.email || "An intern";
+
+                // Notify all admins in parallel
+                await Promise.all(adminIds.map(adminId =>
+                    createNotification({
+                        userId: adminId,
+                        title: "New Report Submitted",
+                        message: `${senderName} submitted their daily report for ${new Date(data.report_date).toLocaleDateString()}`,
+                        type: "report",
+                        link: `/dashboard/reports`,
+                        priority: 'normal',
+                        metadata: { reportId: report.id, internId: data.user_id }
+                    }).catch(err => console.error(`Admin notification failed for ${adminId}:`, err))
+                ));
+            }
         }
 
         revalidatePath("/dashboard/reports");
@@ -81,6 +108,7 @@ export async function saveDailyReport(data: {
         return { success: false, error: error.message };
     }
 }
+
 export async function reviewDailyReport(data: {
     reportId: string;
     reviewerId: string;
@@ -114,14 +142,16 @@ export async function reviewDailyReport(data: {
             throw new Error(reportError.message);
         }
 
-        // 2. Notify the intern
-        await supabase.from("notifications").insert({
-            user_id: data.internId,
-            title: "Report Reviewed",
+        // 2. Notify the intern using the new service
+        await createNotification({
+            userId: data.internId,
+            title: "Daily Report Reviewed",
             message: `Your daily report for ${new Date(data.reportDate).toLocaleDateString()} has been reviewed. Rating: ${data.rating}/5 stars.`,
             type: "report",
-            reference_id: data.reportId,
-            reference_type: "daily_report",
+            link: `/dashboard/reports`,
+            priority: data.rating >= 4 ? 'high' : 'normal',
+            sound: data.rating >= 4 ? 'success' : 'notification',
+            metadata: { reportId: data.reportId, rating: data.rating }
         });
 
         revalidatePath("/dashboard/reports");

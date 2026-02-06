@@ -4,6 +4,7 @@ import { getAuthUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
+import { createNotification } from "@/lib/notifications/notification-service";
 
 export interface CreateTaskInput {
     title: string;
@@ -73,49 +74,25 @@ export async function createTaskAction(input: CreateTaskInput): Promise<CreateTa
 
         console.log("[Server Action] Task created successfully:", data.id);
 
-        // Create notification for the assignee
-        const { error: notifError } = await supabase.from("notifications").insert({
-            user_id: input.assigned_to,
-            title: "New Task Assigned",
-            message: `You have been assigned a new task: ${input.title}`,
-            type: "task",
-            reference_id: data.id,
-            reference_type: "task",
-        });
-
-        if (notifError) {
-            console.warn("[Server Action] Failed to create notification:", notifError.message);
-            // Don't fail the whole operation
-        }
-
-        // 3. Fetch full task details with relations for the UI
-        const { data: fullTask, error: fetchError } = await supabase
-            .from("tasks")
-            .select("*, assignee:profiles!tasks_assigned_to_fkey(*), assigner:profiles!tasks_assigned_by_fkey(*)")
-            .eq("id", data.id)
-            .single();
-
-        if (fetchError) {
-            console.error("[Server Action] Error fetching full task details:", fetchError);
-            // We continue without broadcasting if fetch fails, but this shouldn't happen
-        } else if (process.env.ABLY_API_KEY) {
-            try {
-                const Ably = require('ably');
-                const ably = new Ably.Rest(process.env.ABLY_API_KEY);
-                const channel = ably.channels.get("global-updates");
-
-                await channel.publish("task-created", {
-                    task: fullTask,
-                    timestamp: Date.now()
-                });
-                console.log("[Server Action] Broadcasted task-created event");
-            } catch (ablyError) {
-                console.warn("[Server Action] Failed to broadcast task creation:", ablyError);
-            }
+        // Create notification for the assignee using the new service
+        // This is non-blocking for the DB insert if Ably fails
+        try {
+            await createNotification({
+                userId: input.assigned_to,
+                title: "New Task Assigned",
+                message: `You have been assigned to '${input.title}' - Check it out!`,
+                type: "task",
+                link: `/dashboard/tasks`,
+                priority: input.priority === 'urgent' ? 'urgent' : 'high',
+                metadata: { taskId: data.id }
+            });
+        } catch (notifError) {
+            console.error("[Server Action] Notification failed:", notifError);
         }
 
         // Revalidate the tasks page to show the new task
         revalidatePath("/dashboard/tasks");
+        revalidatePath("/dashboard");
 
         return {
             success: true,
@@ -202,31 +179,18 @@ export async function updateTaskStatusAction(input: UpdateTaskStatusInput): Prom
 
         // 4. Create notification for the assigner (if it's the assignee who updated it)
         if (user.id === currentTask.assigned_to && user.id !== currentTask.assigned_by) {
-            const { error: notifError } = await supabase.from("notifications").insert({
-                user_id: currentTask.assigned_by,
-                title: "Task Status Updated",
-                message: `${user.full_name || user.email} ${actionLabel}: ${currentTask.title}`,
-                type: "task",
-                reference_id: input.taskId,
-                reference_type: "task",
-            });
-            if (notifError) console.warn("[Server Action] Notification failed:", notifError.message);
-        }
-
-        // 5. Broadcast update via Ably
-        if (process.env.ABLY_API_KEY) {
             try {
-                const Ably = require('ably');
-                const ably = new Ably.Rest(process.env.ABLY_API_KEY);
-                const channel = ably.channels.get("global-updates");
-
-                await channel.publish("task-updated", {
-                    task: updatedTask,
-                    timestamp: Date.now()
+                await createNotification({
+                    userId: currentTask.assigned_by,
+                    title: input.status === 'completed' ? "Task Completed" : "Task Status Updated",
+                    message: `${user.full_name || user.email} ${actionLabel}: ${currentTask.title}`,
+                    type: "task",
+                    link: `/dashboard/tasks`,
+                    priority: input.status === 'completed' ? 'high' : 'normal',
+                    metadata: { taskId: input.taskId, status: input.status }
                 });
-                console.log("[Server Action] Broadcasted task-updated event");
-            } catch (ablyError) {
-                console.warn("[Server Action] Failed to broadcast task update:", ablyError);
+            } catch (notifErr) {
+                console.warn("[Server Action] Status notification failed:", notifErr);
             }
         }
 
@@ -304,36 +268,20 @@ export async function approveTaskRewardAction(taskId: string): Promise<CreateTas
             }
         });
 
-        // 5. Notify intern
-        await supabase.from("notifications").insert({
-            user_id: task.assigned_to,
-            title: "Points Awarded!",
-            message: `You earned ${task.points} points for completing: ${task.title}`,
-            type: "reward",
-            reference_id: taskId,
-            reference_type: "task",
-        });
-
-        // 6. Broadcast via Ably
-        const { data: fullTask } = await supabase
-            .from("tasks")
-            .select("*, assignee:profiles!tasks_assigned_to_fkey(*), assigner:profiles!tasks_assigned_by_fkey(*)")
-            .eq("id", taskId)
-            .single();
-
-        if (process.env.ABLY_API_KEY) {
-            try {
-                const Ably = require('ably');
-                const ably = new Ably.Rest(process.env.ABLY_API_KEY);
-                const channel = ably.channels.get("global-updates");
-
-                await channel.publish("task-updated", {
-                    task: fullTask,
-                    timestamp: Date.now()
-                });
-            } catch (aError) {
-                console.warn("[Reward Action] Ably broadcast failed:", aError);
-            }
+        // 5. Notify intern using the new service
+        try {
+            await createNotification({
+                userId: task.assigned_to,
+                title: "🎉 Points Awarded!",
+                message: `You earned ${task.points} points for completing: ${task.title}`,
+                type: "reward",
+                link: `/dashboard/rewards`,
+                priority: 'high',
+                sound: 'success',
+                metadata: { taskId, points: task.points }
+            });
+        } catch (notifErr) {
+            console.warn("[Reward Action] Notification failed:", notifErr);
         }
 
         revalidatePath("/dashboard/tasks");

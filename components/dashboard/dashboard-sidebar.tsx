@@ -199,14 +199,6 @@ export function DashboardSidebar({ userId, profile: initialProfile }: DashboardS
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        <SidebarMenu className="px-2">
-          <SidebarMenuItem>
-            <div className="flex flex-col items-center justify-center py-2 text-[10px] text-muted-foreground/50 font-medium tracking-wider uppercase border-t border-sidebar-border/50 mb-2">
-              <span className="opacity-80">v1.0.1</span>
-              <span className="text-[8px] opacity-60">PWA Upgrade Pending</span>
-            </div>
-          </SidebarMenuItem>
-        </SidebarMenu>
         <SidebarMenu>
           <SidebarMenuItem>
             <DropdownMenu>

@@ -183,13 +183,15 @@ export function AblyClientProvider({ children, userId }: AblyClientProviderProps
             return;
         }
 
-        if (!globalAblyClient) {
-            console.log("Initializing Singleton Ably Client...");
+        // Initialize or recover client
+        if (!globalAblyClient || ['closed', 'failed'].includes(globalAblyClient.connection.state)) {
+            console.log("Initializing (or Recovering) Ably Client...");
             globalAblyClient = new Ably.Realtime({
                 authUrl: "/api/ably/auth",
                 autoConnect: true,
                 disconnectedRetryTimeout: 10000,
                 suspendedRetryTimeout: 30000,
+                closeOnUnload: false, // Handle manually to prevent premature closure
             });
         }
 
@@ -219,11 +221,16 @@ export function AblyClientProvider({ children, userId }: AblyClientProviderProps
                     toast.success("Real-time sync restored", { duration: 2000 });
                 }
             }
-            else if (newState === "failed") {
-                console.error("Ably connection FATAL failure.");
+            else if (newState === "failed" || newState === "closed") {
+                console.error("Ably connection FATAL failure or closed.");
                 setIsConfigured(false);
                 setClient(null);
-                toast.error("Real-time service failed. Using fallback polling.");
+                globalAblyClient = null; // Allow recreation on next cycle
+
+                // Only show error for failure, not intentional close
+                if (newState === "failed") {
+                    toast.error("Real-time service failed. Using fallback polling.");
+                }
             }
             else if (newState === "suspended") {
                 console.warn("Ably connection suspended - attempting background recovery...");

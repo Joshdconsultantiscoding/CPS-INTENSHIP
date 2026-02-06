@@ -37,6 +37,31 @@ export async function ensureProfileSync(user: any, supabase: SupabaseClient) {
                 console.error("[ProfileSync] Insert error:", insertError);
                 return { success: false, error: insertError.message };
             }
+
+            // 3. Notify Admins about the new intern
+            try {
+                const { createNotification } = await import("./notifications/notification-service");
+                const { data: admins } = await supabase
+                    .from("profiles")
+                    .select("id")
+                    .eq("role", "admin");
+
+                if (admins) {
+                    for (const admin of admins) {
+                        await createNotification({
+                            userId: admin.id,
+                            title: "New Intern Registered",
+                            message: `New intern '${user.full_name || user.email}' just joined the platform.`,
+                            type: "system",
+                            link: `/dashboard/interns`,
+                            priority: 'normal',
+                            metadata: { internId: user.id }
+                        });
+                    }
+                }
+            } catch (notifErr) {
+                console.warn("[ProfileSync] Admin notification failed:", notifErr);
+            }
         } else {
             // 3. If it DOES exist, we do nothing to the avatar/name.
             // We might want to update last_active_at or similar if needed,

@@ -144,6 +144,48 @@ export async function sendMessageAction(
             throw new Error(error.message);
         }
 
+        // 3. Create real-time notification
+        try {
+            const { createNotification } = await import("@/lib/notifications/notification-service");
+
+            if (recipientId) {
+                // Direct Message Notification
+                await createNotification({
+                    userId: recipientId,
+                    title: "New Message",
+                    message: `${user.full_name || user.email}: ${content.substring(0, 50)}${content.length > 50 ? '...' : ''}`,
+                    type: "message",
+                    link: `/dashboard/messages?userId=${user.id}`,
+                    metadata: { messageId: data.id, senderId: user.id }
+                });
+            } else if (channelId) {
+                // Channel/Community Notification
+                // Get channel name and members
+                const { data: channel } = await supabase
+                    .from("channels")
+                    .select("name, members")
+                    .eq("id", channelId)
+                    .single();
+
+                if (channel && channel.members) {
+                    const otherMembers = (channel.members as string[]).filter(id => id !== user.id);
+                    // Notify all members in parallel
+                    await Promise.all(otherMembers.map(memberId =>
+                        createNotification({
+                            userId: memberId,
+                            title: `#${channel.name}`,
+                            message: `${user.full_name || user.email}: ${content.substring(0, 50)}${content.length > 50 ? '...' : ''}`,
+                            type: "message",
+                            link: `/dashboard/messages?channelId=${channelId}`,
+                            metadata: { messageId: data.id, channelId }
+                        }).catch(err => console.error(`Channel member notification failed for ${memberId}:`, err))
+                    ));
+                }
+            }
+        } catch (notifErr) {
+            console.warn("Message notification failed (non-blocking):", notifErr);
+        }
+
         return { success: true, message: data };
     } catch (error: any) {
         console.error("SendMessageAction Error:", error);

@@ -38,7 +38,7 @@ import {
 } from "lucide-react";
 import { RewardDialog } from "./reward-dialog";
 import { useAbly } from "@/providers/ably-provider";
-import { deleteRewardAction } from "@/app/actions/rewards";
+import { deleteRewardAction, claimRewardAction } from "@/app/actions/rewards";
 
 interface RewardsOverviewProps {
   profile: Profile | null;
@@ -160,47 +160,21 @@ export function RewardsOverview({
     }
 
     setClaiming(reward.id);
-    const supabase = createClient();
 
-    // Create achievement
-    const { error: achievementError } = await supabase
-      .from("achievements")
-      .insert({
-        user_id: userId,
-        reward_id: reward.id,
-      });
+    try {
+      const result = await claimRewardAction(reward.id);
 
-    if (achievementError) {
-      toast.error("Failed to claim reward");
+      if (!result.success) {
+        toast.error(result.error || "Failed to claim reward");
+      } else {
+        toast.success(`Congratulations! You've earned: ${reward.name}`);
+        router.refresh();
+      }
+    } catch (error: any) {
+      toast.error("An unexpected error occurred while claiming your reward.");
+    } finally {
       setClaiming(null);
-      return;
     }
-
-    // Deduct points
-    const { error: profileError } = await supabase
-      .from("profiles")
-      .update({
-        total_points: userPoints - reward.points_required,
-      })
-      .eq("id", userId);
-
-    if (profileError) {
-      toast.error("Failed to update points");
-      setClaiming(null);
-      return;
-    }
-
-    // Create notification
-    await supabase.from("notifications").insert({
-      user_id: userId,
-      title: "Reward Claimed!",
-      message: `You've successfully claimed: ${reward.name}`,
-      type: "achievement",
-    });
-
-    toast.success(`Congratulations! You've earned: ${reward.name}`);
-    setClaiming(null);
-    router.refresh();
   };
 
   const userRank = leaderboard.findIndex((u) => u.id === userId) + 1;

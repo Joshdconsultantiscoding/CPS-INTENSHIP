@@ -1,8 +1,5 @@
-"use client";
-
-import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import type { Notification } from "@/lib/types";
+import { Notification as AppNotification } from "@/lib/notifications/notification-types";
 import {
   Card,
   CardContent,
@@ -12,7 +9,6 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import {
@@ -24,81 +20,40 @@ import {
   AlertCircle,
   Check,
   CheckCheck,
+  Award,
 } from "lucide-react";
-import { useAbly } from "@/providers/ably-provider";
+import { useNotifications } from "@/components/notifications/notification-provider";
 
 interface NotificationListProps {
-  notifications: Notification[];
+  notifications: AppNotification[];
   userId: string;
 }
 
-const typeIcons = {
+const typeIcons: Record<string, any> = {
   task: CheckSquare,
   report: FileText,
   message: MessageSquare,
   achievement: Trophy,
+  reward: Award,
   system: AlertCircle,
 };
 
-const typeColors = {
+const typeColors: Record<string, string> = {
   task: "bg-primary/10 text-primary",
   report: "bg-chart-2/10 text-chart-2",
   message: "bg-chart-1/10 text-chart-1",
   achievement: "bg-chart-3/10 text-chart-3",
+  reward: "bg-amber-500/10 text-amber-500",
   system: "bg-muted text-muted-foreground",
 };
 
 export function NotificationList({ notifications, userId }: NotificationListProps) {
   const router = useRouter();
-  const { client, isConfigured } = useAbly();
+  const { markAsRead, markAllAsRead } = useNotifications();
 
-  // Real-time notification subscription via Ably
-  useEffect(() => {
-    if (!client || !isConfigured || !userId) return;
-
-    const channelName = `user-notifications:${userId}`;
-    const channel = client.channels.get(channelName);
-
-    const handleNotification = (message: any) => {
-      const data = message.data;
-      toast(data.title || "New Notification", {
-        description: data.content || data.message,
-        duration: 5000,
-      });
-      // Refresh to show new notification in list
-      router.refresh();
-    };
-
-    channel.subscribe("alert", handleNotification);
-    channel.subscribe("notification", handleNotification);
-
-    return () => {
-      channel.unsubscribe("alert", handleNotification);
-      channel.unsubscribe("notification", handleNotification);
-    };
-  }, [client, isConfigured, userId, router]);
-
-  const markAsRead = async (id: string) => {
-    const supabase = createClient();
-    await supabase
-      .from("notifications")
-      .update({ is_read: true })
-      .eq("id", id);
-    router.refresh();
-  };
-
-  const markAllAsRead = async () => {
-    const supabase = createClient();
-    const unreadIds = notifications.filter((n) => !n.is_read).map((n) => n.id);
-    if (unreadIds.length === 0) return;
-
-    await supabase
-      .from("notifications")
-      .update({ is_read: true })
-      .in("id", unreadIds);
-
+  const handleMarkAllAsRead = async () => {
+    await markAllAsRead();
     toast.success("All notifications marked as read");
-    router.refresh();
   };
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
@@ -108,7 +63,7 @@ export function NotificationList({ notifications, userId }: NotificationListProp
       {unreadCount > 0 && (
         <div className="flex items-center justify-between">
           <Badge variant="secondary">{unreadCount} unread</Badge>
-          <Button variant="ghost" size="sm" onClick={markAllAsRead}>
+          <Button variant="ghost" size="sm" onClick={handleMarkAllAsRead}>
             <CheckCheck className="mr-2 h-4 w-4" />
             Mark all as read
           </Button>
@@ -128,14 +83,18 @@ export function NotificationList({ notifications, userId }: NotificationListProp
       ) : (
         <div className="space-y-2">
           {notifications.map((notification) => {
-            const Icon = typeIcons[notification.type] || Bell;
-            const colorClass = typeColors[notification.type] || typeColors.system;
+            const Icon = typeIcons[notification.notification_type || notification.type] || Bell;
+            const colorClass = typeColors[notification.notification_type || notification.type] || typeColors.system;
 
             return (
               <Card
                 key={notification.id}
-                className={`transition-colors ${!notification.is_read ? "border-primary/50 bg-primary/5" : ""
+                className={`transition-all hover:bg-accent/5 cursor-pointer ${!notification.is_read ? "border-primary/50 bg-primary/5" : ""
                   }`}
+                onClick={() => {
+                  if (notification.link) router.push(notification.link);
+                  if (!notification.is_read) markAsRead(notification.id);
+                }}
               >
                 <CardHeader className="flex flex-row items-start gap-4 space-y-0 pb-2">
                   <div
@@ -147,14 +106,19 @@ export function NotificationList({ notifications, userId }: NotificationListProp
                     <CardTitle className="text-base">
                       {notification.title}
                     </CardTitle>
-                    <CardDescription>{notification.message}</CardDescription>
+                    <CardDescription className="text-sm">
+                      {notification.message}
+                    </CardDescription>
                   </div>
                   {!notification.is_read && (
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8"
-                      onClick={() => markAsRead(notification.id)}
+                      className="h-8 w-8 hover:bg-primary/20"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        markAsRead(notification.id);
+                      }}
                     >
                       <Check className="h-4 w-4" />
                       <span className="sr-only">Mark as read</span>

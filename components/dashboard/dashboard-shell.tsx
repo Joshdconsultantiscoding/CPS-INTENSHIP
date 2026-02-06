@@ -17,6 +17,7 @@ import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
 import { BugReportFab } from "@/components/bug-reports/bug-report-fab";
 import { RealTimeStatsSync } from "./real-time-stats-sync";
 import { useLoading } from "@/hooks/use-loading";
+import { NotificationProvider } from "@/components/notifications/notification-provider";
 
 interface DashboardShellProps {
   children: React.ReactNode;
@@ -215,17 +216,19 @@ export function DashboardShell({
   }
 
   return (
-    <SidebarProvider defaultOpen={false}>
-      <RealTimeStatsSync />
-      <DashboardSidebar userId={userId} profile={profile} />
-      <SidebarInset className="flex flex-col min-h-screen">
-        <DashboardHeader userId={userId} profile={profile} />
-        <main className="flex-1 overflow-auto p-3 sm:p-4 md:p-6 pb-20 md:pb-6">
-          {children}
-        </main>
-      </SidebarInset>
-      <MobileNav isAdmin={isAdmin} />
-      <BugReportFab userId={userId} role={profile?.role || 'intern'} />
-    </SidebarProvider>
+    <NotificationProvider>
+      <SidebarProvider defaultOpen={false}>
+        <RealTimeStatsSync />
+        <DashboardSidebar userId={userId} profile={profile} />
+        <SidebarInset className="flex flex-col min-h-screen">
+          <DashboardHeader userId={userId} profile={profile} />
+          <main className="flex-1 overflow-auto p-3 sm:p-4 md:p-6 pb-20 md:pb-6">
+            {children}
+          </main>
+        </SidebarInset>
+        <MobileNav isAdmin={isAdmin} />
+        <BugReportFab userId={userId} role={profile?.role || 'intern'} />
+      </SidebarProvider>
+    </NotificationProvider>
   );
 }

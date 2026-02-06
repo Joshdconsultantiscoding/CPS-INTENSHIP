@@ -1,9 +1,10 @@
 "use server";
 
-import { createAdminClient, createClient } from "@/lib/supabase/server";
-import { getAuthUser } from "@/lib/auth";
-import { revalidatePath } from "next/cache";
+import { createBulkNotifications } from "@/lib/notifications/notification-service";
 
+// ... existing imports
+
+// ... inside submitBugReport
 // Helper to verify Admin access
 async function verifyAdmin() {
     const user = await getAuthUser();
@@ -45,19 +46,20 @@ export async function submitBugReport(report: {
         .eq("role", "admin");
 
     if (admins && admins.length > 0) {
-        const notifications = admins.map(admin => ({
-            user_id: admin.id,
+        const adminIds = admins.map(admin => admin.id);
+
+        await createBulkNotifications(adminIds, {
             title: "New Bug Report 🐛",
             message: `A site feedback report has been submitted by an intern.`,
-            notification_type: 'warning',
-            reference_type: 'bug_report',
-            reference_id: bugReport.id
-        }));
-
-        await adminSupabase.from("notifications").insert(notifications);
+            type: 'warning',
+            link: '/dashboard/admin/bug-reports',
+            priority: 'high',
+            metadata: {
+                reference_type: 'bug_report',
+                reference_id: bugReport.id
+            }
+        });
     }
-
-    revalidatePath("/dashboard/admin/bug-reports");
     return { success: true };
 }
 
