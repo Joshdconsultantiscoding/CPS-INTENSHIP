@@ -10,6 +10,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
 export default async function adminPerformancePage() {
+    console.log("Initializing Performance Dashboard"); // Vercel Debug Trace
     const supabase = await createAdminClient();
 
     // Fetch all attempts with profiles and courses
