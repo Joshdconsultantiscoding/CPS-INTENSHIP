@@ -300,6 +300,14 @@ export async function approveTaskRewardAction(taskId: string): Promise<CreateTas
             console.warn("[Reward Action] Notification failed:", notifErr);
         }
 
+        // Deep Fix: Publish to Ably for real-time dashboard/graph refresh (Points Update)
+        await publishGlobalUpdate("profile-updated", {
+            userId: task.assigned_to,
+            total_points: (profile?.total_points || 0) + (task.points || 0),
+            timestamp: Date.now()
+        });
+
+        // Revalidate the tasks page to show the new task
         revalidatePath("/dashboard/tasks");
         revalidatePath("/dashboard");
 

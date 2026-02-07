@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { Achievement, Reward } from "@/lib/types";
 import { createNotification } from "@/lib/notifications/notification-service";
+import { getAblyAdmin } from "@/lib/ably-server";
 
 /**
  * Creates a new reward in the catalog.
@@ -20,21 +21,60 @@ export async function createRewardAction(data: Omit<Reward, "id" | "created_at">
         }
 
         const adminClient = await createAdminClient();
-        const { data: reward, error } = await adminClient
-            .from("rewards")
-            .insert({
-                name: data.name,
-                description: data.description,
-                points_required: data.points_required,
-                icon: data.icon,
-                is_active: data.is_active ?? true,
-            })
-            .select()
-            .single();
+
+        // Helper to try insert
+        const tryInsert = async (name: string) => {
+            return await adminClient
+                .from("rewards")
+                .insert({
+                    name: name.trim(), // Ensure trimmed
+                    description: data.description,
+                    points_required: data.points_required,
+                    icon: data.icon,
+                    is_active: data.is_active ?? true,
+                })
+                .select()
+                .single();
+        };
+
+        // 1. First attempt
+        let { data: reward, error } = await tryInsert(data.name);
+
+        // 2. Handle unique constraint violation (code 23505)
+        if (error && error.code === '23505') {
+            const copyName = `${data.name.trim()} (Copy)`;
+            const retry1 = await tryInsert(copyName);
+
+            if (retry1.error && retry1.error.code === '23505') {
+                // Try one more time with random suffix just in case
+                const finalName = `${data.name.trim()} (${Math.floor(Math.random() * 1000)})`;
+                const retry2 = await tryInsert(finalName);
+                reward = retry2.data;
+                error = retry2.error;
+            } else {
+                reward = retry1.data;
+                error = retry1.error;
+            }
+        }
 
         if (error) {
             console.error("Error creating reward:", error);
+            // Return user-friendly error if it still fails
+            if (error.code === '23505') {
+                return { success: false, error: "A reward with this name already exists. Please choose a unique name." };
+            }
             return { success: false, error: error.message };
+        }
+
+        // Publish to Ably for real-time update
+        const ably = getAblyAdmin();
+        if (ably) {
+            try {
+                const channel = ably.channels.get("rewards:global");
+                await channel.publish("reward-created", { reward });
+            } catch (e) {
+                console.warn("Ably publish failed:", e);
+            }
         }
 
         revalidatePath("/dashboard/rewards");
@@ -68,7 +108,21 @@ export async function updateRewardAction(id: string, data: Partial<Omit<Reward, 
 
         if (error) {
             console.error("Error updating reward:", error);
+            if (error.code === '23505') {
+                return { success: false, error: "A reward with this name already exists. Please choose a unique name." };
+            }
             return { success: false, error: error.message };
+        }
+
+        // Publish to Ably for real-time update
+        const ably = getAblyAdmin();
+        if (ably) {
+            try {
+                const channel = ably.channels.get("rewards:global");
+                await channel.publish("reward-updated", { reward });
+            } catch (e) {
+                console.warn("Ably publish failed:", e);
+            }
         }
 
         revalidatePath("/dashboard/rewards");
@@ -101,6 +155,17 @@ export async function deleteRewardAction(id: string) {
         if (error) {
             console.error("Error deleting reward:", error);
             return { success: false, error: error.message };
+        }
+
+        // Publish to Ably for real-time update
+        const ably = getAblyAdmin();
+        if (ably) {
+            try {
+                const channel = ably.channels.get("rewards:global");
+                await channel.publish("reward-deleted", { rewardId: id });
+            } catch (e) {
+                console.warn("Ably publish failed:", e);
+            }
         }
 
         revalidatePath("/dashboard/rewards");

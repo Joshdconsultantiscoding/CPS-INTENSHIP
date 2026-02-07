@@ -89,7 +89,13 @@ export function RewardsOverview({
 
     const handleRewardCreated = (message: any) => {
       const newReward = message.data.reward as Reward;
-      setRewards((prev) => [...prev, newReward].sort((a, b) => a.points_required - b.points_required));
+      setRewards((prev) => {
+        // Prevent duplicates
+        if (prev.some(r => r.id === newReward.id)) {
+          return prev;
+        }
+        return [...prev, newReward].sort((a, b) => a.points_required - b.points_required);
+      });
       if (!isAdmin) {
         toast.info(`New reward available: ${newReward.name}`);
       }
@@ -145,7 +151,7 @@ export function RewardsOverview({
     toast.success("Reward deleted successfully");
   };
 
-  const userPoints = profile?.total_points || 0;
+  const [userPoints, setUserPoints] = useState(profile?.total_points || 0);
   const earnedRewardIds = achievements.map((a) => a.reward_id);
 
   const claimReward = async (reward: Reward) => {
@@ -256,7 +262,8 @@ export function RewardsOverview({
         {/* Available Rewards */}
         <TabsContent value="available" className="mt-4">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {rewards.map((reward) => {
+            {/* Robust deduplication to prevent key errors */}
+            {Array.from(new Map(rewards.map(item => [item.id, item])).values()).map((reward) => {
               const isEarned = earnedRewardIds.includes(reward.id);
               const canClaim = userPoints >= reward.points_required && !isEarned;
               const progress = Math.min(
@@ -371,7 +378,7 @@ export function RewardsOverview({
             </Card>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {achievements.map((achievement) => (
+              {Array.from(new Map(achievements.map(item => [item.id, item])).values()).map((achievement) => (
                 <Card key={achievement.id} className="border-accent bg-accent/5 overflow-hidden">
                   {isAdmin && achievement.user && (
                     <div className="bg-accent/10 px-4 py-2 border-b border-accent/20 flex items-center gap-2">
