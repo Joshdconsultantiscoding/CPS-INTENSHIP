@@ -25,9 +25,19 @@ interface TermsModalProps {
 export function TermsModal({ userId, onAccepted }: TermsModalProps) {
     const [accepted, setAccepted] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [hasReadToBottom, setHasReadToBottom] = useState(false);
+    const contentRef = React.useRef<HTMLDivElement>(null);
+
+    const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+        const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+        // Check if scrolled to bottom (with small buffer)
+        if (scrollHeight - scrollTop - clientHeight < 50) {
+            setHasReadToBottom(true);
+        }
+    };
 
     const handleAccept = async () => {
-        if (!accepted) return;
+        if (!accepted || !hasReadToBottom) return;
         if (!userId) {
             toast.error("User ID not found. Please refresh the page.");
             return;
@@ -79,7 +89,11 @@ export function TermsModal({ userId, onAccepted }: TermsModalProps) {
                     </DialogHeader>
                 </div>
 
-                <ScrollArea className="flex-1 px-6 py-4 border-y bg-muted/30">
+                <div
+                    className="flex-1 px-6 py-4 border-y bg-muted/30 overflow-y-auto"
+                    onScroll={handleScroll}
+                    ref={contentRef}
+                >
                     <div className="space-y-4 text-sm text-muted-foreground leading-relaxed">
                         <section>
                             <h3 className="font-semibold text-foreground mb-2">1. Usage Policy</h3>
@@ -105,8 +119,10 @@ export function TermsModal({ userId, onAccepted }: TermsModalProps) {
                             <h3 className="font-semibold text-foreground mb-2">5. Data Privacy</h3>
                             <p>Your profile data and activity logs are stored securely. We use this data solely for managing the internship program and improving platform experience.</p>
                         </section>
+
+                        <div className="h-4" /> {/* Spacer at bottom */}
                     </div>
-                </ScrollArea>
+                </div>
 
                 <div className="p-6 space-y-4 bg-background">
                     <div className="flex items-start space-x-3">
@@ -114,17 +130,20 @@ export function TermsModal({ userId, onAccepted }: TermsModalProps) {
                             id="terms"
                             checked={accepted}
                             onCheckedChange={(checked) => setAccepted(checked === true)}
+                            disabled={!hasReadToBottom}
                             className="mt-1"
                         />
                         <div className="grid gap-1.5 leading-none">
                             <Label
                                 htmlFor="terms"
-                                className="text-sm font-medium leading-none cursor-pointer"
+                                className={`text-sm font-medium leading-none cursor-pointer ${!hasReadToBottom ? 'opacity-50 cursor-not-allowed' : ''}`}
                             >
                                 I have read and agree to the terms and conditions
                             </Label>
                             <p className="text-xs text-muted-foreground">
-                                By ticking this, you commit to professional standards within the program.
+                                {!hasReadToBottom
+                                    ? "Please scroll to the end of the terms to enable acceptance."
+                                    : "By ticking this, you commit to professional standards within the program."}
                             </p>
                         </div>
                     </div>
@@ -132,7 +151,7 @@ export function TermsModal({ userId, onAccepted }: TermsModalProps) {
                     <DialogFooter className="flex sm:justify-end gap-2 pt-2">
                         <Button
                             className="w-full sm:w-auto px-8"
-                            disabled={!accepted || isSubmitting}
+                            disabled={!accepted || isSubmitting || !hasReadToBottom}
                             onClick={handleAccept}
                         >
                             {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
