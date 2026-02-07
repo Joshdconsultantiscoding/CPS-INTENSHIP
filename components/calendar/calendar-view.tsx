@@ -236,7 +236,7 @@ export function CalendarView({ events, userId, isAdmin, users = [] }: CalendarVi
                   Add Event
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
                 <DialogHeader>
                   <DialogTitle>Create New Event</DialogTitle>
                 </DialogHeader>
