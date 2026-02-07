@@ -35,7 +35,8 @@ import {
     AlertCircle,
     Calendar,
     ExternalLink,
-    User
+    User,
+    ShieldCheck
 } from "lucide-react";
 import { format } from "date-fns";
 import { updateBugReportStatus } from "@/actions/bug-reports";
@@ -197,56 +198,88 @@ export function BugReportsList({ initialReports }: BugReportsListProps) {
             </Card>
 
             <Sheet open={!!selectedReport} onOpenChange={(val) => !val && setSelectedReport(null)}>
-                <SheetContent className="sm:max-w-xl overflow-y-auto">
+                <SheetContent className="sm:max-w-2xl overflow-y-auto bg-background/95 backdrop-blur-xl border-l border-border/50 shadow-2xl p-0 gap-0">
                     {selectedReport && (
-                        <div className="space-y-8">
-                            <SheetHeader>
-                                <div className="flex items-center gap-4 mb-4">
-                                    <Avatar className="h-12 w-12">
-                                        <AvatarImage src={selectedReport.profile.avatar_url} />
-                                        <AvatarFallback>{selectedReport.profile.full_name.charAt(0)}</AvatarFallback>
-                                    </Avatar>
-                                    <div className="text-left">
-                                        <SheetTitle className="text-xl">{selectedReport.profile.full_name}</SheetTitle>
-                                        <SheetDescription>{selectedReport.profile.email}</SheetDescription>
+                        <div className="flex flex-col h-full">
+                            {/* Premium Header with Gradient Background */}
+                            <div className="relative bg-gradient-to-b from-muted/50 to-background p-6 border-b border-border/50">
+                                <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-primary/50 to-transparent opacity-50" />
+                                <div className="flex items-start justify-between gap-4">
+                                    <div className="flex gap-4">
+                                        <div className="relative">
+                                            <Avatar className="h-16 w-16 border-2 border-background shadow-lg ring-2 ring-border/20">
+                                                <AvatarImage src={selectedReport.profile.avatar_url} />
+                                                <AvatarFallback className="text-lg font-bold bg-primary/10 text-primary">
+                                                    {selectedReport.profile.full_name.charAt(0)}
+                                                </AvatarFallback>
+                                            </Avatar>
+                                            <div className="absolute -bottom-1 -right-1 bg-background rounded-full p-0.5 shadow-sm">
+                                                <Badge variant={getStatusVariant(selectedReport.status)} className="h-5 px-1.5 text-[10px] uppercase tracking-wider font-bold border-0 shadow-sm">
+                                                    {selectedReport.status}
+                                                </Badge>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1 pt-1">
+                                            <SheetTitle className="text-2xl font-bold tracking-tight">
+                                                {selectedReport.profile.full_name}
+                                            </SheetTitle>
+                                            <SheetDescription className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                                                <span className="bg-primary/5 px-2 py-0.5 rounded text-xs text-primary/80">
+                                                    {selectedReport.profile.email}
+                                                </span>
+                                            </SheetDescription>
+                                        </div>
                                     </div>
-                                    <div className="ml-auto">
-                                        <Badge variant={getStatusVariant(selectedReport.status)} className="capitalize py-1 px-3">
-                                            {selectedReport.status}
-                                        </Badge>
+                                    <div className="flex flex-col items-end gap-1 text-xs text-muted-foreground bg-muted/30 px-3 py-2 rounded-lg border border-border/50">
+                                        <span className="flex items-center gap-1.5 font-medium text-foreground">
+                                            <Calendar className="h-3.5 w-3.5 text-primary/70" />
+                                            Reported Date
+                                        </span>
+                                        <span>{format(new Date(selectedReport.created_at), "PPP")}</span>
+                                        <span className="text-[10px] opacity-70">{format(new Date(selectedReport.created_at), "p")}</span>
                                     </div>
                                 </div>
-                            </SheetHeader>
+                            </div>
 
-                            <div className="space-y-6">
+                            <div className="p-6 space-y-8 flex-1">
+                                {/* Issue Description */}
                                 <section className="space-y-3">
-                                    <h4 className="text-sm font-semibold flex items-center gap-2 text-primary">
-                                        <AlertCircle className="h-4 w-4" />
+                                    <h4 className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                                        <AlertCircle className="h-4 w-4 text-primary" />
                                         Issue Description
                                     </h4>
-                                    <div className="bg-muted/30 p-4 rounded-xl text-sm leading-relaxed border border-muted italic">
-                                        "{selectedReport.description}"
+                                    <div className="relative group">
+                                        <div className="absolute -inset-0.5 bg-gradient-to-r from-primary/20 to-secondary/20 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-500" />
+                                        <div className="relative bg-card p-5 rounded-xl text-sm leading-relaxed border border-border/50 shadow-sm">
+                                            <span className="text-4xl absolute -top-3 -left-2 text-primary/10 font-serif">"</span>
+                                            <p className="relative z-10 text-foreground/90 font-medium">
+                                                {selectedReport.description}
+                                            </p>
+                                            <span className="text-4xl absolute -bottom-6 -right-1 text-primary/10 font-serif leading-none">"</span>
+                                        </div>
                                     </div>
                                 </section>
 
+                                {/* Screenshots */}
                                 {selectedReport.screenshot_urls?.length > 0 && (
-                                    <section className="space-y-3">
-                                        <h4 className="text-sm font-semibold flex items-center gap-2 text-primary">
-                                            <Calendar className="h-4 w-4" />
-                                            Attached Screenshots ({selectedReport.screenshot_urls.length})
+                                    <section className="space-y-4">
+                                        <h4 className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                                            <Eye className="h-4 w-4 text-primary" />
+                                            Attached Screenshots <span className="text-xs font-normal text-muted-foreground normal-case bg-muted px-2 py-0.5 rounded-full">{selectedReport.screenshot_urls.length}</span>
                                         </h4>
-                                        <div className="grid grid-cols-2 gap-3">
+                                        <div className="grid grid-cols-2 gap-4">
                                             {selectedReport.screenshot_urls.map((url: string, i: number) => (
                                                 <a
                                                     key={i}
                                                     href={url}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
-                                                    className="relative aspect-video rounded-lg overflow-hidden border border-muted hover:ring-2 hover:ring-primary transition-all group"
+                                                    className="group relative aspect-video rounded-xl overflow-hidden border border-border/50 bg-muted/20 shadow-sm hover:shadow-md transition-all hover:ring-2 hover:ring-primary/50"
                                                 >
-                                                    <img src={url} alt={`Screenshot ${i + 1}`} className="w-full h-full object-cover" />
-                                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                        <ExternalLink className="h-6 w-6 text-white" />
+                                                    <img src={url} alt={`Screenshot ${i + 1}`} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-2 text-white backdrop-blur-sm">
+                                                        <ExternalLink className="h-6 w-6" />
+                                                        <span className="text-xs font-medium">View Fullsize</span>
                                                     </div>
                                                 </a>
                                             ))}
@@ -254,52 +287,54 @@ export function BugReportsList({ initialReports }: BugReportsListProps) {
                                     </section>
                                 )}
 
-                                <section className="space-y-3 pt-4 border-t">
-                                    <h4 className="text-sm font-semibold">Update Status</h4>
-                                    <div className="flex flex-wrap gap-2">
+                                {/* Update Status */}
+                                <section className="space-y-4 pt-4 border-t border-border/50 border-dashed">
+                                    <h4 className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                                        Action Required
+                                    </h4>
+                                    <div className="flex flex-wrap gap-3">
                                         <Button
-                                            size="sm"
+                                            size="default"
                                             variant={selectedReport.status === 'pending' ? 'secondary' : 'outline'}
                                             disabled={updatingStatus}
                                             onClick={() => handleStatusUpdate(selectedReport.id, 'pending')}
-                                            className="gap-1.5"
+                                            className={cn("gap-2 flex-1 h-11 border-dashed transition-all", selectedReport.status === 'pending' && "bg-secondary border-solid font-medium")}
                                         >
-                                            <Clock className="h-3.5 w-3.5" />
-                                            Set to Pending
+                                            <Clock className="h-4 w-4" />
+                                            Mark Pending
                                         </Button>
                                         <Button
-                                            size="sm"
+                                            size="default"
                                             variant={selectedReport.status === 'reviewed' ? 'secondary' : 'outline'}
                                             disabled={updatingStatus}
                                             onClick={() => handleStatusUpdate(selectedReport.id, 'reviewed')}
-                                            className="gap-1.5"
+                                            className={cn("gap-2 flex-1 h-11 border-dashed transition-all", selectedReport.status === 'reviewed' && "bg-blue-500/10 text-blue-600 border-blue-200 border-solid font-medium hover:bg-blue-500/20")}
                                         >
-                                            <Filter className="h-3.5 w-3.5" />
+                                            <Filter className="h-4 w-4" />
                                             Mark Reviewed
                                         </Button>
                                         <Button
-                                            size="sm"
+                                            size="default"
                                             variant={selectedReport.status === 'fixed' ? 'default' : 'outline'}
                                             disabled={updatingStatus}
                                             onClick={() => handleStatusUpdate(selectedReport.id, 'fixed')}
-                                            className={cn("gap-1.5", selectedReport.status === 'fixed' && "bg-green-600 hover:bg-green-700")}
+                                            className={cn("gap-2 flex-1 h-11 transition-all shadow-sm", selectedReport.status === 'fixed'
+                                                ? "bg-green-600 hover:bg-green-700 text-white font-bold ring-2 ring-green-600/20 ring-offset-2"
+                                                : "hover:border-green-500/50 hover:text-green-600 hover:bg-green-500/5 border-dashed")}
                                         >
-                                            <CheckCircle2 className="h-3.5 w-3.5" />
-                                            Mark as Fixed
+                                            <CheckCircle2 className="h-4 w-4" />
+                                            Mark Resolved
                                         </Button>
                                     </div>
                                 </section>
                             </div>
 
-                            <div className="pt-8 border-t flex items-center justify-between text-[11px] text-muted-foreground">
-                                <div className="flex items-center gap-1">
-                                    <User className="h-3 w-3" />
-                                    Report ID: {selectedReport.id}
-                                </div>
-                                <div className="flex items-center gap-1">
-                                    <Clock className="h-3 w-3" />
-                                    Reported {format(new Date(selectedReport.created_at), "PPP p")}
-                                </div>
+                            <div className="p-4 bg-muted/20 border-t border-border/50 text-[10px] text-muted-foreground flex justify-between items-center">
+                                <span className="font-mono opacity-50">ID: {selectedReport.id}</span>
+                                <span className="flex items-center gap-1 opacity-70">
+                                    <ShieldCheck className="h-3 w-3" />
+                                    Secure Report
+                                </span>
                             </div>
                         </div>
                     )}
