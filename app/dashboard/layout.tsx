@@ -6,6 +6,7 @@ import { ensureProfileSync } from "@/lib/profile-sync";
 import { redirect } from "next/navigation";
 import React from "react";
 import { NotificationEngineProvider } from "@/components/notifications/notification-engine";
+import { config } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 
@@ -48,14 +49,18 @@ export default async function DashboardLayout({
 
   console.time(syncLabel);
   // CRITICAL: Ensure profile is synced to Supabase as soon as they reach the dashboard
-  if (!profileRes.data) {
-    console.log(`[DashboardLayout] Profile missing for ${userId}, ensuring sync...`);
+  const userEmail = clerkUser.emailAddresses[0]?.emailAddress?.toLowerCase();
+  const isAdminEmail = userEmail === config.adminEmail.toLowerCase();
+  const targetRole = isAdminEmail ? "admin" : (profileRes.data?.role || "intern");
+
+  if (!profileRes.data || (isAdminEmail && profileRes.data.role !== "admin")) {
+    console.log(`[DashboardLayout] Profile missing or role mismatch for ${userId}, ensuring sync...`);
     const syncRes = await ensureProfileSync({
       id: clerkUser.id,
-      email: clerkUser.emailAddresses[0]?.emailAddress || "",
+      email: userEmail || "",
       full_name: `${clerkUser.firstName || ""} ${clerkUser.lastName || ""}`.trim() || clerkUser.emailAddresses[0]?.emailAddress,
       avatar_url: clerkUser.imageUrl,
-      role: "intern" // Default role
+      role: targetRole
     }, supabase);
 
     if (syncRes.success) {

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { ChangelogService } from "@/lib/changelog/changelog-service";
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import { createAdminClient } from "@/lib/supabase/server";
+import { config } from "@/lib/config";
 
 /**
  * GET /api/changelogs
@@ -23,7 +24,8 @@ export async function GET() {
 export async function POST(req: Request) {
     try {
         const { userId } = await auth();
-        if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        const user = await currentUser();
+        if (!userId || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
         // Verify admin status
         const supabase = await createAdminClient();
@@ -33,12 +35,18 @@ export async function POST(req: Request) {
             .eq("user_id", userId)
             .single();
 
-        if (!profile || (profile.role !== "admin" && profile.role !== "owner")) {
+        const userEmail = user.emailAddresses[0]?.emailAddress?.toLowerCase();
+        const isAdminEmail = userEmail === config.adminEmail.toLowerCase();
+        const hasAdminRole = profile?.role === "admin" || profile?.role === "owner";
+
+        if (!isAdminEmail && !hasAdminRole) {
             return NextResponse.json({ error: "Admin access required" }, { status: 403 });
         }
 
+        const profileId = profile?.id || userId; // Fallback to userId if profile not found (unlikely but safe)
+
         const body = await req.json();
-        const result = await ChangelogService.publishRelease(body, profile.id);
+        const result = await ChangelogService.publishRelease(body, profileId);
 
         if (!result.success) {
             return NextResponse.json({ error: result.error }, { status: 400 });

@@ -12,7 +12,7 @@ export async function ensureProfileSync(user: any, supabase: SupabaseClient) {
         // 1. Check if profile already exists
         const { data: existing, error: fetchError } = await supabase
             .from("profiles")
-            .select("id, avatar_url, full_name, email")
+            .select("id, avatar_url, full_name, email, role")
             .eq("id", user.id)
             .maybeSingle();
 
@@ -63,13 +63,17 @@ export async function ensureProfileSync(user: any, supabase: SupabaseClient) {
                 console.warn("[ProfileSync] Admin notification failed:", notifErr);
             }
         } else {
-            // 3. If it DOES exist, check if it's incomplete (missing name) and self-heal
-            if (existing && (!existing.full_name || existing.full_name === "New User")) {
-                console.log(`[ProfileSync] Updating incomplete profile for: ${user.id}`);
+            // 3. If it DOES exist, check for role promotion or incomplete profile
+            const needsRoleUpdate = user.role && existing.role !== user.role;
+            const isIncomplete = !existing.full_name || existing.full_name === "New User";
+
+            if (needsRoleUpdate || isIncomplete) {
+                console.log(`[ProfileSync] Updating profile for: ${user.id} (Role Update: ${needsRoleUpdate})`);
                 await supabase.from("profiles").update({
-                    full_name: user.full_name || "New User",
-                    email: user.email || existing.email, // Ensure email is set
-                    avatar_url: user.avatar_url || existing.avatar_url
+                    full_name: user.full_name || existing.full_name,
+                    email: user.email || existing.email,
+                    avatar_url: user.avatar_url || existing.avatar_url,
+                    role: user.role || existing.role
                 }).eq("id", user.id);
             }
         }

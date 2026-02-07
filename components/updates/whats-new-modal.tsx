@@ -12,8 +12,10 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Sparkles, ChevronRight, Zap, Bug, Rocket } from "lucide-react";
+import { Rocket } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { ChangelogItem } from "./changelog-item";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface WhatsNewModalProps {
     changelog: Changelog | null;
@@ -45,77 +47,50 @@ export function WhatsNewModal({ changelog, onClose }: WhatsNewModalProps) {
 
     return (
         <Dialog open={open} onOpenChange={(val) => !val && handleClose()}>
-            <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden gap-0 border-none shadow-2xl">
+            <DialogContent className="sm:max-w-[550px] p-0 overflow-hidden gap-0 border-none shadow-2xl bg-background/95 backdrop-blur-xl">
                 {/* Header Decoration */}
-                <div className="h-32 bg-gradient-to-br from-primary via-primary/80 to-primary/40 flex items-center justify-center relative overflow-hidden">
+                <div className="h-40 bg-gradient-to-br from-primary via-primary/90 to-primary/40 flex items-center justify-center relative overflow-hidden">
                     <div className="absolute inset-0 opacity-20 pointer-events-none">
-                        <div className="absolute top-0 left-0 w-24 h-24 bg-white/20 rounded-full -translate-x-12 -translate-y-12" />
-                        <div className="absolute bottom-0 right-0 w-32 h-32 bg-white/10 rounded-full translate-x-16 translate-y-16" />
+                        <div className="absolute top-0 left-0 w-32 h-32 bg-white/20 rounded-full -translate-x-12 -translate-y-12" />
+                        <div className="absolute bottom-0 right-0 w-40 h-40 bg-white/10 rounded-full translate-x-16 translate-y-16" />
                     </div>
-                    <div className="bg-white/20 backdrop-blur-md p-4 rounded-2xl shadow-xl border border-white/20">
-                        <Rocket className="h-10 w-10 text-white" />
+                    <div className="bg-white/10 backdrop-blur-sm p-5 rounded-3xl shadow-2xl border border-white/20 animate-in zoom-in-50 duration-500">
+                        <Rocket className="h-12 w-12 text-white drop-shadow-lg" />
+                    </div>
+                    <div className="absolute bottom-4 right-6 text-white/40 font-black text-6xl select-none tracking-tighter">
+                        NEW
                     </div>
                 </div>
 
-                <div className="p-6 space-y-4">
+                <div className="p-8 space-y-6">
                     <DialogHeader>
-                        <div className="flex items-center gap-2 mb-1">
-                            <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20">
-                                {changelog.version}
+                        <div className="flex items-center gap-2 mb-2">
+                            <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/10 font-mono shadow-sm">
+                                v{changelog.version.replace(/^v/, '')}
                             </Badge>
                             {changelog.is_major && (
-                                <Badge variant="default" className="bg-amber-500 hover:bg-amber-600">
+                                <Badge variant="default" className="bg-amber-500 hover:bg-amber-600 shadow-md animate-pulse">
                                     Major Update
                                 </Badge>
                             )}
                         </div>
-                        <DialogTitle className="text-2xl font-bold">
-                            Welcome to CPS Intern {changelog.version}
+                        <DialogTitle className="text-3xl font-black tracking-tight leading-none pt-2">
+                            {changelog.title}
                         </DialogTitle>
-                        <DialogDescription className="text-base text-balance line-clamp-2">
-                            {changelog.title} — {changelog.description}
+                        <DialogDescription className="text-base text-muted-foreground/80 font-medium pt-2">
+                            We've been working hard! Here's what's new in our latest release.
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="space-y-4 py-2">
-                        {changelog.features?.length > 0 && (
-                            <div className="space-y-2">
-                                <h4 className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center">
-                                    <Zap className="h-3 w-3 mr-1.5 text-primary" /> Highlight Features
-                                </h4>
-                                <ul className="space-y-1.5">
-                                    {changelog.features.slice(0, 3).map((f, i) => (
-                                        <li key={i} className="flex items-start text-sm group">
-                                            <ChevronRight className="h-4 w-4 mr-2 text-primary/40 mt-0.5 shrink-0 group-hover:text-primary transition-colors" />
-                                            <span className="line-clamp-1">{f}</span>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-                        )}
+                    <ScrollArea className="max-h-[350px] pr-4 -mr-4">
+                        <ChangelogItem changelog={changelog} />
+                    </ScrollArea>
 
-                        {changelog.fixes?.length > 0 && (
-                            <div className="space-y-2">
-                                <h4 className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center">
-                                    <Bug className="h-3 w-3 mr-1.5 text-chart-1" /> Key Fixes
-                                </h4>
-                                <ul className="space-y-1.5">
-                                    {changelog.fixes.slice(0, 2).map((f, i) => (
-                                        <li key={i} className="flex items-start text-sm text-muted-foreground">
-                                            <span className="mr-2 opacity-50">•</span>
-                                            <span className="line-clamp-1 italic">{f}</span>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-                        )}
-                    </div>
-
-                    <DialogFooter className="pt-2 sm:justify-between gap-3">
-                        <Button variant="ghost" onClick={handleViewAll} className="flex-1 sm:flex-none">
-                            Full Release Notes
+                    <DialogFooter className="pt-4 sm:justify-between gap-4 border-t border-dashed">
+                        <Button variant="ghost" onClick={handleViewAll} className="flex-1 sm:flex-none font-bold text-muted-foreground hover:text-primary hover:bg-primary/5">
+                            View All History
                         </Button>
-                        <Button onClick={handleClose} className="flex-1 sm:flex-none font-semibold px-8 shadow-lg shadow-primary/20">
+                        <Button onClick={handleClose} className="flex-1 sm:flex-none font-black px-12 h-11 shadow-xl shadow-primary/10 hover:shadow-primary/20 scale-105 active:scale-95 transition-all">
                             Got it!
                         </Button>
                     </DialogFooter>
