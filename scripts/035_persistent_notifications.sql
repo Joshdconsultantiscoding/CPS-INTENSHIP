@@ -1,14 +1,15 @@
 -- Persistent Notifications System Migration
 -- Adds NORMAL, IMPORTANT, CRITICAL levels with retry logic and offline recovery
 -- 1. Add new columns for persistent notifications
+-- NOTE: target_group_id and user_id are TEXT to match Clerk IDs in profiles table
 ALTER TABLE public.notifications
 ADD COLUMN IF NOT EXISTS priority_level TEXT DEFAULT 'NORMAL' CHECK (
         priority_level IN ('NORMAL', 'IMPORTANT', 'CRITICAL')
     ),
     ADD COLUMN IF NOT EXISTS target_type TEXT DEFAULT 'USER' CHECK (target_type IN ('USER', 'GROUP', 'ALL')),
-    ADD COLUMN IF NOT EXISTS target_group_id UUID REFERENCES public.profiles(id) ON DELETE
-SET NULL,
-    ADD COLUMN IF NOT EXISTS repeat_interval INTEGER DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS target_group_id TEXT,
+    -- Department/Group identifier (as string)
+ADD COLUMN IF NOT EXISTS repeat_interval INTEGER DEFAULT 0,
     -- minutes between retries
 ADD COLUMN IF NOT EXISTS max_repeats INTEGER DEFAULT 0,
     -- max retry count
@@ -18,6 +19,9 @@ ADD COLUMN IF NOT EXISTS acknowledged BOOLEAN DEFAULT FALSE,
     -- for critical notifications
 ADD COLUMN IF NOT EXISTS acknowledged_at TIMESTAMPTZ,
     ADD COLUMN IF NOT EXISTS last_shown_at TIMESTAMPTZ;
+-- Ensure user_id in notifications is treated as TEXT if we're doing cross-type joins, 
+-- but public.notifications(user_id) should already be TEXT/VARCHAR from Clerk.
+-- If it's UUID, we need to be careful, but based on your profiles table it's TEXT.
 -- 2. Create index for unacknowledged critical notifications
 CREATE INDEX IF NOT EXISTS idx_notifications_critical_unack ON public.notifications(user_id, priority_level, acknowledged)
 WHERE priority_level = 'CRITICAL'
@@ -33,7 +37,8 @@ CREATE INDEX IF NOT EXISTS idx_notifications_important_retry ON public.notificat
 WHERE priority_level = 'IMPORTANT'
     AND is_read = FALSE;
 -- 4. Function to get pending notifications for a user (called on login)
-CREATE OR REPLACE FUNCTION public.get_pending_notifications(p_user_id UUID) RETURNS SETOF public.notifications AS $$ BEGIN RETURN QUERY
+-- Changed argument to TEXT to match Clerk IDs
+CREATE OR REPLACE FUNCTION public.get_pending_notifications(p_user_id TEXT) RETURNS SETOF public.notifications AS $$ BEGIN RETURN QUERY
 SELECT *
 FROM public.notifications n
 WHERE (
@@ -64,7 +69,8 @@ ORDER BY CASE
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- 5. Function to acknowledge a critical notification
-CREATE OR REPLACE FUNCTION public.acknowledge_notification(p_notification_id UUID, p_user_id UUID) RETURNS BOOLEAN AS $$
+-- Changed argument to TEXT to match Clerk IDs
+CREATE OR REPLACE FUNCTION public.acknowledge_notification(p_notification_id UUID, p_user_id TEXT) RETURNS BOOLEAN AS $$
 DECLARE v_success BOOLEAN := FALSE;
 BEGIN
 UPDATE public.notifications
@@ -96,10 +102,11 @@ RETURN COALESCE(v_new_count, 0);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- 7. Create broadcast notifications table for ALL type (tracks who has seen it)
+-- user_id is TEXT to match Clerk IDs
 CREATE TABLE IF NOT EXISTS public.notification_receipts (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     notification_id UUID REFERENCES public.notifications(id) ON DELETE CASCADE,
-    user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+    user_id TEXT REFERENCES public.profiles(id) ON DELETE CASCADE,
     is_read BOOLEAN DEFAULT FALSE,
     acknowledged BOOLEAN DEFAULT FALSE,
     read_at TIMESTAMPTZ,
@@ -110,9 +117,13 @@ CREATE TABLE IF NOT EXISTS public.notification_receipts (
 CREATE INDEX IF NOT EXISTS idx_notification_receipts_user ON public.notification_receipts(user_id, is_read);
 -- 8. Enable RLS on notification_receipts
 ALTER TABLE public.notification_receipts ENABLE ROW LEVEL SECURITY;
+-- Handle policies for TEXT user_id
+DROP POLICY IF EXISTS "Users can view own receipts" ON public.notification_receipts;
 CREATE POLICY "Users can view own receipts" ON public.notification_receipts FOR
-SELECT TO authenticated USING (user_id = auth.uid()::uuid);
+SELECT TO authenticated USING (user_id = auth.uid()::text);
+DROP POLICY IF EXISTS "System can insert receipts" ON public.notification_receipts;
 CREATE POLICY "System can insert receipts" ON public.notification_receipts FOR
-INSERT TO authenticated WITH CHECK (user_id = auth.uid()::uuid);
+INSERT TO authenticated WITH CHECK (user_id = auth.uid()::text);
+DROP POLICY IF EXISTS "Users can update own receipts" ON public.notification_receipts;
 CREATE POLICY "Users can update own receipts" ON public.notification_receipts FOR
-UPDATE TO authenticated USING (user_id = auth.uid()::uuid);
+UPDATE TO authenticated USING (user_id = auth.uid()::text);
