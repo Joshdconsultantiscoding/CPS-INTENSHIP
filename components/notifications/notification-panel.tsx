@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { useNotifications } from "./notification-provider";
+import { useNotifications } from "./notification-engine";
 import { NotificationType } from "@/lib/notifications/notification-types";
 import { formatDistanceToNow } from "date-fns";
 import {

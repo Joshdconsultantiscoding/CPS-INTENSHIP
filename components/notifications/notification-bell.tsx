@@ -8,7 +8,7 @@ import {
     PopoverContent,
     PopoverTrigger
 } from "@/components/ui/popover";
-import { useNotifications } from "./notification-provider";
+import { useNotifications } from "./notification-engine";
 import { NotificationPanel } from "./notification-panel";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";

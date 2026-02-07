@@ -22,7 +22,7 @@ import {
   CheckCheck,
   Award,
 } from "lucide-react";
-import { useNotifications } from "@/components/notifications/notification-provider";
+import { useNotifications } from "./notification-engine";
 
 interface NotificationListProps {
   notifications: AppNotification[];
@@ -83,8 +83,8 @@ export function NotificationList({ notifications, userId }: NotificationListProp
       ) : (
         <div className="space-y-2">
           {notifications.map((notification) => {
-            const Icon = typeIcons[notification.notification_type || notification.type] || Bell;
-            const colorClass = typeColors[notification.notification_type || notification.type] || typeColors.system;
+            const Icon = typeIcons[notification.notification_type] || Bell;
+            const colorClass = typeColors[notification.notification_type] || typeColors.system;
 
             return (
               <Card

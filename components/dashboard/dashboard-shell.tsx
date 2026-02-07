@@ -61,6 +61,13 @@ export function DashboardShell({
   const [isReturningUser, setIsReturningUser] = React.useState(serverOnboarding?.isCompleted || false);
   const { setIsLoading } = useLoading();
 
+  const userId = serverUser?.id || profile?.id || user?.id || "";
+
+  // Consolidate admin check to use profile or serverUser primarily for instant rendering
+  const ADMIN_EMAIL = config.adminEmail;
+  const userEmail = serverUser?.email || user?.emailAddresses[0]?.emailAddress;
+  const isAdmin = profile?.role === "admin" || (userEmail?.toLowerCase() === ADMIN_EMAIL.toLowerCase());
+
   // Presence is now handled globally by AblyClientProvider
 
   // Check Onboarding & Fetch Profile
@@ -193,13 +200,6 @@ export function DashboardShell({
   if (onboardingStatus === "flow") {
     return <OnboardingFlow userId={userId} onComplete={() => setOnboardingStatus("completed")} />;
   }
-
-  const userId = serverUser?.id || profile?.id || user?.id || "";
-
-  // Consolidate admin check to use profile or serverUser primarily for instant rendering
-  const ADMIN_EMAIL = config.adminEmail;
-  const userEmail = serverUser?.email || user?.emailAddresses[0]?.emailAddress;
-  const isAdmin = profile?.role === "admin" || (userEmail?.toLowerCase() === ADMIN_EMAIL.toLowerCase());
 
   return (
     <SidebarProvider defaultOpen={false}>
