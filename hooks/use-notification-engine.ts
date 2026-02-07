@@ -5,6 +5,8 @@ import { useAbly } from "@/providers/ably-provider";
 import { useAuth } from "@clerk/nextjs";
 import { Notification, PriorityLevel, PRIORITY_SOUNDS } from "@/lib/notifications/notification-types";
 import { toast } from "sonner";
+import { Changelog } from "@/lib/changelog/changelog-types";
+import { Profile } from "@/lib/types";
 
 interface NotificationEngineState {
     notifications: Notification[];
@@ -12,6 +14,8 @@ interface NotificationEngineState {
     criticalNotification: Notification | null;
     isLoading: boolean;
     unreadCount: number;
+    latestChangelog: Changelog | null;
+    showWhatsNew: boolean;
 }
 
 interface UseNotificationEngineReturn extends NotificationEngineState {
@@ -20,6 +24,7 @@ interface UseNotificationEngineReturn extends NotificationEngineState {
     markAllAsRead: () => Promise<void>;
     dismissNotification: (id: string) => void;
     fetchNotifications: () => Promise<void>;
+    markVersionAsSeen: (version: string) => Promise<void>;
 }
 
 // Audio refs for sounds
@@ -109,7 +114,9 @@ export function useNotificationEngine(role?: string): UseNotificationEngineRetur
         pendingNotifications: [],
         criticalNotification: null,
         isLoading: true,
-        unreadCount: 0
+        unreadCount: 0,
+        latestChangelog: null,
+        showWhatsNew: false
     });
 
     const retryTimers = useRef<Map<string, NodeJS.Timeout>>(new Map());
@@ -319,6 +326,22 @@ export function useNotificationEngine(role?: string): UseNotificationEngineRetur
         }));
     }, []);
 
+    // Mark version as seen
+    const markVersionAsSeen = useCallback(async (version: string) => {
+        if (!userId) return;
+        try {
+            await fetch("/api/profiles/update-version", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ userId, version })
+            });
+
+            setState(prev => ({ ...prev, showWhatsNew: false }));
+        } catch (e) {
+            console.warn("Failed to mark version as seen:", e);
+        }
+    }, [userId]);
+
     // Fetch pending notifications on login (offline recovery)
     useEffect(() => {
         if (!isSignedIn || !userId) return;
@@ -353,6 +376,25 @@ export function useNotificationEngine(role?: string): UseNotificationEngineRetur
                     sorted.forEach((n, index) => {
                         processNotification(n, index > 0);
                     });
+                }
+
+                // CHECK FOR NEW CHANGELOG
+                const [latestLogRes, profileRes] = await Promise.all([
+                    fetch("/api/changelogs/latest"),
+                    fetch(`/api/profiles/id/${userId}`) // Assuming this endpoint exists or similar
+                ]);
+
+                if (latestLogRes.ok && profileRes.ok) {
+                    const latestLog: Changelog = await latestLogRes.json();
+                    const profile: Profile = await profileRes.json();
+
+                    if (latestLog && profile.last_seen_version !== latestLog.version) {
+                        setState(prev => ({
+                            ...prev,
+                            latestChangelog: latestLog,
+                            showWhatsNew: true
+                        }));
+                    }
                 }
             } catch (e) {
                 console.error("Failed to fetch pending notifications:", e);
@@ -415,6 +457,7 @@ export function useNotificationEngine(role?: string): UseNotificationEngineRetur
         markAsRead,
         markAllAsRead,
         dismissNotification,
-        fetchNotifications
+        fetchNotifications,
+        markVersionAsSeen
     };
 }

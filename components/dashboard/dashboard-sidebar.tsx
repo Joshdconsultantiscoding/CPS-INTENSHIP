@@ -36,11 +36,14 @@ import {
   LogOut,
   Bug,
   Send,
+  Sparkles,
+  Rocket,
 } from "lucide-react";
 import { usePortalSettings, type PortalSettings } from "@/hooks/use-portal-settings";
 import Link from "next/link";
 import { internNavItems, adminNavItems } from "@/lib/navigation";
 import { useLoading } from "@/hooks/use-loading";
+import { Badge } from "@/components/ui/badge";
 
 interface DashboardSidebarProps {
   userId: string;
@@ -58,6 +61,19 @@ export function DashboardSidebar({ userId, profile: initialProfile }: DashboardS
 
   // Real-time Profile State
   const [profile, setProfile] = useState<Profile | null>(initialProfile);
+  const [latestVersion, setLatestVersion] = useState<string>("v0.0.0");
+
+  // Fetch latest version for NEW badges
+  useEffect(() => {
+    fetch("/api/changelogs/latest")
+      .then(res => res.json())
+      .then(data => {
+        if (data?.version) setLatestVersion(data.version);
+      })
+      .catch(() => { });
+  }, []);
+
+  const hasUnseenUpdates = profile?.last_seen_version !== latestVersion;
 
   // Sync with initial props if they change (e.g. server revalidation)
   useEffect(() => {
@@ -168,6 +184,11 @@ export function DashboardSidebar({ userId, profile: initialProfile }: DashboardS
                     >
                       <item.icon className="size-4" />
                       <span>{item.title}</span>
+                      {item.title === "Updates" && hasUnseenUpdates && (
+                        <Badge className="ml-auto px-1.5 py-0 text-[10px] bg-primary text-primary-foreground">
+                          NEW
+                        </Badge>
+                      )}
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

@@ -16,6 +16,7 @@ import {
     GraduationCap,
     Bug,
     Home,
+    Rocket,
     LucideIcon,
 } from "lucide-react";
 

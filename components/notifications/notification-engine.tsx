@@ -4,6 +4,7 @@ import React, { createContext, useContext, ReactNode } from "react";
 import { useNotificationEngine } from "@/hooks/use-notification-engine";
 import { CriticalNotificationModal } from "./critical-modal";
 import { Notification } from "@/lib/notifications/notification-types";
+import { WhatsNewModal } from "../updates/whats-new-modal";
 
 interface NotificationEngineContextType {
     notifications: Notification[];
@@ -14,6 +15,7 @@ interface NotificationEngineContextType {
     markAllAsRead: () => Promise<void>;
     dismissNotification: (id: string) => void;
     fetchNotifications: () => Promise<void>;
+    markVersionAsSeen: (version: string) => Promise<void>;
 }
 
 const NotificationEngineContext = createContext<NotificationEngineContextType | null>(null);
@@ -38,6 +40,7 @@ interface NotificationEngineProviderProps {
  * - Shows fullscreen modal for CRITICAL notifications
  * - Handles retry logic for IMPORTANT notifications
  * - Recovers pending notifications on login
+ * - Shows "What's New" modal for new versions
  */
 export function NotificationEngineProvider({ children, role }: NotificationEngineProviderProps) {
     const {
@@ -46,11 +49,14 @@ export function NotificationEngineProvider({ children, role }: NotificationEngin
         unreadCount,
         criticalNotification,
         isLoading,
+        latestChangelog,
+        showWhatsNew,
         acknowledgeNotification,
         markAsRead,
         markAllAsRead,
         dismissNotification,
-        fetchNotifications
+        fetchNotifications,
+        markVersionAsSeen
     } = useNotificationEngine(role);
 
     return (
@@ -63,7 +69,8 @@ export function NotificationEngineProvider({ children, role }: NotificationEngin
                 markAsRead,
                 markAllAsRead,
                 dismissNotification,
-                fetchNotifications
+                fetchNotifications,
+                markVersionAsSeen
             }}
         >
             {children}
@@ -72,6 +79,12 @@ export function NotificationEngineProvider({ children, role }: NotificationEngin
             <CriticalNotificationModal
                 notification={criticalNotification}
                 onAcknowledge={acknowledgeNotification}
+            />
+
+            {/* What's New modal - show once after update */}
+            <WhatsNewModal
+                changelog={latestChangelog}
+                onClose={markVersionAsSeen}
             />
         </NotificationEngineContext.Provider>
     );

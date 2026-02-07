@@ -30,6 +30,7 @@ export interface Profile {
   last_active_at: string | null;
   is_typing_to: string | null;
   auth_provider: AuthProvider | null;
+  last_seen_version?: string;
   created_at: string;
   updated_at: string;
 }
