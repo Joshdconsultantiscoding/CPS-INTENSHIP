@@ -168,10 +168,10 @@ export function MessagesInterface({
   // Media State
   const [isUploading, setIsUploading] = useState(false);
 
-  // Online dot: re-render every 2s so last_active_at-based online status updates
+  // Online dot: re-render every 10s so last_active_at-based online status updates (was 2s - too aggressive)
   const [, setPresenceTick] = useState(0);
   useEffect(() => {
-    const t = setInterval(() => setPresenceTick((c) => c + 1), 2000);
+    const t = setInterval(() => setPresenceTick((c) => c + 1), 10000);
     return () => clearInterval(t);
   }, []);
 
@@ -434,8 +434,9 @@ export function MessagesInterface({
     fetchMessages();
     updatePresence();
 
-    const msgInterval = setInterval(fetchMessages, 2000);
-    const presInterval = setInterval(updatePresence, 2000);
+    // Reduced from 2s to 10s for better performance (Ably handles real-time delivery)
+    const msgInterval = setInterval(fetchMessages, 10000);
+    const presInterval = setInterval(updatePresence, 15000);
 
     // Supabase Realtime subscription (works without Ably)
     const channelName = selectedUser
