@@ -449,16 +449,18 @@ export function CertificateTemplate({ certificate, showActions = true }: Certifi
                     variant="outline"
                     className="flex-1 border-gray-200 hover:bg-gray-50 text-gray-700 py-6 text-lg font-semibold shadow-sm hover:shadow-md transition-all rounded-xl"
                     onClick={() => {
+                        const verifyUrl = `${window.location.origin}/verify/${certificate.certificate_id}`;
+
                         if (navigator.share) {
                             navigator.share({
                                 title: `Certificate for ${certificate.intern_name}`,
                                 text: `Check out my certificate for ${certificate.course_title}!`,
-                                url: window.location.href,
+                                url: verifyUrl,
                             }).catch(console.error);
                         } else {
                             // Fallback
-                            navigator.clipboard.writeText(window.location.href);
-                            alert("Link copied to clipboard!");
+                            navigator.clipboard.writeText(verifyUrl);
+                            alert("Verification link copied to clipboard!");
                         }
                     }}
                 >

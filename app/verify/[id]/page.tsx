@@ -5,12 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
 
 interface VerifyPageProps {
-    params: {
+    params: Promise<{
         id: string;
-    };
+    }>;
 }
 
-export default async function VerifyCertificatePage({ params }: VerifyPageProps) {
+export default async function VerifyCertificatePage(props: VerifyPageProps) {
+    const params = await props.params;
     const result = await verifyCertificate(params.id);
 
     if (!result.success || !result.certificate) {
@@ -24,7 +25,7 @@ export default async function VerifyCertificatePage({ params }: VerifyPageProps)
                         <CardTitle>Certificate Not Found</CardTitle>
                     </CardHeader>
                     <CardContent className="text-center text-muted-foreground">
-                        <p>The certificate with ID <strong>{params.id}</strong> could not be found.</p>
+                        <p>The certificate with ID <strong>{params?.id || "Unknown"}</strong> could not be found.</p>
                         <p className="mt-2">Please verify the certificate ID and try again.</p>
                     </CardContent>
                 </Card>

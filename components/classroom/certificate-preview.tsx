@@ -22,7 +22,7 @@ export function CertificatePreview({ certificate }: CertificatePreviewProps) {
     const [open, setOpen] = useState(false);
 
     const handleShare = async () => {
-        const verifyUrl = `${window.location.origin}/verify/${certificate.id}`;
+        const verifyUrl = `${window.location.origin}/verify/${certificate.certificate_id}`;
 
         if (navigator.share) {
             try {
