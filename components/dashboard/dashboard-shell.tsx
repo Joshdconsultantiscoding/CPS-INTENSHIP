@@ -17,7 +17,6 @@ import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
 import { BugReportFab } from "@/components/bug-reports/bug-report-fab";
 import { RealTimeStatsSync } from "./real-time-stats-sync";
 import { useLoading } from "@/hooks/use-loading";
-import { NotificationProvider } from "@/components/notifications/notification-provider";
 
 interface DashboardShellProps {
   children: React.ReactNode;
@@ -151,29 +150,6 @@ export function DashboardShell({
     }
   }, [user, isLoaded, serverProfile]);
 
-  const userId = serverUser?.id || profile?.id || user?.id || "";
-
-  // Consolidate admin check to use profile or serverUser primarily for instant rendering
-  const ADMIN_EMAIL = config.adminEmail;
-  const userEmail = serverUser?.email || user?.emailAddresses[0]?.emailAddress;
-  const isAdmin = profile?.role === "admin" || (userEmail?.toLowerCase() === ADMIN_EMAIL.toLowerCase());
-
-  // Mounting state for suppression of hydration mismatches
-  const [hasMounted, setHasMounted] = React.useState(false);
-
-  React.useEffect(() => {
-    setHasMounted(true);
-  }, []);
-
-  // Check Onboarding & Fetch Profile
-  React.useEffect(() => {
-    async function initDashboardData() {
-      if (!user?.id) return;
-      // Logic remains but we don't block render with a loader here anymore
-      // as the shell is persistent across dashboard navigation.
-    }
-  }, [user, isLoaded, serverProfile]);
-
   // Sync Global Loading State removed from here
 
   // Don't render ONLY if we have absolutely no data yet (no clerk AND no server profile)
@@ -218,20 +194,25 @@ export function DashboardShell({
     return <OnboardingFlow userId={userId} onComplete={() => setOnboardingStatus("completed")} />;
   }
 
+  const userId = serverUser?.id || profile?.id || user?.id || "";
+
+  // Consolidate admin check to use profile or serverUser primarily for instant rendering
+  const ADMIN_EMAIL = config.adminEmail;
+  const userEmail = serverUser?.email || user?.emailAddresses[0]?.emailAddress;
+  const isAdmin = profile?.role === "admin" || (userEmail?.toLowerCase() === ADMIN_EMAIL.toLowerCase());
+
   return (
-    <NotificationProvider>
-      <SidebarProvider defaultOpen={false}>
-        <RealTimeStatsSync />
-        <DashboardSidebar userId={userId} profile={profile} />
-        <SidebarInset className="flex flex-col min-h-screen">
-          <DashboardHeader userId={userId} profile={profile} />
-          <main className="flex-1 overflow-auto p-3 sm:p-4 md:p-6 pb-20 md:pb-6">
-            {children}
-          </main>
-        </SidebarInset>
-        <MobileNav isAdmin={isAdmin} />
-        <BugReportFab userId={userId} role={profile?.role || 'intern'} />
-      </SidebarProvider>
-    </NotificationProvider>
+    <SidebarProvider defaultOpen={false}>
+      <RealTimeStatsSync />
+      <DashboardSidebar userId={userId} profile={profile} />
+      <SidebarInset className="flex flex-col min-h-screen">
+        <DashboardHeader userId={userId} profile={profile} />
+        <main className="flex-1 overflow-auto p-3 sm:p-4 md:p-6 pb-20 md:pb-6">
+          {children}
+        </main>
+      </SidebarInset>
+      <MobileNav isAdmin={isAdmin} />
+      <BugReportFab userId={userId} role={profile?.role || 'intern'} />
+    </SidebarProvider>
   );
 }

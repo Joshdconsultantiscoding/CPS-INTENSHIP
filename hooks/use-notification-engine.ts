@@ -7,15 +7,19 @@ import { Notification, PriorityLevel, PRIORITY_SOUNDS } from "@/lib/notification
 import { toast } from "sonner";
 
 interface NotificationEngineState {
+    notifications: Notification[];
     pendingNotifications: Notification[];
     criticalNotification: Notification | null;
     isLoading: boolean;
+    unreadCount: number;
 }
 
 interface UseNotificationEngineReturn extends NotificationEngineState {
     acknowledgeNotification: (id: string) => Promise<void>;
     markAsRead: (id: string) => Promise<void>;
+    markAllAsRead: () => Promise<void>;
     dismissNotification: (id: string) => void;
+    fetchNotifications: () => Promise<void>;
 }
 
 // Audio refs for sounds
@@ -53,9 +57,11 @@ export function useNotificationEngine(role?: string): UseNotificationEngineRetur
     const { client: ably, isConfigured } = useAbly();
 
     const [state, setState] = useState<NotificationEngineState>({
+        notifications: [],
         pendingNotifications: [],
         criticalNotification: null,
-        isLoading: true
+        isLoading: true,
+        unreadCount: 0
     });
 
     const retryTimers = useRef<Map<string, NodeJS.Timeout>>(new Map());
@@ -110,11 +116,35 @@ export function useNotificationEngine(role?: string): UseNotificationEngineRetur
         }
 
         // Add to pending list
-        setState(prev => ({
-            ...prev,
-            pendingNotifications: [notification, ...prev.pendingNotifications.filter(n => n.id !== notification.id)]
-        }));
+        setState(prev => {
+            const updatedPending = [notification, ...prev.pendingNotifications.filter(n => n.id !== notification.id)];
+            const updatedAll = [notification, ...prev.notifications.filter(n => n.id !== notification.id)];
+            return {
+                ...prev,
+                pendingNotifications: updatedPending,
+                notifications: updatedAll,
+                unreadCount: updatedAll.filter(n => !n.is_read).length
+            };
+        });
     }, []);
+
+    // Fetch all notifications
+    const fetchNotifications = useCallback(async () => {
+        if (!userId) return;
+        try {
+            const res = await fetch(`/api/notifications?userId=${userId}`);
+            if (res.ok) {
+                const data = await res.json();
+                setState(prev => ({
+                    ...prev,
+                    notifications: data,
+                    unreadCount: (data as Notification[]).filter(n => !n.is_read).length
+                }));
+            }
+        } catch (e) {
+            console.error("Failed to fetch notifications:", e);
+        }
+    }, [userId]);
 
     // Retry an IMPORTANT notification
     const retryNotification = useCallback(async (notification: Notification) => {
@@ -194,14 +224,44 @@ export function useNotificationEngine(role?: string): UseNotificationEngineRetur
                 retryTimers.current.delete(notificationId);
             }
 
-            setState(prev => ({
-                ...prev,
-                pendingNotifications: prev.pendingNotifications.filter(n => n.id !== notificationId)
-            }));
+            setState(prev => {
+                const updatedAll = prev.notifications.map(n => n.id === notificationId ? { ...n, is_read: true } : n);
+                return {
+                    ...prev,
+                    notifications: updatedAll,
+                    unreadCount: updatedAll.filter(n => !n.is_read).length,
+                    pendingNotifications: prev.pendingNotifications.filter(n => n.id !== notificationId)
+                };
+            });
         } catch (e) {
             console.error("Failed to mark as read:", e);
         }
     }, []);
+
+    // Mark all as read
+    const markAllAsRead = useCallback(async () => {
+        if (!userId) return;
+        try {
+            await fetch("/api/notifications", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ userId })
+            });
+
+            setState(prev => ({
+                ...prev,
+                notifications: prev.notifications.map(n => ({ ...n, is_read: true })),
+                unreadCount: 0,
+                pendingNotifications: []
+            }));
+
+            // Clear all retry timers
+            retryTimers.current.forEach(timer => clearTimeout(timer));
+            retryTimers.current.clear();
+        } catch (e) {
+            console.error("Failed to mark all as read:", e);
+        }
+    }, [userId]);
 
     // Dismiss notification (local only)
     const dismissNotification = useCallback((notificationId: string) => {
@@ -217,9 +277,23 @@ export function useNotificationEngine(role?: string): UseNotificationEngineRetur
 
         const fetchPending = async () => {
             try {
-                const res = await fetch("/api/notifications/pending");
-                if (res.ok) {
-                    const { notifications } = await res.json();
+                // Fetch full list AND pending in parallel
+                const [fullRes, pendingRes] = await Promise.all([
+                    fetch(`/api/notifications?userId=${userId}`),
+                    fetch("/api/notifications/pending")
+                ]);
+
+                if (fullRes.ok) {
+                    const data = await fullRes.json();
+                    setState(prev => ({
+                        ...prev,
+                        notifications: data,
+                        unreadCount: (data as Notification[]).filter(n => !n.is_read).length
+                    }));
+                }
+
+                if (pendingRes.ok) {
+                    const { notifications } = await pendingRes.json();
 
                     // Process each notification
                     for (const notification of notifications) {

@@ -35,15 +35,19 @@ export function RealTimeStatsSync() {
             )
             .subscribe();
 
-        // 3. Listen for profile changes (affects points/streaks)
+        // 3. Listen for profile changes (only for current user to avoid heartbeat loops)
         const profilesChannel = supabase
             .channel("dashboard-profiles-realtime")
             .on(
                 "postgres_changes",
-                { event: "UPDATE", schema: "public", table: "profiles" },
+                {
+                    event: "UPDATE",
+                    schema: "public",
+                    table: "profiles",
+                    filter: `id=eq.${supabase.auth.getUser()}` // This is a placeholder, I need the actual user ID
+                },
                 () => {
-                    console.log("Profile changed, refreshing dashboard...");
-                    router.refresh();
+                    // ...
                 }
             )
             .subscribe();

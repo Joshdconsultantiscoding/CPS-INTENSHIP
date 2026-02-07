@@ -6,18 +6,22 @@ import { CriticalNotificationModal } from "./critical-modal";
 import { Notification } from "@/lib/notifications/notification-types";
 
 interface NotificationEngineContextType {
+    notifications: Notification[];
     pendingNotifications: Notification[];
+    unreadCount: number;
     isLoading: boolean;
     markAsRead: (id: string) => Promise<void>;
+    markAllAsRead: () => Promise<void>;
     dismissNotification: (id: string) => void;
+    fetchNotifications: () => Promise<void>;
 }
 
 const NotificationEngineContext = createContext<NotificationEngineContextType | null>(null);
 
-export function useNotificationEngineContext() {
+export function useNotifications() {
     const context = useContext(NotificationEngineContext);
     if (!context) {
-        throw new Error("useNotificationEngineContext must be used within NotificationEngineProvider");
+        throw new Error("useNotifications must be used within NotificationEngineProvider");
     }
     return context;
 }
@@ -37,21 +41,29 @@ interface NotificationEngineProviderProps {
  */
 export function NotificationEngineProvider({ children, role }: NotificationEngineProviderProps) {
     const {
+        notifications,
         pendingNotifications,
+        unreadCount,
         criticalNotification,
         isLoading,
         acknowledgeNotification,
         markAsRead,
-        dismissNotification
+        markAllAsRead,
+        dismissNotification,
+        fetchNotifications
     } = useNotificationEngine(role);
 
     return (
         <NotificationEngineContext.Provider
             value={{
+                notifications,
                 pendingNotifications,
+                unreadCount,
                 isLoading,
                 markAsRead,
-                dismissNotification
+                markAllAsRead,
+                dismissNotification,
+                fetchNotifications
             }}
         >
             {children}
