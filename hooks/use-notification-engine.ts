@@ -25,6 +25,10 @@ interface UseNotificationEngineReturn extends NotificationEngineState {
 // Audio refs for sounds
 const audioCache: Record<string, HTMLAudioElement> = {};
 
+// Track if sound is blocked to play on first interaction
+let soundBlocked = false;
+let queuedSound: { name: string; loop: boolean } | null = null;
+
 function playSound(soundName: string, loop = false) {
     if (typeof window === "undefined") return null;
 
@@ -37,7 +41,28 @@ function playSound(soundName: string, loop = false) {
     const audio = audioCache[soundPath];
     audio.loop = loop;
     audio.currentTime = 0;
-    audio.play().catch(() => { }); // Ignore autoplay errors
+
+    audio.play().catch((err) => {
+        // If blocked by autoplay, queue it for first interaction
+        if (err.name === 'NotAllowedError' || err.name === 'NotSupportedError') {
+            soundBlocked = true;
+            queuedSound = { name: soundName, loop };
+
+            // Add one-time listener for interaction
+            const handleInteraction = () => {
+                if (queuedSound) {
+                    playSound(queuedSound.name, queuedSound.loop);
+                    queuedSound = null;
+                    soundBlocked = false;
+                }
+                window.removeEventListener('click', handleInteraction);
+                window.removeEventListener('keydown', handleInteraction);
+            };
+
+            window.addEventListener('click', handleInteraction, { once: true });
+            window.addEventListener('keydown', handleInteraction, { once: true });
+        }
+    });
 
     return audio;
 }
@@ -68,14 +93,14 @@ export function useNotificationEngine(role?: string): UseNotificationEngineRetur
     const alarmAudio = useRef<HTMLAudioElement | null>(null);
 
     // Process a notification based on priority level
-    const processNotification = useCallback((notification: Notification) => {
+    const processNotification = useCallback((notification: Notification, silent = false) => {
         const level = notification.priority_level || "NORMAL";
 
         switch (level) {
             case "CRITICAL":
                 // Show fullscreen modal, play alarm
                 setState(prev => ({ ...prev, criticalNotification: notification }));
-                alarmAudio.current = playSound(PRIORITY_SOUNDS.CRITICAL, true);
+                if (!silent) alarmAudio.current = playSound(PRIORITY_SOUNDS.CRITICAL, true);
                 break;
 
             case "IMPORTANT":
@@ -88,7 +113,7 @@ export function useNotificationEngine(role?: string): UseNotificationEngineRetur
                         onClick: () => window.location.href = notification.link!
                     } : undefined
                 });
-                playSound(PRIORITY_SOUNDS.IMPORTANT);
+                if (!silent) playSound(PRIORITY_SOUNDS.IMPORTANT);
 
                 // Start retry timer if configured
                 if (notification.repeat_interval > 0 && notification.repeat_count < notification.max_repeats) {
@@ -111,7 +136,7 @@ export function useNotificationEngine(role?: string): UseNotificationEngineRetur
                         onClick: () => window.location.href = notification.link!
                     } : undefined
                 });
-                playSound(PRIORITY_SOUNDS.NORMAL);
+                if (!silent) playSound(PRIORITY_SOUNDS.NORMAL);
                 break;
         }
 
@@ -293,12 +318,18 @@ export function useNotificationEngine(role?: string): UseNotificationEngineRetur
                 }
 
                 if (pendingRes.ok) {
-                    const { notifications } = await pendingRes.json();
+                    const { notifications: pending } = await pendingRes.json();
 
-                    // Process each notification
-                    for (const notification of notifications) {
-                        processNotification(notification);
-                    }
+                    // Sort by priority (CRITICAL > IMPORTANT > NORMAL)
+                    const sorted = [...pending].sort((a, b) => {
+                        const score: Record<string, number> = { CRITICAL: 3, IMPORTANT: 2, NORMAL: 1 };
+                        return (score[b.priority_level] || 0) - (score[a.priority_level] || 0);
+                    });
+
+                    // Process notifications, but play sound ONLY for the top one
+                    sorted.forEach((n, index) => {
+                        processNotification(n, index > 0);
+                    });
                 }
             } catch (e) {
                 console.error("Failed to fetch pending notifications:", e);
@@ -359,6 +390,8 @@ export function useNotificationEngine(role?: string): UseNotificationEngineRetur
         ...state,
         acknowledgeNotification,
         markAsRead,
-        dismissNotification
+        markAllAsRead,
+        dismissNotification,
+        fetchNotifications
     };
 }
