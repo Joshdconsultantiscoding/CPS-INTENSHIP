@@ -21,7 +21,7 @@ export type NotificationPriority = 'low' | 'normal' | 'high' | 'urgent';
 export type PriorityLevel = 'NORMAL' | 'IMPORTANT' | 'CRITICAL';
 
 // NEW: Target types for notification delivery
-export type TargetType = 'USER' | 'GROUP' | 'ALL';
+export type TargetType = 'USER' | 'GROUP' | 'ALL' | 'INTERNS' | 'ADMINS';
 
 export interface Notification {
     id: string;

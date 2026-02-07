@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Bell, Send, Users, User, Globe, AlertTriangle, AlertCircle, Info } from "lucide-react";
+import { Bell, Send, Users, User, Globe, AlertTriangle, AlertCircle, Info, Shield } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 interface UserProfile {
@@ -27,7 +27,7 @@ export default function SendNotificationPage() {
     const [isFetching, setIsFetching] = useState(true);
 
     // Form state
-    const [targetType, setTargetType] = useState<"USER" | "GROUP" | "ALL">("USER");
+    const [targetType, setTargetType] = useState<"USER" | "GROUP" | "ALL" | "INTERNS" | "ADMINS">("USER");
     const [targetUserId, setTargetUserId] = useState("");
     const [title, setTitle] = useState("");
     const [message, setMessage] = useState("");
@@ -173,6 +173,24 @@ export default function SendNotificationPage() {
                                 >
                                     <Globe className="h-4 w-4" />
                                     Everyone
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant={targetType === "INTERNS" ? "default" : "outline"}
+                                    onClick={() => setTargetType("INTERNS")}
+                                    className="flex items-center gap-2"
+                                >
+                                    <Users className="h-4 w-4" />
+                                    All Interns
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant={targetType === "ADMINS" ? "default" : "outline"}
+                                    onClick={() => setTargetType("ADMINS")}
+                                    className="flex items-center gap-2"
+                                >
+                                    <Shield className="h-4 w-4" />
+                                    All Admins
                                 </Button>
                             </div>
 

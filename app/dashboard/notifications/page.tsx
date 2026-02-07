@@ -8,5 +8,5 @@ export const metadata = {
 export default async function NotificationsPage() {
   const user = await getAuthUser();
 
-  return <NotificationsPageContent userId={user.id} />;
+  return <NotificationsPageContent userId={user.id} role={user.role} />;
 }

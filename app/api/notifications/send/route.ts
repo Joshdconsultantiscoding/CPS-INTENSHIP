@@ -97,6 +97,32 @@ export async function POST(req: NextRequest) {
                 }
                 break;
 
+            case "INTERNS":
+            case "ADMINS":
+                // Get all users with the specific role
+                const targetRole = targetType === "INTERNS" ? "intern" : "admin";
+                const { data: roleUsers } = await supabase
+                    .from("profiles")
+                    .select("id")
+                    .eq("role", targetRole);
+
+                if (roleUsers && roleUsers.length > 0) {
+                    const userIds = roleUsers.map(u => u.id);
+                    await createBulkNotifications(userIds, {
+                        title,
+                        message,
+                        type: type as NotificationType || "system",
+                        priorityLevel: priorityLevel as PriorityLevel,
+                        targetType: targetType,
+                        repeatInterval: repeatInterval || 0,
+                        maxRepeats: maxRepeats || 0,
+                        link,
+                        expiresAt: expiresAt ? new Date(expiresAt) : undefined
+                    });
+                    notification = { sent: userIds.length };
+                }
+                break;
+
             case "ALL":
                 notification = await broadcastNotification({
                     title,

@@ -93,6 +93,16 @@ async function publishNotification(
                 const allChannel = ably.channels.get("notifications:all");
                 await allChannel.publish("notification", notification);
                 break;
+
+            case 'INTERNS':
+                const internsChannel = ably.channels.get("notifications:interns");
+                await internsChannel.publish("notification", notification);
+                break;
+
+            case 'ADMINS':
+                const adminsChannel = ably.channels.get("notifications:admins");
+                await adminsChannel.publish("notification", notification);
+                break;
         }
 
         console.log(`[NotificationService] Published ${notification.priority_level} notification to ${targetType}`);
@@ -182,7 +192,6 @@ export async function incrementRepeatCount(notificationId: string): Promise<numb
     const { data, error } = await supabase
         .from("notifications")
         .update({
-            repeat_count: supabase.rpc ? undefined : 0, // Will use RPC instead
             last_shown_at: new Date().toISOString()
         })
         .eq("id", notificationId)
@@ -238,7 +247,7 @@ export async function getNotificationsNeedingRetry(userId: string): Promise<Noti
         .or(`user_id.eq.${userId},target_type.eq.ALL`)
         .eq("priority_level", "IMPORTANT")
         .eq("is_read", false)
-        .filter("repeat_count", "lt", supabase.rpc ? 999 : 999); // Will filter in code
+        .eq("is_read", false);
 
     if (error) {
         console.error("Error fetching retry notifications:", error);
