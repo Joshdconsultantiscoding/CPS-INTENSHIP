@@ -16,18 +16,29 @@ export async function updateProfile(userId: string, data: {
         const supabase = await createAdminClient();
 
         // 1. Sanitize data: Remove undefined keys to prevent "column not found" errors
-        // Supabase client sometimes treats 'undefined' as a column that doesn't exist
         const cleanedData = Object.fromEntries(
             Object.entries(data).filter(([_, v]) => v !== undefined)
         );
 
-        // 2. Perform update
-        // 2. Perform upsert (create if missing, update if exists)
-        // This fixes issues where a user exists in auth (Clerk) but not in DB (profiles)
+        // 2. Fetch User Email from Clerk to satisfy NOT NULL constraint on Upsert
+        // This is a "Deep Fix" for users who signed up but don't have a DB record yet
+        const { currentUser } = await import("@clerk/nextjs/server");
+        const clerkUser = await currentUser();
+        const email = clerkUser?.emailAddresses[0]?.emailAddress;
+
+        if (!email) {
+            return {
+                success: false,
+                error: "User email not found in session. Please sign in again."
+            };
+        }
+
+        // 3. Perform upsert (create if missing, update if exists)
         const { error } = await supabase
             .from("profiles")
             .upsert({
                 id: userId,
+                email: email.toLowerCase(),
                 ...cleanedData,
                 updated_at: new Date().toISOString(),
             }, {
@@ -40,7 +51,7 @@ export async function updateProfile(userId: string, data: {
             throw error;
         }
 
-        // 3. Revalidate Paths - include root layout for Sidebar avatar
+        // 4. Revalidate Paths - include root layout for Sidebar avatar
         revalidatePath("/", "layout");
         revalidatePath("/dashboard/settings");
         revalidatePath("/dashboard/interns");
@@ -48,8 +59,7 @@ export async function updateProfile(userId: string, data: {
         revalidatePath("/dashboard/tasks"); // Fix for stale dropdowns
         revalidatePath("/dashboard/reports"); // Proactive fix
 
-        // Deep Fix: Broadcast to Ably for Global Real-Time Sync (Sidebar, other users)
-        // Using centralized utility for consistency
+        // 5. Deep Fix: Broadcast to Ably for Global Real-Time Sync (Sidebar, other users)
         try {
             // Fetch current user data to ensure we broadcast the COMPLETE state
             const { data: currentProfile } = await supabase
@@ -59,9 +69,9 @@ export async function updateProfile(userId: string, data: {
                 .single();
 
             if (currentProfile) {
-                const newFirstName = cleanedData.first_name ?? currentProfile.first_name;
-                const newLastName = cleanedData.last_name ?? currentProfile.last_name;
-                const newFullName = `${newFirstName} ${newLastName}`.trim();
+                const newFirstName = (cleanedData.first_name as string) ?? currentProfile.first_name;
+                const newLastName = (cleanedData.last_name as string) ?? currentProfile.last_name;
+                const newFullName = `${newFirstName || ""} ${newLastName || ""}`.trim();
 
                 // If full_name changed, update it in the DB
                 if (newFullName !== currentProfile.full_name) {
@@ -79,8 +89,8 @@ export async function updateProfile(userId: string, data: {
                     timestamp: Date.now()
                 });
             }
-        } catch (error) {
-            console.warn("Failed to broadcast profile update:", error);
+        } catch (updateError) {
+            console.warn("Failed to broadcast profile update:", updateError);
         }
 
         return { success: true };
