@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Notification as AppNotification } from "@/lib/notifications/notification-types";
 import {
@@ -23,6 +24,14 @@ import {
   Award,
 } from "lucide-react";
 import { useNotifications } from "./notification-engine";
+import { cn } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface NotificationListProps {
   notifications: AppNotification[];
@@ -50,6 +59,7 @@ const typeColors: Record<string, string> = {
 export function NotificationList({ notifications, userId }: NotificationListProps) {
   const router = useRouter();
   const { markAsRead, markAllAsRead } = useNotifications();
+  const [selectedNotification, setSelectedNotification] = useState<AppNotification | null>(null);
 
   const handleMarkAllAsRead = async () => {
     await markAllAsRead();
@@ -125,18 +135,72 @@ export function NotificationList({ notifications, userId }: NotificationListProp
                     </Button>
                   )}
                 </CardHeader>
-                <CardContent className="pl-[4.5rem]">
+                <CardContent className="pl-[4.5rem] flex items-center justify-between">
                   <p className="text-xs text-muted-foreground">
                     {formatDistanceToNow(new Date(notification.created_at), {
                       addSuffix: true,
                     })}
                   </p>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="h-auto p-0 text-xs font-medium"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedNotification(notification);
+                      if (!notification.is_read) markAsRead(notification.id);
+                    }}
+                  >
+                    View Details
+                  </Button>
                 </CardContent>
               </Card>
             );
           })}
         </div>
       )}
+
+      {/* Detail View Dialog */}
+      <Dialog open={!!selectedNotification} onOpenChange={(open) => !open && setSelectedNotification(null)}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <div className="flex items-center gap-2 mb-2">
+              <div className={cn(
+                "h-8 w-8 rounded-full flex items-center justify-center bg-primary/10 text-primary"
+              )}>
+                {selectedNotification && (() => {
+                  const Icon = typeIcons[selectedNotification.notification_type] || Bell;
+                  return <Icon className="h-4 w-4" />;
+                })()}
+              </div>
+              <Badge variant="outline" className="text-[10px] uppercase">
+                {selectedNotification?.priority_level}
+              </Badge>
+            </div>
+            <DialogTitle>{selectedNotification?.title}</DialogTitle>
+            <DialogDescription className="text-xs pt-1">
+              Received {selectedNotification && formatDistanceToNow(new Date(selectedNotification.created_at), { addSuffix: true })}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <div className="text-sm leading-relaxed whitespace-pre-wrap">
+              {selectedNotification?.message}
+            </div>
+
+            {selectedNotification?.link && (
+              <Button
+                className="w-full"
+                onClick={() => {
+                  router.push(selectedNotification.link!);
+                  setSelectedNotification(null);
+                }}
+              >
+                Go to Link
+              </Button>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -8,10 +8,13 @@ export async function GET(request: Request) {
     if (!userId) return NextResponse.json({ error: "Missing userId" }, { status: 400 });
 
     const supabase = await createAdminClient();
+
+    // Fetch notifications where user_id matches OR it's a broadcast to all/interns/admins
+    // Note: We'll refine this later with receipts if needed, but for history visibility this works.
     const { data, error } = await supabase
         .from("notifications")
         .select("*")
-        .eq("user_id", userId)
+        .or(`user_id.eq.${userId},target_type.eq.ALL,target_type.eq.INTERNS,target_type.eq.ADMINS`)
         .order("created_at", { ascending: false })
         .limit(100);
 

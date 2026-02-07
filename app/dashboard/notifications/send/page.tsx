@@ -125,8 +125,8 @@ export default function SendNotificationPage() {
     };
 
     return (
-        <div className="container max-w-3xl py-8">
-            <Card>
+        <div className="container max-w-4xl mx-auto py-8">
+            <Card className="shadow-lg border-primary/10">
                 <CardHeader>
                     <div className="flex items-center gap-3">
                         <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
