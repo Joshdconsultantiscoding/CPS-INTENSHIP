@@ -33,36 +33,59 @@ function playSound(soundName: string, loop = false) {
     if (typeof window === "undefined") return null;
 
     const soundPath = `/sounds/${soundName}.mp3`;
+    console.log(`[NotificationEngine] Play requested: ${soundName} (loop: ${loop})`);
 
     if (!audioCache[soundPath]) {
+        console.log(`[NotificationEngine] Creating new Audio object for: ${soundName}`);
         audioCache[soundPath] = new Audio(soundPath);
+        audioCache[soundPath].load();
     }
 
     const audio = audioCache[soundPath];
     audio.loop = loop;
     audio.currentTime = 0;
 
-    audio.play().catch((err) => {
-        // If blocked by autoplay, queue it for first interaction
-        if (err.name === 'NotAllowedError' || err.name === 'NotSupportedError') {
-            soundBlocked = true;
-            queuedSound = { name: soundName, loop };
+    const playPromise = audio.play();
 
-            // Add one-time listener for interaction
-            const handleInteraction = () => {
-                if (queuedSound) {
-                    playSound(queuedSound.name, queuedSound.loop);
-                    queuedSound = null;
-                    soundBlocked = false;
-                }
-                window.removeEventListener('click', handleInteraction);
-                window.removeEventListener('keydown', handleInteraction);
-            };
+    if (playPromise !== undefined) {
+        playPromise.then(() => {
+            console.log(`[NotificationEngine] Successfully playing: ${soundName}`);
+        }).catch((err) => {
+            console.warn(`[NotificationEngine] Playback blocked by browser policy: ${err.name}`);
 
-            window.addEventListener('click', handleInteraction, { once: true });
-            window.addEventListener('keydown', handleInteraction, { once: true });
-        }
-    });
+            // If blocked by autoplay, queue it for first interaction
+            if (err.name === 'NotAllowedError' || err.name === 'NotSupportedError') {
+                soundBlocked = true;
+                queuedSound = { name: soundName, loop };
+                console.log(`[NotificationEngine] Queued "${soundName}" to play on next user interaction.`);
+
+                // Add one-time listener for interaction
+                const handleInteraction = () => {
+                    if (queuedSound) {
+                        console.log(`[NotificationEngine] User interaction detected. Attempting to play queued sound: ${queuedSound.name}`);
+                        const qSoundPath = `/sounds/${queuedSound.name}.mp3`;
+                        const qAudio = audioCache[qSoundPath];
+                        if (qAudio) {
+                            qAudio.play()
+                                .then(() => console.log(`[NotificationEngine] Queued sound "${queuedSound?.name}" played successfully.`))
+                                .catch(e => console.error(`[NotificationEngine] Failed to play queued sound even after interaction:`, e));
+                        }
+                        queuedSound = null;
+                        soundBlocked = false;
+                    }
+                    window.removeEventListener('click', handleInteraction);
+                    window.removeEventListener('keydown', handleInteraction);
+                    window.removeEventListener('mousedown', handleInteraction);
+                    window.removeEventListener('touchstart', handleInteraction);
+                };
+
+                window.addEventListener('click', handleInteraction, { once: true });
+                window.addEventListener('keydown', handleInteraction, { once: true });
+                window.addEventListener('mousedown', handleInteraction, { once: true });
+                window.addEventListener('touchstart', handleInteraction, { once: true });
+            }
+        });
+    }
 
     return audio;
 }
