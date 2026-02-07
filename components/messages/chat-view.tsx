@@ -552,6 +552,12 @@ export function ChatView({
                                 key={aiMessageKey}
                                 className={cn("flex w-full mb-3", msg.role === "user" ? "justify-end" : "justify-start")}
                             >
+                                {/* AI Avatar */}
+                                {msg.role === "assistant" && (
+                                    <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-primary to-primary/60 flex items-center justify-center mr-2 shrink-0">
+                                        <Bot className="h-4 w-4 text-white" />
+                                    </div>
+                                )}
                                 <div className={cn("max-w-[85%] sm:max-w-[70%] rounded-2xl px-4 py-2 shadow-sm relative", msg.role === "user" ? "bg-[#d9fdd3] dark:bg-[#005c4b] rounded-tr-sm" : "bg-white dark:bg-[#202c33] rounded-tl-sm border border-transparent dark:border-white/5")}>
                                     <div className="text-[15px] leading-relaxed whitespace-pre-wrap wrap-break-word">
                                         {msg.content.split("\n").map((line, i) => (
@@ -567,9 +573,35 @@ export function ChatView({
                                     </div>
                                     <div className="flex justify-end mt-1"><span className="text-[10px] opacity-60 font-bold uppercase">{formatTime(msg.timestamp)}</span></div>
                                 </div>
+                                {/* User Avatar */}
+                                {msg.role === "user" && (
+                                    <div className="h-8 w-8 rounded-full bg-slate-400 flex items-center justify-center ml-2 shrink-0 overflow-hidden">
+                                        {currentUser?.avatar_url ? (
+                                            <img src={currentUser.avatar_url} alt="" className="h-full w-full object-cover" />
+                                        ) : (
+                                            <UserIcon className="h-4 w-4 text-white" />
+                                        )}
+                                    </div>
+                                )}
                             </motion.div>
                         )
                     })}
+                    {/* AI Typing Indicator - Matches AI Assistant Page Style */}
+                    {isAIChat && aiTyping && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="flex w-full mb-3 justify-start"
+                        >
+                            <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-primary to-primary/60 flex items-center justify-center mr-2 shrink-0">
+                                <Bot className="h-4 w-4 text-white" />
+                            </div>
+                            <div className="flex items-center gap-2 rounded-2xl bg-white dark:bg-[#202c33] px-4 py-2.5 shadow-sm border border-transparent dark:border-white/5 rounded-tl-sm">
+                                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                <span className="text-sm text-muted-foreground">Thinking...</span>
+                            </div>
+                        </motion.div>
+                    )}
                 </AnimatePresence>
                 <div ref={messagesEndRef} />
             </div>
