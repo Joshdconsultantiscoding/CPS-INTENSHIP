@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { createNotification } from "@/lib/notifications/notification-service";
+import { publishGlobalUpdate } from "@/lib/ably-server";
 
 export interface CreateTaskInput {
     title: string;
@@ -89,6 +90,13 @@ export async function createTaskAction(input: CreateTaskInput): Promise<CreateTa
         } catch (notifError) {
             console.error("[Server Action] Notification failed:", notifError);
         }
+
+        // Deep Fix: Publish to Ably for real-time dashboard/graph refresh
+        await publishGlobalUpdate("task-created", {
+            taskId: data.id,
+            userId: input.assigned_to,
+            timestamp: Date.now()
+        });
 
         // Revalidate the tasks page to show the new task
         revalidatePath("/dashboard/tasks");
@@ -193,6 +201,14 @@ export async function updateTaskStatusAction(input: UpdateTaskStatusInput): Prom
                 console.warn("[Server Action] Status notification failed:", notifErr);
             }
         }
+
+        // Deep Fix: Publish to Ably for real-time dashboard/graph refresh
+        await publishGlobalUpdate("task-updated", {
+            taskId: input.taskId,
+            userId: currentTask.assigned_to,
+            status: input.status,
+            timestamp: Date.now()
+        });
 
         revalidatePath("/dashboard/tasks");
         revalidatePath("/dashboard");

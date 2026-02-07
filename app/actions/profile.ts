@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
+import { publishGlobalUpdate } from "@/lib/ably-server";
 
 export async function updateProfile(userId: string, data: {
     first_name?: string | null;
@@ -47,52 +48,39 @@ export async function updateProfile(userId: string, data: {
         revalidatePath("/dashboard/tasks"); // Fix for stale dropdowns
         revalidatePath("/dashboard/reports"); // Proactive fix
 
-        // 4. Broadcast to Ably for Global Real-Time Sync (Sidebar, other users)
-        if (process.env.ABLY_API_KEY) {
-            try {
-                const Ably = require('ably');
-                const ably = new Ably.Rest(process.env.ABLY_API_KEY);
-                // Fetch current user data to ensure we broadcast the COMPLETE state
-                // This prevents "undefined undefined" names if only avatar is updated
-                const { data: currentProfile } = await supabase
-                    .from("profiles")
-                    .select("first_name, last_name, avatar_url, role, email, full_name") // Added full_name to select
-                    .eq("id", userId)
-                    .single();
+        // Deep Fix: Broadcast to Ably for Global Real-Time Sync (Sidebar, other users)
+        // Using centralized utility for consistency
+        try {
+            // Fetch current user data to ensure we broadcast the COMPLETE state
+            const { data: currentProfile } = await supabase
+                .from("profiles")
+                .select("first_name, last_name, avatar_url, role, email, full_name")
+                .eq("id", userId)
+                .single();
 
-                if (currentProfile) {
-                    // 4a. Calculate new full_name if first_name or last_name changed
-                    const newFirstName = cleanedData.first_name ?? currentProfile.first_name;
-                    const newLastName = cleanedData.last_name ?? currentProfile.last_name;
-                    const newFullName = `${newFirstName} ${newLastName}`.trim();
+            if (currentProfile) {
+                const newFirstName = cleanedData.first_name ?? currentProfile.first_name;
+                const newLastName = cleanedData.last_name ?? currentProfile.last_name;
+                const newFullName = `${newFirstName} ${newLastName}`.trim();
 
-                    // 4b. If full_name changed, update it in the DB
-                    if (newFullName !== currentProfile.full_name) {
-                        const { error: fullNameUpdateError } = await supabase
-                            .from("profiles")
-                            .update({ full_name: newFullName })
-                            .eq("id", userId);
-
-                        if (fullNameUpdateError) {
-                            console.error("Supabase Error updating full_name:", fullNameUpdateError);
-                            // Don't throw, just log, as the main update already succeeded
-                        }
-                    }
-
-                    // 4c. Broadcast to Ably
-                    const channel = ably.channels.get("global-updates");
-                    await channel.publish("profile-updated", {
-                        userId,
-                        ...currentProfile,
-                        ...cleanedData, // Override with any new data
-                        full_name: newFullName, // Ensure broadcast uses the latest calculated full_name
-                        timestamp: Date.now()
-                    });
+                // If full_name changed, update it in the DB
+                if (newFullName !== currentProfile.full_name) {
+                    await supabase
+                        .from("profiles")
+                        .update({ full_name: newFullName })
+                        .eq("id", userId);
                 }
-            } catch (ablyError) {
-                console.warn("Failed to broadcast profile update:", ablyError);
-                // Don't fail the request if Ably fails
+
+                await publishGlobalUpdate("profile-updated", {
+                    userId,
+                    ...currentProfile,
+                    ...cleanedData,
+                    full_name: newFullName,
+                    timestamp: Date.now()
+                });
             }
+        } catch (error) {
+            console.warn("Failed to broadcast profile update:", error);
         }
 
         return { success: true };

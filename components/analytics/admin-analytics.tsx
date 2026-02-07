@@ -90,12 +90,14 @@ export function AdminAnalytics({
     channel.subscribe("task-created", handleUpdate);
     channel.subscribe("task-updated", handleUpdate);
     channel.subscribe("report-submitted", handleUpdate);
+    channel.subscribe("report-updated", handleUpdate);
     channel.subscribe("profile-updated", handleUpdate);
 
     return () => {
       channel.unsubscribe();
     };
   }, [client, isConfigured, refetchData]);
+
   const completedTasks = tasks.filter((t) => t.status === "completed").length;
   const pendingTasks = tasks.filter((t) => t.status === "pending" || t.status === "in_progress").length;
   const overdueTasks = tasks.filter(
@@ -108,10 +110,10 @@ export function AdminAnalytics({
 
   // Task status distribution
   const taskStatusData = [
-    { name: "Completed", value: completedTasks, fill: "var(--color-chart-2)" },
-    { name: "In Progress", value: tasks.filter((t) => t.status === "in_progress").length, fill: "var(--color-chart-1)" },
-    { name: "Pending", value: tasks.filter((t) => t.status === "pending").length, fill: "var(--color-chart-3)" },
-    { name: "Overdue", value: overdueTasks, fill: "var(--color-chart-4)" },
+    { name: "Completed", value: completedTasks, fill: "url(#grad-completed)" },
+    { name: "In Progress", value: tasks.filter((t) => t.status === "in_progress").length, fill: "url(#grad-inprogress)" },
+    { name: "Pending", value: tasks.filter((t) => t.status === "pending").length, fill: "url(#grad-pending)" },
+    { name: "Overdue", value: overdueTasks, fill: "url(#grad-overdue)" },
   ];
 
   // Reports over time (last 14 days)
@@ -139,55 +141,73 @@ export function AdminAnalytics({
     return {
       name: intern.full_name?.split(" ")[0] || "Unknown",
       hours: parseFloat(avgHours.toFixed(1)),
+      fill: "url(#grad-hours)"
     };
   }).slice(0, 8);
 
   return (
     <div className="space-y-6">
+      {/* Header with Live Indicator */}
+      <div className="flex items-center justify-between">
+        <div className="space-y-1">
+          <h2 className="text-xl font-bold tracking-tight">Admin Intelligence</h2>
+          <p className="text-sm text-muted-foreground">Monitor real-time program performance and intern engagement.</p>
+        </div>
+        {isConfigured && (
+          <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 flex items-center gap-2 py-1 px-3 animate-in fade-in slide-in-from-right-4 duration-500">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+            </span>
+            <span className="text-[10px] uppercase tracking-widest font-black">Real-time Stream</span>
+          </Badge>
+        )}
+      </div>
+
       {/* Overview Stats */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
+        <Card className="border-primary/5 hover:border-primary/20 transition-colors">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Interns</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+            <Users className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{interns.length}</div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground mt-1">
               Active in the program
             </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border-green-500/5 hover:border-green-500/20 transition-colors">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Task Completion</CardTitle>
-            <CheckSquare className="h-4 w-4 text-muted-foreground" />
+            <CheckSquare className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{taskCompletionRate}%</div>
-            <Progress value={taskCompletionRate} className="mt-2" />
+            <Progress value={taskCompletionRate} className="mt-3 h-1.5" />
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border-blue-500/5 hover:border-blue-500/20 transition-colors">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Reports (30d)</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
+            <FileText className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{reports.length}</div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground mt-1">
               {pendingReports} pending review
             </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border-destructive/5 hover:border-destructive/20 transition-colors">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Overdue Tasks</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
+            <Clock className="h-4 w-4 text-destructive" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-destructive">{overdueTasks}</div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground mt-1">
               Need attention
             </p>
           </CardContent>
@@ -197,10 +217,10 @@ export function AdminAnalytics({
       {/* Charts Row */}
       <div className="grid gap-4 md:grid-cols-2">
         {/* Task Distribution */}
-        <Card>
+        <Card className="overflow-hidden border-primary/10">
           <CardHeader>
-            <CardTitle>Task Distribution</CardTitle>
-            <CardDescription>Breakdown of all tasks by status</CardDescription>
+            <CardTitle className="text-base">Task Health</CardTitle>
+            <CardDescription>Breakdown of all program tasks by status</CardDescription>
           </CardHeader>
           <CardContent>
             <ChartContainer
@@ -211,6 +231,24 @@ export function AdminAnalytics({
             >
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
+                  <defs>
+                    <linearGradient id="grad-completed" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#22c55e" stopOpacity={0.8} />
+                      <stop offset="100%" stopColor="#22c55e" stopOpacity={0.4} />
+                    </linearGradient>
+                    <linearGradient id="grad-inprogress" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.8} />
+                      <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.4} />
+                    </linearGradient>
+                    <linearGradient id="grad-pending" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#94a3b8" stopOpacity={0.8} />
+                      <stop offset="100%" stopColor="#94a3b8" stopOpacity={0.4} />
+                    </linearGradient>
+                    <linearGradient id="grad-overdue" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#ef4444" stopOpacity={0.8} />
+                      <stop offset="100%" stopColor="#ef4444" stopOpacity={0.4} />
+                    </linearGradient>
+                  </defs>
                   <ChartTooltip content={<ChartTooltipContent />} />
                   <Pie
                     data={taskStatusData}
@@ -220,9 +258,10 @@ export function AdminAnalytics({
                     outerRadius={80}
                     paddingAngle={5}
                     dataKey="value"
+                    animationDuration={1500}
                   >
                     {taskStatusData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.fill} />
+                      <Cell key={`cell-${index}`} fill={entry.fill} stroke="transparent" />
                     ))}
                   </Pie>
                 </PieChart>
@@ -232,10 +271,10 @@ export function AdminAnalytics({
               {taskStatusData.map((item) => (
                 <div key={item.name} className="flex items-center gap-2">
                   <div
-                    className="h-3 w-3 rounded-full"
-                    style={{ backgroundColor: item.fill }}
+                    className="h-2 w-2 rounded-full"
+                    style={{ background: item.fill }}
                   />
-                  <span className="text-sm text-muted-foreground">
+                  <span className="text-xs font-medium text-muted-foreground">
                     {item.name}: {item.value}
                   </span>
                 </div>
@@ -245,28 +284,35 @@ export function AdminAnalytics({
         </Card>
 
         {/* Reports Over Time */}
-        <Card>
+        <Card className="overflow-hidden border-primary/10">
           <CardHeader>
-            <CardTitle>Daily Reports Trend</CardTitle>
-            <CardDescription>Report submissions over the last 14 days</CardDescription>
+            <CardTitle className="text-base">Daily Submission Flow</CardTitle>
+            <CardDescription>Reporting pipeline over the last 14 days</CardDescription>
           </CardHeader>
           <CardContent>
             <ChartContainer
               config={{
                 reports: {
                   label: "Reports",
-                  color: "var(--color-primary)",
+                  color: "hsl(var(--primary))",
                 },
               }}
               className="h-[250px]"
             >
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={reportsOverTime}>
+                  <defs>
+                    <linearGradient id="grad-reports" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
                   <XAxis
                     dataKey="date"
                     tickLine={false}
                     axisLine={false}
                     fontSize={12}
+                    tickMargin={10}
                     interval={1}
                   />
                   <YAxis
@@ -275,14 +321,14 @@ export function AdminAnalytics({
                     fontSize={12}
                     allowDecimals={false}
                   />
-                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <ChartTooltip content={<ChartTooltipContent indicator="dot" />} />
                   <Area
                     type="monotone"
                     dataKey="reports"
                     stroke="var(--color-primary)"
-                    fill="var(--color-primary)"
-                    fillOpacity={0.2}
+                    fill="url(#grad-reports)"
                     strokeWidth={2}
+                    animationDuration={1500}
                   />
                 </AreaChart>
               </ResponsiveContainer>
@@ -294,38 +340,38 @@ export function AdminAnalytics({
       {/* Second Row */}
       <div className="grid gap-4 md:grid-cols-2">
         {/* Top Performers */}
-        <Card>
+        <Card className="border-primary/10">
           <CardHeader>
-            <CardTitle>Top Performers</CardTitle>
-            <CardDescription>Interns ranked by total points earned</CardDescription>
+            <CardTitle className="text-base">Leaderboard</CardTitle>
+            <CardDescription>Interns ranked by program points (all-time)</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               {topPerformers.map((intern, index) => (
                 <div
                   key={intern.id}
-                  className="flex items-center justify-between"
+                  className="flex items-center justify-between group"
                 >
                   <div className="flex items-center gap-3">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-sm font-medium">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted group-hover:bg-primary/20 group-hover:text-primary text-xs font-bold transition-colors">
                       {index + 1}
                     </span>
-                    <Avatar className="h-8 w-8">
+                    <Avatar className="h-9 w-9 border-2 border-background shadow-sm">
                       <AvatarImage src={intern.avatar_url || ""} />
-                      <AvatarFallback>
+                      <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
                         {intern.full_name?.charAt(0) || "U"}
                       </AvatarFallback>
                     </Avatar>
-                    <div>
-                      <p className="text-sm font-medium">{intern.full_name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {intern.department || "No department"}
+                    <div className="space-y-0.5">
+                      <p className="text-sm font-bold leading-none">{intern.full_name}</p>
+                      <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-black opacity-60">
+                        {intern.department || "General"}
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Trophy className="h-4 w-4 text-chart-3" />
-                    <span className="font-medium">{intern.total_points || 0}</span>
+                  <div className="flex items-center gap-2 bg-primary/5 px-3 py-1.5 rounded-full border border-primary/10">
+                    <Trophy className="h-3.5 w-3.5 text-primary" />
+                    <span className="text-sm font-black text-primary">{intern.total_points || 0}</span>
                   </div>
                 </div>
               ))}
@@ -334,23 +380,29 @@ export function AdminAnalytics({
         </Card>
 
         {/* Average Hours */}
-        <Card>
+        <Card className="border-primary/10">
           <CardHeader>
-            <CardTitle>Average Daily Hours</CardTitle>
-            <CardDescription>Average working hours per intern</CardDescription>
+            <CardTitle className="text-base">Resource Allocation</CardTitle>
+            <CardDescription>Average productive hours per intern day</CardDescription>
           </CardHeader>
           <CardContent>
             <ChartContainer
               config={{
                 hours: {
-                  label: "Hours",
-                  color: "var(--color-chart-2)",
+                  label: "Average Hours",
+                  color: "hsl(var(--primary))",
                 },
               }}
               className="h-[250px]"
             >
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={hoursByIntern} layout="vertical">
+                <BarChart data={hoursByIntern} layout="vertical" margin={{ left: -20 }}>
+                  <defs>
+                    <linearGradient id="grad-hours" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="var(--color-primary)" stopOpacity={0.8} />
+                      <stop offset="100%" stopColor="var(--color-primary)" stopOpacity={0.2} />
+                    </linearGradient>
+                  </defs>
                   <XAxis type="number" domain={[0, 12]} hide />
                   <YAxis
                     dataKey="name"
@@ -358,13 +410,15 @@ export function AdminAnalytics({
                     tickLine={false}
                     axisLine={false}
                     fontSize={12}
-                    width={60}
+                    width={80}
                   />
-                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <ChartTooltip content={<ChartTooltipContent hideLabel />} />
                   <Bar
                     dataKey="hours"
-                    fill="var(--color-chart-2)"
-                    radius={4}
+                    fill="url(#grad-hours)"
+                    radius={[0, 4, 4, 0]}
+                    animationDuration={1500}
+                    barSize={20}
                   />
                 </BarChart>
               </ResponsiveContainer>

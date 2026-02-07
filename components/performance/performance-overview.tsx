@@ -107,6 +107,7 @@ export function PerformanceOverview({
     channel.subscribe("task-created", handleUpdate);
     channel.subscribe("task-updated", handleUpdate);
     channel.subscribe("report-submitted", handleUpdate);
+    channel.subscribe("report-updated", handleUpdate);
     channel.subscribe("profile-updated", handleUpdate);
 
     return () => {
@@ -131,21 +132,22 @@ export function PerformanceOverview({
     };
   });
 
-  // Prepare mood distribution
+  // Prepare mood distribution - Normalize to lowercase for reliable mapping
   const moodCounts = reports.reduce(
     (acc, r) => {
-      acc[r.mood] = (acc[r.mood] || 0) + 1;
+      const mood = (r.mood || "neutral").toLowerCase();
+      acc[mood] = (acc[mood] || 0) + 1;
       return acc;
     },
     {} as Record<string, number>
   );
 
   const moodData = [
-    { mood: "Great", count: moodCounts.great || 0, fill: "var(--color-chart-2)" },
-    { mood: "Good", count: moodCounts.good || 0, fill: "var(--color-chart-1)" },
-    { mood: "Neutral", count: moodCounts.neutral || 0, fill: "var(--color-muted)" },
-    { mood: "Challenging", count: moodCounts.challenging || 0, fill: "var(--color-chart-3)" },
-    { mood: "Difficult", count: moodCounts.difficult || 0, fill: "var(--color-chart-4)" },
+    { mood: "Great", count: moodCounts.great || 0, fill: "url(#grad-great)" },
+    { mood: "Good", count: moodCounts.good || 0, fill: "url(#grad-good)" },
+    { mood: "Neutral", count: moodCounts.neutral || 0, fill: "url(#grad-neutral)" },
+    { mood: "Challenging", count: moodCounts.challenging || 0, fill: "url(#grad-challenging)" },
+    { mood: "Difficult", count: moodCounts.difficult || 0, fill: "url(#grad-difficult)" },
   ];
 
   // Calculate average hours worked
@@ -158,50 +160,67 @@ export function PerformanceOverview({
 
   return (
     <div className="space-y-6">
+      {/* Header with Live Indicator */}
+      <div className="flex items-center justify-between">
+        <div className="space-y-1">
+          <h2 className="text-xl font-bold tracking-tight">Performance Statistics</h2>
+          <p className="text-sm text-muted-foreground">Detailed metrics and live growth tracking.</p>
+        </div>
+        {isConfigured && (
+          <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 flex items-center gap-2 py-1 px-3 animate-in fade-in slide-in-from-right-4 duration-500">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+            </span>
+            <span className="text-[10px] uppercase tracking-widest font-black">Live Sync Active</span>
+          </Badge>
+        )}
+      </div>
+
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
+        <Card className="border-primary/5 hover:border-primary/20 transition-colors">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Points</CardTitle>
-            <Trophy className="h-4 w-4 text-muted-foreground" />
+            <Trophy className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{profile?.total_points || totalPoints}</div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground mt-1">
               From {completedTasks} completed tasks
             </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border-orange-500/5 hover:border-orange-500/20 transition-colors">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Current Streak</CardTitle>
-            <Flame className="h-4 w-4 text-muted-foreground" />
+            <Flame className="h-4 w-4 text-orange-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{profile?.current_streak || 0} days</div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground mt-1">
               Best: {profile?.longest_streak || 0} days
             </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border-green-500/5 hover:border-green-500/20 transition-colors">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Task Completion</CardTitle>
-            <Target className="h-4 w-4 text-muted-foreground" />
+            <Target className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{completionRate}%</div>
-            <Progress value={completionRate} className="mt-2" />
+            <Progress value={completionRate} className="mt-3 h-1.5" />
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border-blue-500/5 hover:border-blue-500/20 transition-colors">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Avg. Hours/Day</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
+            <Clock className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{avgHours}h</div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground mt-1">
               Based on {submittedReports} reports
             </p>
           </CardContent>
@@ -211,28 +230,35 @@ export function PerformanceOverview({
       {/* Charts Row */}
       <div className="grid gap-4 md:grid-cols-2">
         {/* Tasks Completed Chart */}
-        <Card>
+        <Card className="overflow-hidden border-primary/10">
           <CardHeader>
-            <CardTitle>Tasks Completed</CardTitle>
-            <CardDescription>Your task completion over the last 7 days</CardDescription>
+            <CardTitle className="text-base">Productivity Trend</CardTitle>
+            <CardDescription>Task completion over the last 7 days</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-2">
             <ChartContainer
               config={{
                 completed: {
                   label: "Completed",
-                  color: "var(--color-primary)",
+                  color: "hsl(var(--primary))",
                 },
               }}
               className="h-[200px]"
             >
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={last7Days}>
+                  <defs>
+                    <linearGradient id="colorCompleted" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
                   <XAxis
                     dataKey="date"
                     tickLine={false}
                     axisLine={false}
                     fontSize={12}
+                    tickMargin={10}
                   />
                   <YAxis
                     tickLine={false}
@@ -240,14 +266,14 @@ export function PerformanceOverview({
                     fontSize={12}
                     allowDecimals={false}
                   />
-                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
                   <Area
                     type="monotone"
                     dataKey="completed"
                     stroke="var(--color-primary)"
-                    fill="var(--color-primary)"
-                    fillOpacity={0.2}
+                    fill="url(#colorCompleted)"
                     strokeWidth={2}
+                    animationDuration={1500}
                   />
                 </AreaChart>
               </ResponsiveContainer>
@@ -256,22 +282,42 @@ export function PerformanceOverview({
         </Card>
 
         {/* Mood Distribution Chart */}
-        <Card>
+        <Card className="overflow-hidden border-primary/10">
           <CardHeader>
-            <CardTitle>Mood Distribution</CardTitle>
-            <CardDescription>How you've been feeling during your internship</CardDescription>
+            <CardTitle className="text-base">Mood Distribution</CardTitle>
+            <CardDescription>Frequency of mood reports in the last 30 days</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-2">
             <ChartContainer
               config={{
-                count: {
-                  label: "Reports",
-                },
+                count: { label: "Reports" },
               }}
               className="h-[200px]"
             >
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={moodData} layout="vertical">
+                <BarChart data={moodData} layout="vertical" margin={{ left: -20 }}>
+                  <defs>
+                    <linearGradient id="grad-great" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="#22c55e" stopOpacity={0.8} />
+                      <stop offset="100%" stopColor="#22c55e" stopOpacity={0.3} />
+                    </linearGradient>
+                    <linearGradient id="grad-good" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.8} />
+                      <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.3} />
+                    </linearGradient>
+                    <linearGradient id="grad-neutral" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="#94a3b8" stopOpacity={0.8} />
+                      <stop offset="100%" stopColor="#94a3b8" stopOpacity={0.3} />
+                    </linearGradient>
+                    <linearGradient id="grad-challenging" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.8} />
+                      <stop offset="100%" stopColor="#f59e0b" stopOpacity={0.3} />
+                    </linearGradient>
+                    <linearGradient id="grad-difficult" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="#ef4444" stopOpacity={0.8} />
+                      <stop offset="100%" stopColor="#ef4444" stopOpacity={0.3} />
+                    </linearGradient>
+                  </defs>
                   <XAxis type="number" hide />
                   <YAxis
                     dataKey="mood"
@@ -279,10 +325,15 @@ export function PerformanceOverview({
                     tickLine={false}
                     axisLine={false}
                     fontSize={12}
-                    width={80}
+                    width={100}
                   />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar dataKey="count" radius={4} />
+                  <ChartTooltip content={<ChartTooltipContent hideLabel />} />
+                  <Bar
+                    dataKey="count"
+                    radius={[0, 4, 4, 0]}
+                    animationDuration={1500}
+                    barSize={20}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </ChartContainer>

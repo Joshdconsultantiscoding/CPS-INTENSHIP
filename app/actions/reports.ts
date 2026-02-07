@@ -5,6 +5,7 @@ import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import { createNotification } from "@/lib/notifications/notification-service";
 import { config } from "@/lib/config";
+import { publishGlobalUpdate } from "@/lib/ably-server";
 
 export async function saveDailyReport(data: {
     id?: string | null;
@@ -99,6 +100,15 @@ export async function saveDailyReport(data: {
             }
         }
 
+        // Deep Fix: Publish to Ably for real-time dashboard/graph refresh
+        await publishGlobalUpdate("report-submitted", {
+            reportId: report.id,
+            userId: data.user_id,
+            status: data.status,
+            reportDate: data.report_date,
+            timestamp: Date.now()
+        });
+
         revalidatePath("/dashboard/reports");
         revalidatePath("/dashboard");
 
@@ -152,6 +162,14 @@ export async function reviewDailyReport(data: {
             priority: data.rating >= 4 ? 'high' : 'normal',
             sound: data.rating >= 4 ? 'success' : 'notification',
             metadata: { reportId: data.reportId, rating: data.rating }
+        });
+
+        // Deep Fix: Publish to Ably for real-time dashboard/graph refresh
+        await publishGlobalUpdate("report-updated", {
+            reportId: data.reportId,
+            userId: data.internId,
+            status: "reviewed",
+            timestamp: Date.now()
         });
 
         revalidatePath("/dashboard/reports");
