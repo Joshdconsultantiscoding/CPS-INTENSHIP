@@ -729,28 +729,33 @@ export function MessagesInterface({
       setAiMessages((prev) => [...prev, userMsg]);
       setAiTyping(true);
 
+      // Simulate AI thinking delay (like the AI assistant page)
       setTimeout(async () => {
         const response = generateResponse(content);
-        const aiMsg: AIMessage = {
-          id: `ai-${Date.now()}`,
+        const aiMsgId = `ai-${Date.now()}`;
+
+        // Add AI message with streaming content (character by character like AI assistant page)
+        setAiMessages((prev) => [...prev, {
+          id: aiMsgId,
           role: "assistant",
           content: "",
           timestamp: new Date(),
           status: "read"
-        };
-        setAiMessages((prev) => [...prev, aiMsg]);
+        }]);
+
+        // Turn off typing indicator once message bubble appears
         setAiTyping(false);
 
-        // Typewriter effect
-        const words = response.split(" ");
-        let current = "";
-        for (let i = 0; i < words.length; i++) {
-          current += (i === 0 ? "" : " ") + words[i];
-          const text = current;
-          setAiMessages((prev) => prev.map((m) => m.id === aiMsg.id ? { ...m, content: text } : m));
-          await new Promise((r) => setTimeout(r, 20));
+        // Stream the response character-by-character (smooth like AI assistant page)
+        for (let i = 0; i <= response.length; i++) {
+          const partialText = response.slice(0, i);
+          setAiMessages((prev) => prev.map((m) =>
+            m.id === aiMsgId ? { ...m, content: partialText } : m
+          ));
+          // Fast streaming speed (similar to real AI streaming)
+          await new Promise((r) => setTimeout(r, 15));
         }
-      }, 500);
+      }, 800); // Initial thinking delay
       return;
     }
 
