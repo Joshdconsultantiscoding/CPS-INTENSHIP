@@ -223,3 +223,214 @@ export interface AdminStats {
   averagePerformance: number;
   topPerformers: Profile[];
 }
+
+// =============================================
+// LMS TYPES
+// =============================================
+
+export type QuizQuestionType = 'mcq' | 'multi_select' | 'boolean' | 'short_answer' | 'file_upload';
+export type QuizAttemptStatus = 'in_progress' | 'submitted' | 'timed_out' | 'flagged';
+export type QuizAttachmentLevel = 'course' | 'module' | 'lesson';
+
+export interface Quiz {
+  id: string;
+  title: string;
+  description: string | null;
+  course_id: string | null;
+  module_id: string | null;
+  lesson_id: string | null;
+  attachment_level: QuizAttachmentLevel;
+  time_limit_seconds: number;
+  passing_score: number;
+  attempts_allowed: number;
+  randomize_questions: boolean;
+  randomize_options: boolean;
+  show_correct_answers: boolean;
+  show_explanations: boolean;
+  strict_mode: boolean;
+  fullscreen_required: boolean;
+  detect_tab_switch: boolean;
+  auto_submit_on_cheat: boolean;
+  is_published: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  questions?: QuizQuestion[];
+}
+
+export interface QuizQuestionOption {
+  id: string;
+  text: string;
+  image_url?: string;
+}
+
+export interface QuizQuestion {
+  id: string;
+  quiz_id: string;
+  type: QuizQuestionType;
+  question_text: string;
+  question_image_url: string | null;
+  options: QuizQuestionOption[];
+  correct_answers: string[]; // Hidden from interns in app layer
+  points: number;
+  partial_credit: boolean;
+  explanation: string | null;
+  hint: string | null;
+  order_index: number;
+  is_required: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface QuizAttempt {
+  id: string;
+  quiz_id: string;
+  user_id: string;
+  started_at: string;
+  ended_at: string | null;
+  time_spent_seconds: number;
+  status: QuizAttemptStatus;
+  total_points: number;
+  earned_points: number;
+  score_percentage: number;
+  passed: boolean;
+  tab_switches: number;
+  idle_time_seconds: number;
+  fullscreen_exits: number;
+  flagged_reason: string | null;
+  attempt_number: number;
+  created_at: string;
+  quiz?: Quiz;
+  answers?: QuizAnswer[];
+}
+
+export interface QuizAnswer {
+  id: string;
+  attempt_id: string;
+  question_id: string;
+  selected_options: string[];
+  text_answer: string | null;
+  file_url: string | null;
+  is_correct: boolean | null;
+  points_earned: number;
+  auto_graded: boolean;
+  admin_feedback: string | null;
+  answered_at: string;
+  time_to_answer_seconds: number;
+  question?: QuizQuestion;
+}
+
+export interface LessonTimeTracking {
+  id: string;
+  user_id: string;
+  lesson_id: string;
+  course_id: string;
+  first_accessed_at: string;
+  last_accessed_at: string;
+  total_active_seconds: number;
+  total_idle_seconds: number;
+  current_session_start: string | null;
+  is_paused: boolean;
+  pause_reason: string | null;
+  completed: boolean;
+  completed_at: string | null;
+  completion_percentage: number;
+  video_watched_seconds: number;
+  content_scroll_percentage: number;
+}
+
+export interface CourseCertificate {
+  id: string;
+  certificate_id: string;
+  user_id: string;
+  course_id: string;
+  intern_name: string;
+  course_title: string;
+  completion_date: string;
+  final_score: number | null;
+  total_time_spent_seconds: number;
+  certificate_url: string | null;
+  template_used: string;
+  verification_url: string | null;
+  qr_code_url: string | null;
+  is_valid: boolean;
+  revoked_at: string | null;
+  revoked_reason: string | null;
+  issued_by: string | null;
+  admin_signature: string | null;
+  created_at: string;
+}
+
+export interface CourseSettings {
+  id: string;
+  course_id: string;
+  required_time_percentage: number;
+  allow_skip_lessons: boolean;
+  auto_mark_complete: boolean;
+  auto_move_next: boolean;
+  quiz_required_for_completion: boolean;
+  retry_failed_quizzes: boolean;
+  show_quiz_feedback: boolean;
+  lock_next_until_previous: boolean;
+  lock_quiz_until_lesson: boolean;
+  certificate_on_completion: boolean;
+  min_score_for_certificate: number;
+  enable_strict_mode: boolean;
+  strict_mode_for_quizzes: boolean;
+  strict_mode_for_lessons: boolean;
+  enable_time_tracking: boolean;
+  updated_at: string;
+}
+
+export interface CourseWithProgress {
+  id: string;
+  title: string;
+  description: string | null;
+  thumbnail_url: string | null;
+  level: string;
+  duration_minutes: number;
+  is_published: boolean;
+  course_modules: ModuleWithProgress[];
+  total_lessons: number;
+  completed_lessons: number;
+  progress_percentage: number;
+  total_time_spent_seconds: number;
+  certificate?: CourseCertificate;
+  course_settings?: CourseSettings;
+  is_completed?: boolean;
+  // Legacy or Direct from courses table (some columns were added directly to courses)
+  enable_time_tracking?: boolean;
+  enable_strict_mode?: boolean;
+  passing_score?: number;
+  certificate_enabled?: boolean;
+  auto_issue_certificate?: boolean;
+}
+
+export interface ModuleWithProgress {
+  id: string;
+  title: string;
+  description: string | null;
+  order_index: number;
+  course_lessons: LessonWithProgress[];
+  quiz_id: string | null;
+  quiz?: Quiz;
+  completed?: boolean;
+  progress_percentage?: number;
+}
+
+export interface LessonWithProgress {
+  id: string;
+  title: string;
+  content: string | null;
+  video_url: string | null;
+  duration_minutes: number;
+  order_index: number;
+  required_time_seconds: number;
+  is_locked: boolean;
+  allow_skip: boolean;
+  quiz_id: string | null;
+  completed: boolean;
+  time_spent_seconds: number;
+  quiz?: Quiz;
+  quiz_attempt?: QuizAttempt;
+}
