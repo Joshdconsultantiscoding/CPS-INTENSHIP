@@ -21,10 +21,18 @@ export async function updateProfile(userId: string, data: {
         );
 
         // 2. Perform update
+        // 2. Perform upsert (create if missing, update if exists)
+        // This fixes issues where a user exists in auth (Clerk) but not in DB (profiles)
         const { error } = await supabase
             .from("profiles")
-            .update(cleanedData)
-            .eq("id", userId);
+            .upsert({
+                id: userId,
+                ...cleanedData,
+                updated_at: new Date().toISOString(),
+            }, {
+                onConflict: "id",
+                ignoreDuplicates: false
+            });
 
         if (error) {
             console.error("Supabase Error in updateProfile:", error);

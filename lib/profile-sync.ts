@@ -12,7 +12,7 @@ export async function ensureProfileSync(user: any, supabase: SupabaseClient) {
         // 1. Check if profile already exists
         const { data: existing, error: fetchError } = await supabase
             .from("profiles")
-            .select("id, avatar_url")
+            .select("id, avatar_url, full_name, email")
             .eq("id", user.id)
             .maybeSingle();
 
@@ -63,10 +63,15 @@ export async function ensureProfileSync(user: any, supabase: SupabaseClient) {
                 console.warn("[ProfileSync] Admin notification failed:", notifErr);
             }
         } else {
-            // 3. If it DOES exist, we do nothing to the avatar/name.
-            // We might want to update last_active_at or similar if needed,
-            // but we avoid destructive overwrites of user-controlled fields.
-            // console.log(`[ProfileSync] Profile already exists for: ${user.id}, preserving existing data.`);
+            // 3. If it DOES exist, check if it's incomplete (missing name) and self-heal
+            if (existing && (!existing.full_name || existing.full_name === "New User")) {
+                console.log(`[ProfileSync] Updating incomplete profile for: ${user.id}`);
+                await supabase.from("profiles").update({
+                    full_name: user.full_name || "New User",
+                    email: user.email || existing.email, // Ensure email is set
+                    avatar_url: user.avatar_url || existing.avatar_url
+                }).eq("id", user.id);
+            }
         }
 
         return { success: true };

@@ -78,6 +78,52 @@ export async function POST(req: Request) {
             console.error('Error upserting profile:', error)
             return new Response('Error upserting profile', { status: 500 })
         }
+
+        // NEW: Notify admins and broadcast when a NEW user is created
+        if (eventType === 'user.created') {
+            try {
+                // 1. Notify all admins about the new intern
+                const { data: admins } = await supabase
+                    .from('profiles')
+                    .select('id')
+                    .eq('role', 'admin');
+
+                if (admins && admins.length > 0) {
+                    const { createNotification } = await import('@/lib/notifications/notification-service');
+                    for (const admin of admins) {
+                        await createNotification({
+                            userId: admin.id,
+                            title: 'New Intern Registered',
+                            message: `New intern '${fullName || email}' just joined the platform.`,
+                            type: 'system',
+                            link: '/dashboard/interns',
+                            priority: 'normal',
+                            metadata: { internId: id }
+                        });
+                    }
+                    console.log(`[Webhook] Notified ${admins.length} admins about new intern: ${id}`);
+                }
+
+                // 2. Broadcast via Ably for real-time UI updates (admin dashboards, interns list)
+                if (process.env.ABLY_API_KEY) {
+                    const Ably = require('ably');
+                    const ably = new Ably.Rest(process.env.ABLY_API_KEY);
+                    const channel = ably.channels.get('global-updates');
+                    await channel.publish('new-intern', {
+                        id: id,
+                        email: email,
+                        full_name: fullName,
+                        avatar_url: image_url,
+                        role: role,
+                        created_at: new Date().toISOString()
+                    });
+                    console.log(`[Webhook] Broadcasted new intern via Ably: ${id}`);
+                }
+            } catch (notifyError) {
+                console.warn('[Webhook] Non-fatal error during admin notification:', notifyError);
+                // Don't fail the webhook for notification errors
+            }
+        }
     }
 
     return new Response('', { status: 200 })

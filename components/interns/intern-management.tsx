@@ -161,12 +161,29 @@ export function InternManagement({
           );
         }
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "profiles",
+        },
+        (payload) => {
+          // Handle new profile insertions from Supabase
+          setUsers((prev) => {
+            if (prev.find((u) => u.id === payload.new.id)) return prev;
+            return [payload.new as UserProfile, ...prev];
+          });
+        }
+      )
       .subscribe();
 
     // 2. Ably Global Updates (Bypasses RLS issues)
     let ablyChannel: any = null;
     if (ablyClient) {
       ablyChannel = ablyClient.channels.get("global-updates");
+
+      // Listen for profile updates
       ablyChannel.subscribe("profile-updated", (message: any) => {
         const { userId, ...updates } = message.data;
         setUsers((prev) =>
@@ -174,6 +191,27 @@ export function InternManagement({
             u.id === userId ? { ...u, ...updates } : u
           )
         );
+      });
+
+      // CRITICAL: Listen for new intern signups (real-time admin sync)
+      ablyChannel.subscribe("new-intern", (message: any) => {
+        const newIntern = message.data;
+        console.log("[InternManagement] New intern via Ably:", newIntern.id);
+        setUsers((prev) => {
+          // Prevent duplicates
+          if (prev.find((u) => u.id === newIntern.id)) return prev;
+          // Add to top of list
+          return [{
+            ...newIntern,
+            role: newIntern.role || "intern",
+            total_points: 0,
+            current_streak: 0,
+            longest_streak: 0,
+            online_status: "online",
+            last_seen_at: new Date().toISOString(),
+            last_active_at: new Date().toISOString(),
+          } as UserProfile, ...prev];
+        });
       });
     }
 
