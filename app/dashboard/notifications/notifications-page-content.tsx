@@ -1,6 +1,6 @@
 "use client";
 
-import { useNotifications } from "./notification-engine";
+import { useNotifications } from "@/components/notifications/notification-engine";
 import { Notification as AppNotification } from "@/lib/notifications/notification-types";
 import { NotificationList } from "@/components/notifications/notification-list";
 import { Button } from "@/components/ui/button";
