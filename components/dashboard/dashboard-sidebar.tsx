@@ -35,6 +35,7 @@ import {
   Settings,
   LogOut,
   Bug,
+  Send,
 } from "lucide-react";
 import { usePortalSettings, type PortalSettings } from "@/hooks/use-portal-settings";
 import Link from "next/link";
@@ -186,6 +187,16 @@ export function DashboardSidebar({ userId, profile: initialProfile }: DashboardS
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              {isAdmin && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild tooltip="Send Notification">
+                    <Link href="/dashboard/notifications/send" onClick={(e) => handleNavClick(e, "Send Notification")}>
+                      <Send className="size-4" />
+                      <span>Send Notification</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
               <SidebarMenuItem>
                 <SidebarMenuButton asChild tooltip="Settings">
                   <Link href="/dashboard/settings" onClick={(e) => handleNavClick(e, "Settings")}>

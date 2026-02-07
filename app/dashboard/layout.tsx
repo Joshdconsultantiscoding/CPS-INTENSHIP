@@ -5,6 +5,7 @@ import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { ensureProfileSync } from "@/lib/profile-sync";
 import { redirect } from "next/navigation";
 import React from "react";
+import { NotificationEngineProvider } from "@/components/notifications/notification-engine";
 
 export const dynamic = "force-dynamic";
 
@@ -68,14 +69,16 @@ export default async function DashboardLayout({
 
   return (
     <AblyClientProvider userId={userId}>
-      <DashboardShell
-        serverProfile={profileRes.data}
-        serverSettings={settingsRes.data?.setting_value}
-        serverOnboarding={serverOnboarding}
-        serverUser={serverUser}
-      >
-        {children}
-      </DashboardShell>
+      <NotificationEngineProvider>
+        <DashboardShell
+          serverProfile={profileRes.data}
+          serverSettings={settingsRes.data?.setting_value}
+          serverOnboarding={serverOnboarding}
+          serverUser={serverUser}
+        >
+          {children}
+        </DashboardShell>
+      </NotificationEngineProvider>
     </AblyClientProvider>
   );
 }
