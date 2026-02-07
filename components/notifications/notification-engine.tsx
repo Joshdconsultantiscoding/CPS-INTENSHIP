@@ -24,6 +24,7 @@ export function useNotificationEngineContext() {
 
 interface NotificationEngineProviderProps {
     children: ReactNode;
+    role?: string;
 }
 
 /**
@@ -34,7 +35,7 @@ interface NotificationEngineProviderProps {
  * - Handles retry logic for IMPORTANT notifications
  * - Recovers pending notifications on login
  */
-export function NotificationEngineProvider({ children }: NotificationEngineProviderProps) {
+export function NotificationEngineProvider({ children, role }: NotificationEngineProviderProps) {
     const {
         pendingNotifications,
         criticalNotification,
@@ -42,7 +43,7 @@ export function NotificationEngineProvider({ children }: NotificationEngineProvi
         acknowledgeNotification,
         markAsRead,
         dismissNotification
-    } = useNotificationEngine();
+    } = useNotificationEngine(role);
 
     return (
         <NotificationEngineContext.Provider

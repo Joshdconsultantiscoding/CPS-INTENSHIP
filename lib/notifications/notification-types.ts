@@ -73,7 +73,7 @@ export interface CreateNotificationParams {
 export const PRIORITY_SOUNDS: Record<PriorityLevel, string> = {
     NORMAL: 'notification',
     IMPORTANT: 'warning',
-    CRITICAL: 'alarm'
+    CRITICAL: 'warning' // Map to warning if alarm.mp3 is missing
 };
 
 // Toast colors for priority levels

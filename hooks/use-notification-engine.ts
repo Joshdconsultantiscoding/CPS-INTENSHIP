@@ -48,7 +48,7 @@ function stopSound(soundName: string) {
     }
 }
 
-export function useNotificationEngine(): UseNotificationEngineReturn {
+export function useNotificationEngine(role?: string): UseNotificationEngineReturn {
     const { userId, isSignedIn } = useAuth();
     const { client: ably, isConfigured } = useAbly();
 
@@ -69,7 +69,7 @@ export function useNotificationEngine(): UseNotificationEngineReturn {
             case "CRITICAL":
                 // Show fullscreen modal, play alarm
                 setState(prev => ({ ...prev, criticalNotification: notification }));
-                alarmAudio.current = playSound("alarm", true);
+                alarmAudio.current = playSound(PRIORITY_SOUNDS.CRITICAL, true);
                 break;
 
             case "IMPORTANT":
@@ -82,7 +82,7 @@ export function useNotificationEngine(): UseNotificationEngineReturn {
                         onClick: () => window.location.href = notification.link!
                     } : undefined
                 });
-                playSound("warning");
+                playSound(PRIORITY_SOUNDS.IMPORTANT);
 
                 // Start retry timer if configured
                 if (notification.repeat_interval > 0 && notification.repeat_count < notification.max_repeats) {
@@ -105,7 +105,7 @@ export function useNotificationEngine(): UseNotificationEngineReturn {
                         onClick: () => window.location.href = notification.link!
                     } : undefined
                 });
-                playSound("notification");
+                playSound(PRIORITY_SOUNDS.NORMAL);
                 break;
         }
 
@@ -134,7 +134,7 @@ export function useNotificationEngine(): UseNotificationEngineReturn {
             description: notification.message,
             duration: 10000
         });
-        playSound("warning");
+        playSound(PRIORITY_SOUNDS.IMPORTANT);
 
         // Schedule next retry if not maxed out
         const newCount = notification.repeat_count + 1;
@@ -256,6 +256,15 @@ export function useNotificationEngine(): UseNotificationEngineReturn {
                 processNotification(msg.data);
             });
             channels.push(allChannel);
+
+            // Role-specific channel (e.g., notifications:interns)
+            if (role) {
+                const roleChannel = ably.channels.get(`notifications:${role.toLowerCase()}s`);
+                roleChannel.subscribe("notification", (msg: any) => {
+                    processNotification(msg.data);
+                });
+                channels.push(roleChannel);
+            }
 
         } catch (e) {
             console.error("Failed to subscribe to notification channels:", e);

@@ -69,7 +69,7 @@ export default async function DashboardLayout({
 
   return (
     <AblyClientProvider userId={userId}>
-      <NotificationEngineProvider>
+      <NotificationEngineProvider role={profileRes.data?.role}>
         <DashboardShell
           serverProfile={profileRes.data}
           serverSettings={settingsRes.data?.setting_value}
