@@ -99,16 +99,26 @@ export default async function DashboardPage() {
   } else {
     const nowIso = new Date().toISOString();
     // Intern view - Fetch Data in parallel
-    const [{ data: tasks }, { data: reports }, { data: eventsData }] = (await Promise.all([
+    const [
+      { data: tasks },
+      { data: reports },
+      { data: eventsData },
+      { data: notificationsData },
+      { count: unreadMessagesCount }
+    ] = (await Promise.all([
       supabase.from("tasks").select("*").eq("assigned_to", user.id).order("due_date", { ascending: true }),
       supabase.from("daily_reports").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
-      supabase.from("calendar_events").select("*").or(`is_public.eq.true,user_id.eq.${user.id},attendees.cs.{${user.id}}`).gte("start_time", nowIso).order("start_time", { ascending: true }).limit(5)
+      supabase.from("calendar_events").select("*").or(`is_public.eq.true,user_id.eq.${user.id},attendees.cs.{${user.id}}`).gte("start_time", nowIso).order("start_time", { ascending: true }).limit(5),
+      supabase.from("notifications").select("*").or(`user_id.eq.${user.id},target_type.eq.ALL`).order("created_at", { ascending: false }).limit(20),
+      supabase.from("messages").select("id", { count: "exact", head: true }).eq("recipient_id", user.id).eq("is_read", false)
     ])) as any[];
 
     // Calculate stats
     const typedTasks = (tasks || []) as unknown as Task[];
     const typedReports = (reports || []) as unknown as DailyReport[];
     const events = (eventsData || []) as unknown as CalendarEvent[];
+    const notifications = (notificationsData || []) as unknown as Notification[];
+    const unreadMessages = unreadMessagesCount || 0;
 
     const completedTasks = typedTasks.filter(t => t.status === 'completed').length;
     const pendingTasks = typedTasks.filter(t => t.status === 'pending' || t.status === 'in_progress').length;
@@ -117,9 +127,6 @@ export default async function DashboardPage() {
     const now = new Date();
     const overdueTasks = typedTasks.filter(t => t.due_date && new Date(t.due_date) < now && t.status !== 'completed').length;
 
-    // Mock Messages/Notifications for now as tables might not exist or need complex query
-    const unreadMessages = 0;
-    const notifications: Notification[] = [];
 
     return (
       <InternDashboard

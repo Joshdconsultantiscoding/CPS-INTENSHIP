@@ -1,63 +1,61 @@
 "use client";
 
-import { useEffect } from "react";
+import React, { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-export function RealTimeStatsSync() {
+export function RealTimeStatsSync({ userId }: { userId: string }) {
     const router = useRouter();
     const supabase = createClient();
+    const refreshTimer = React.useRef<NodeJS.Timeout | null>(null);
+
+    const debouncedRefresh = React.useCallback(() => {
+        if (refreshTimer.current) clearTimeout(refreshTimer.current);
+        refreshTimer.current = setTimeout(() => {
+            console.log("[RealTimeStatsSync] Refreshing dashboard data...");
+            router.refresh();
+        }, 5000); // 5 second debounce to prevent rapid-fire refreshes
+    }, [router]);
 
     useEffect(() => {
-        // 1. Listen for task changes (affects pending/completed counts)
+        if (!userId) return;
+
+        // 1. Listen for task changes
         const tasksChannel = supabase
-            .channel("dashboard-tasks-realtime")
-            .on(
-                "postgres_changes",
-                { event: "*", schema: "public", table: "tasks" },
-                () => {
-                    console.log("Tasks changed, refreshing dashboard...");
-                    router.refresh();
-                }
-            )
-            .subscribe();
-
-        // 2. Listen for report changes (affects pending reports count)
-        const reportsChannel = supabase
-            .channel("dashboard-reports-realtime")
-            .on(
-                "postgres_changes",
-                { event: "*", schema: "public", table: "daily_reports" },
-                () => {
-                    console.log("Reports changed, refreshing dashboard...");
-                    router.refresh();
-                }
-            )
-            .subscribe();
-
-        // 3. Listen for profile changes (only for current user to avoid heartbeat loops)
-        const profilesChannel = supabase
-            .channel("dashboard-profiles-realtime")
+            .channel(`dashboard-tasks-${userId}`)
             .on(
                 "postgres_changes",
                 {
-                    event: "UPDATE",
+                    event: "*",
                     schema: "public",
-                    table: "profiles",
-                    filter: `id=eq.${supabase.auth.getUser()}` // This is a placeholder, I need the actual user ID
+                    table: "tasks",
+                    filter: `assigned_to=eq.${userId}`
                 },
-                () => {
-                    // ...
-                }
+                () => debouncedRefresh()
+            )
+            .subscribe();
+
+        // 2. Listen for report changes
+        const reportsChannel = supabase
+            .channel(`dashboard-reports-${userId}`)
+            .on(
+                "postgres_changes",
+                {
+                    event: "*",
+                    schema: "public",
+                    table: "daily_reports",
+                    filter: `user_id=eq.${userId}`
+                },
+                () => debouncedRefresh()
             )
             .subscribe();
 
         return () => {
+            if (refreshTimer.current) clearTimeout(refreshTimer.current);
             supabase.removeChannel(tasksChannel);
             supabase.removeChannel(reportsChannel);
-            supabase.removeChannel(profilesChannel);
         };
-    }, [router, supabase]);
+    }, [userId, supabase, debouncedRefresh]);
 
     return null; // This is a logic-only component
 }

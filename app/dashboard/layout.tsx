@@ -14,24 +14,40 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const logId = Math.random().toString(36).substring(7);
+  const totalLabel = `[DashboardLayout] Total Handshake (${logId})`;
+  const authLabel = `[DashboardLayout] 1. Auth/Clerk Fetch (${logId})`;
+  const dataLabel = `[DashboardLayout] 2. Parallel Data Fetch (${logId})`;
+  const syncLabel = `[DashboardLayout] 3. Profile Sync Process (${logId})`;
+
+  console.time(totalLabel);
+  console.time(authLabel);
   const { userId } = await auth();
   if (!userId) redirect("/auth/sign-in");
 
   const supabase = await createAdminClient();
+  console.timeEnd(authLabel);
 
-  // Parallel Fetch: Profile + Settings + Onboarding + Terms + Clerk User to maximize speed
-  let [clerkUser, profileRes, settingsRes, termsRes, progressRes] = await Promise.all([
+  console.time(dataLabel);
+  // Parallel Fetch: Profile + Settings + Onboarding + Terms + Latest Release
+  const [clerkUser, profileRes, settingsRes, termsRes, progressRes, latestLogRes] = await Promise.all([
     currentUser(),
     supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
     supabase.from("api_settings").select("setting_value").eq("setting_key", "portal_settings").maybeSingle(),
     supabase.from("terms_acceptances").select("user_id").eq("user_id", userId).maybeSingle(),
-    supabase.from("onboarding_progress").select("is_completed").eq("user_id", userId).maybeSingle()
+    supabase.from("onboarding_progress").select("is_completed").eq("user_id", userId).maybeSingle(),
+    supabase.from("changelogs").select("*").order("created_at", { ascending: false }).limit(1).maybeSingle()
   ]);
+  console.timeEnd(dataLabel);
+
+  if (settingsRes.data?.setting_value && Object.keys(settingsRes.data.setting_value).length === 0) {
+    console.warn(`[DashboardLayout] (${logId}) WARNING: portal_settings came back as an EMPTY OBJECT! This hides UI cards.`);
+  }
 
   if (!clerkUser) redirect("/auth/sign-in");
 
+  console.time(syncLabel);
   // CRITICAL: Ensure profile is synced to Supabase as soon as they reach the dashboard
-  // This handles the gap where new interns don't appear until they perform a specific action
   if (!profileRes.data) {
     console.log(`[DashboardLayout] Profile missing for ${userId}, ensuring sync...`);
     const syncRes = await ensureProfileSync({
@@ -52,6 +68,7 @@ export default async function DashboardLayout({
       profileRes.data = updatedProfile;
     }
   }
+  console.timeEnd(syncLabel);
 
   const serverOnboarding = {
     hasAcceptedTerms: !!termsRes.data,
@@ -67,9 +84,15 @@ export default async function DashboardLayout({
     imageUrl: clerkUser.imageUrl
   };
 
+  console.timeEnd(totalLabel);
+
   return (
     <AblyClientProvider userId={userId}>
-      <NotificationEngineProvider role={profileRes.data?.role}>
+      <NotificationEngineProvider
+        role={profileRes.data?.role}
+        serverLatestLog={latestLogRes.data}
+        serverSettings={settingsRes.data?.setting_value}
+      >
         <DashboardShell
           serverProfile={profileRes.data}
           serverSettings={settingsRes.data?.setting_value}

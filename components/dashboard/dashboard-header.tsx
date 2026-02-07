@@ -43,15 +43,21 @@ const pathTitles: Record<string, string> = {
   "/dashboard/settings": "Settings",
   "/dashboard/classroom": "Classroom",
   "/dashboard/classroom/courses": "Course Marketplace",
+  "/dashboard/updates": "Product Updates",
   "/dashboard/admin/classroom": "Class Management Center",
   "/dashboard/admin/portal-settings": "Portal Settings",
   "/dashboard/admin/community": "Communities",
+  "/dashboard/admin/releases": "Manage Updates",
 };
+
+import { useNotifications } from "@/components/notifications/notification-engine";
+import { Rocket } from "lucide-react";
 
 
 export function DashboardHeader({ userId, profile: initialProfile }: DashboardHeaderProps) {
   const pathname = usePathname();
   const { client: ablyClient } = useAbly();
+  const { latestChangelog } = useNotifications();
 
   // Real-time Profile State
   const [profile, setProfile] = useState<Profile | null>(initialProfile);
@@ -135,10 +141,16 @@ export function DashboardHeader({ userId, profile: initialProfile }: DashboardHe
         </BreadcrumbList>
       </Breadcrumb>
       <div className="ml-auto flex items-center gap-3">
-        {/* Version Badge & PWA Status */}
+        {/* Version Badge & PWA Status Sync */}
         <div className="flex flex-col items-end justify-center">
           <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary/5 border border-primary/10">
-            <span className="text-[10px] font-bold tracking-tight text-primary/80">v{version}</span>
+            <Rocket className="h-3 w-3 text-primary/60" />
+            <span className="text-[10px] font-bold tracking-tight text-primary/80">
+              {(() => {
+                const v = latestChangelog?.version || version;
+                return v.startsWith('v') ? v : `v${v}`;
+              })()}
+            </span>
           </div>
           <span className="text-[8px] uppercase tracking-widest font-bold text-muted-foreground/40 mt-0.5 hidden sm:block">
             PWA Sync Pending

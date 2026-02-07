@@ -26,34 +26,19 @@ const defaultSettings: PortalSettings = {
     company_name: "InternHub",
 };
 
+import { useNotifications } from "@/components/notifications/notification-engine";
+
 export function usePortalSettings() {
-    const [settings, setSettings] = useState<PortalSettings>(defaultSettings);
-    const [loading, setLoading] = useState(true);
+    const { settings, isLoadingSettings } = useNotifications();
 
-    useEffect(() => {
-        async function loadSettings() {
-            try {
-                const supabase = createClient();
-                const { data, error } = await supabase
-                    .from("api_settings")
-                    .select("setting_value")
-                    .eq("setting_key", "portal_settings")
-                    .maybeSingle();
+    // Deep merge server settings with defaults to ensure no missing flags
+    const mergedSettings = {
+        ...defaultSettings,
+        ...(settings || {})
+    };
 
-                if (error) throw error;
-
-                if (data?.setting_value) {
-                    setSettings({ ...defaultSettings, ...data.setting_value });
-                }
-            } catch (error) {
-                console.error("Error loading portal settings:", error);
-            } finally {
-                setLoading(false);
-            }
-        }
-
-        loadSettings();
-    }, []);
-
-    return { settings, loading };
+    return {
+        settings: mergedSettings,
+        loading: isLoadingSettings
+    };
 }

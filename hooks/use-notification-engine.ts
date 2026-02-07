@@ -16,6 +16,7 @@ interface NotificationEngineState {
     unreadCount: number;
     latestChangelog: Changelog | null;
     showWhatsNew: boolean;
+    hasUnseenUpdates: boolean;
 }
 
 interface UseNotificationEngineReturn extends NotificationEngineState {
@@ -25,6 +26,7 @@ interface UseNotificationEngineReturn extends NotificationEngineState {
     dismissNotification: (id: string) => void;
     fetchNotifications: () => Promise<void>;
     markVersionAsSeen: (version: string) => Promise<void>;
+    setLatestVersion: (version: string) => void;
 }
 
 // Audio refs for sounds
@@ -38,7 +40,7 @@ function playSound(soundName: string, loop = false) {
     if (typeof window === "undefined") return null;
 
     const soundPath = `/sounds/${soundName}.mp3`;
-    console.log(`[NotificationEngine] Play requested: ${soundName} (loop: ${loop})`);
+    // Reduced logging for performance
 
     if (!audioCache[soundPath]) {
         console.log(`[NotificationEngine] Creating new Audio object for: ${soundName}`);
@@ -105,19 +107,20 @@ function stopSound(soundName: string) {
     }
 }
 
-export function useNotificationEngine(role?: string): UseNotificationEngineReturn {
+export function useNotificationEngine(role?: string, serverLatestLog?: Changelog | null): UseNotificationEngineReturn {
     const { userId, isSignedIn } = useAuth();
     const { client: ably, isConfigured } = useAbly();
 
-    const [state, setState] = useState<NotificationEngineState>({
+    const [state, setState] = useState<NotificationEngineState>(({
         notifications: [],
         pendingNotifications: [],
         criticalNotification: null,
         isLoading: true,
         unreadCount: 0,
-        latestChangelog: null,
-        showWhatsNew: false
-    });
+        latestChangelog: serverLatestLog || null,
+        showWhatsNew: false,
+        hasUnseenUpdates: false
+    }));
 
     const retryTimers = useRef<Map<string, NodeJS.Timeout>>(new Map());
     const alarmAudio = useRef<HTMLAudioElement | null>(null);
@@ -130,7 +133,7 @@ export function useNotificationEngine(role?: string): UseNotificationEngineRetur
             case "CRITICAL":
                 // Show fullscreen modal, play alarm
                 setState(prev => ({ ...prev, criticalNotification: notification }));
-                if (!silent) alarmAudio.current = playSound(PRIORITY_SOUNDS.CRITICAL, true);
+                if (!silent) alarmAudio.current = playSound(notification.sound || PRIORITY_SOUNDS.CRITICAL, true);
                 break;
 
             case "IMPORTANT":
@@ -143,7 +146,7 @@ export function useNotificationEngine(role?: string): UseNotificationEngineRetur
                         onClick: () => window.location.href = notification.link!
                     } : undefined
                 });
-                if (!silent) playSound(PRIORITY_SOUNDS.IMPORTANT);
+                if (!silent) playSound(notification.sound || PRIORITY_SOUNDS.IMPORTANT);
 
                 // Start retry timer if configured
                 if (notification.repeat_interval > 0 && notification.repeat_count < notification.max_repeats) {
@@ -166,8 +169,25 @@ export function useNotificationEngine(role?: string): UseNotificationEngineRetur
                         onClick: () => window.location.href = notification.link!
                     } : undefined
                 });
-                if (!silent) playSound(PRIORITY_SOUNDS.NORMAL);
+                if (!silent) playSound(notification.sound || PRIORITY_SOUNDS.NORMAL);
                 break;
+        }
+
+        // If it's a changelog push, update latest version AND show modal to everyone
+        if (notification.metadata?.type === 'changelog_push' && notification.metadata?.version) {
+            if (!silent) playSound('success');
+
+            setState(prev => ({
+                ...prev,
+                showWhatsNew: true,
+                hasUnseenUpdates: true,
+                latestChangelog: {
+                    ...(prev.latestChangelog || {}),
+                    version: notification.metadata.version,
+                    title: notification.title,
+                    description: notification.message,
+                } as any
+            }));
         }
 
         // Add to pending list
@@ -365,46 +385,37 @@ export function useNotificationEngine(role?: string): UseNotificationEngineRetur
 
                 if (pendingRes.ok) {
                     const { notifications: pending } = await pendingRes.json();
-
-                    // Sort by priority (CRITICAL > IMPORTANT > NORMAL)
                     const sorted = [...pending].sort((a, b) => {
                         const score: Record<string, number> = { CRITICAL: 3, IMPORTANT: 2, NORMAL: 1 };
                         return (score[b.priority_level] || 0) - (score[a.priority_level] || 0);
                     });
-
-                    // Process notifications, but play sound ONLY for the top one
-                    sorted.forEach((n, index) => {
-                        processNotification(n, index > 0);
-                    });
+                    sorted.forEach((n, index) => processNotification(n, index > 0));
                 }
 
-                // CHECK FOR NEW CHANGELOG
-                const [latestLogRes, profileRes] = await Promise.all([
-                    fetch("/api/changelogs/latest"),
-                    fetch(`/api/profiles/id/${userId}`) // Assuming this endpoint exists or similar
-                ]);
+                // CHECK VERSION FROM PROFILE (Parallel with notification recovery)
+                const profileRes = await fetch(`/api/profiles/current`);
+                if (profileRes.ok) {
+                    const profile = await profileRes.json();
+                    const latest = state.latestChangelog;
 
-                if (latestLogRes.ok && profileRes.ok) {
-                    const latestLog: Changelog = await latestLogRes.json();
-                    const profile: Profile = await profileRes.json();
-
-                    if (latestLog && profile.last_seen_version !== latestLog.version) {
+                    if (latest && profile.last_seen_version !== latest.version) {
+                        playSound('success');
                         setState(prev => ({
                             ...prev,
-                            latestChangelog: latestLog,
-                            showWhatsNew: true
+                            showWhatsNew: true,
+                            hasUnseenUpdates: true
                         }));
                     }
                 }
             } catch (e) {
-                console.error("Failed to fetch pending notifications:", e);
+                // Silently fail to avoid console clutter
             } finally {
                 setState(prev => ({ ...prev, isLoading: false }));
             }
         };
 
         fetchPending();
-    }, [isSignedIn, userId, processNotification]);
+    }, [isSignedIn, userId, processNotification, state.latestChangelog]);
 
     // Subscribe to Ably channels for real-time notifications
     useEffect(() => {
@@ -451,6 +462,17 @@ export function useNotificationEngine(role?: string): UseNotificationEngineRetur
         };
     }, [ably, isConfigured, userId, processNotification]);
 
+    // Externally update latest version (for live preview in header)
+    const setLatestVersion = useCallback((version: string) => {
+        setState(prev => ({
+            ...prev,
+            latestChangelog: {
+                ...(prev.latestChangelog || {}),
+                version
+            } as any
+        }));
+    }, []);
+
     return {
         ...state,
         acknowledgeNotification,
@@ -458,6 +480,7 @@ export function useNotificationEngine(role?: string): UseNotificationEngineRetur
         markAllAsRead,
         dismissNotification,
         fetchNotifications,
-        markVersionAsSeen
+        markVersionAsSeen,
+        setLatestVersion
     };
 }

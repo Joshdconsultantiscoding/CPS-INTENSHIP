@@ -1,14 +1,28 @@
 import { ChangelogService } from "@/lib/changelog/changelog-service";
 import { ChangelogList } from "@/components/updates/changelog-list";
-import { Sparkles, History } from "lucide-react";
+import { Sparkles, History, Settings } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { createAdminClient } from "@/lib/supabase/server";
+import { auth } from "@clerk/nextjs/server";
 
 export default async function UpdatesPage() {
+    const { userId } = await auth();
     const changelogs = await ChangelogService.getChangelogs();
 
+    // Check if user is admin
+    const supabase = await createAdminClient();
+    const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", userId)
+        .single();
+    const isAdmin = profile?.role === "admin";
+
     return (
-        <div className="container max-w-5xl py-12 space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div className="container mx-auto max-w-5xl py-12 space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
             {/* Header Section */}
-            <div className="text-center space-y-4 max-w-3xl mx-auto">
+            <div className="flex flex-col items-center text-center space-y-4 max-w-3xl mx-auto">
                 <div className="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium bg-primary/10 text-primary border border-primary/20 mb-2">
                     <Sparkles className="mr-1 h-3.5 w-3.5" />
                     Product Updates
@@ -17,9 +31,19 @@ export default async function UpdatesPage() {
                 <p className="text-xl text-muted-foreground leading-relaxed">
                     Check out our latest releases, new features, and improvements we&apos;ve made to the platform.
                 </p>
-                <div className="flex items-center justify-center gap-2 pt-2">
-                    <History className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground font-medium uppercase tracking-widest">Version History</span>
+                <div className="flex items-center justify-center gap-4 pt-4">
+                    <div className="flex items-center gap-2">
+                        <History className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground font-medium uppercase tracking-widest">Version History</span>
+                    </div>
+                    {isAdmin && (
+                        <Button asChild variant="outline" size="sm" className="rounded-full shadow-sm hover:bg-primary/5">
+                            <Link href="/dashboard/admin/releases">
+                                <Settings className="h-4 w-4 mr-2" />
+                                Manage Updates
+                            </Link>
+                        </Button>
+                    )}
                 </div>
             </div>
 

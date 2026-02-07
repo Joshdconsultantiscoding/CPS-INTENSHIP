@@ -12,10 +12,11 @@ export const metadata = {
 export default async function CoursesPage({
     searchParams,
 }: {
-    searchParams: { q?: string };
+    searchParams: Promise<{ q?: string }>;
 }) {
     await getAuthUser();
-    const query = searchParams?.q || "";
+    const resolvedSearchParams = await searchParams;
+    const query = resolvedSearchParams?.q || "";
 
     const courses = await getStudentCourses(query);
 

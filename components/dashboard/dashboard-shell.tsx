@@ -44,7 +44,11 @@ export function DashboardShell({
   serverOnboarding,
   serverUser
 }: DashboardShellProps) {
-  const { user, isLoaded } = useUser();
+  // Use serverUser prop instead of useUser hook to avoid SSR context errors
+  const user = serverUser;
+  const isLoaded = !!serverUser;
+
+  const { setIsLoading } = useLoading();
   const [profile, setProfile] = React.useState<Profile | null>(serverProfile || null);
 
   // Initialize state from server data if available
@@ -59,13 +63,12 @@ export function DashboardShell({
 
   const [sessionTermsAccepted, setSessionTermsAccepted] = React.useState(false); // Alway false on mount to force per-session check for interns
   const [isReturningUser, setIsReturningUser] = React.useState(serverOnboarding?.isCompleted || false);
-  const { setIsLoading } = useLoading();
 
-  const userId = serverUser?.id || profile?.id || user?.id || "";
+  const userId = serverUser?.id || profile?.id || "";
 
   // Consolidate admin check to use profile or serverUser primarily for instant rendering
   const ADMIN_EMAIL = config.adminEmail;
-  const userEmail = serverUser?.email || user?.emailAddresses[0]?.emailAddress;
+  const userEmail = serverUser?.email;
   const isAdmin = profile?.role === "admin" || (userEmail?.toLowerCase() === ADMIN_EMAIL.toLowerCase());
 
   // Presence is now handled globally by AblyClientProvider
@@ -77,7 +80,7 @@ export function DashboardShell({
 
       const supabase = createClient();
       const ADMIN_EMAIL = config.adminEmail;
-      const isAdminEmail = user?.emailAddresses[0]?.emailAddress?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+      const isAdminEmail = user?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
 
       // Use server data where possible, only fetch what's missing
       const checks = [];
@@ -140,7 +143,7 @@ export function DashboardShell({
       } else if (isAdminEmail && !profile) {
         setProfile({
           id: user.id,
-          email: user.emailAddresses[0]?.emailAddress || "",
+          email: user.email || "",
           first_name: user.firstName || "Admin",
           last_name: user.lastName || "",
           role: "admin",
@@ -203,7 +206,7 @@ export function DashboardShell({
 
   return (
     <SidebarProvider defaultOpen={false}>
-      <RealTimeStatsSync />
+      <RealTimeStatsSync userId={userId} />
       <DashboardSidebar userId={userId} profile={profile} />
       <SidebarInset className="flex flex-col min-h-screen">
         <DashboardHeader userId={userId} profile={profile} />

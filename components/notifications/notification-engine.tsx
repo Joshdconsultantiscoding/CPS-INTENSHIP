@@ -5,17 +5,24 @@ import { useNotificationEngine } from "@/hooks/use-notification-engine";
 import { CriticalNotificationModal } from "./critical-modal";
 import { Notification } from "@/lib/notifications/notification-types";
 import { WhatsNewModal } from "../updates/whats-new-modal";
+import { PortalSettings } from "@/hooks/use-portal-settings";
+import { Changelog } from "@/lib/changelog/changelog-types";
 
 interface NotificationEngineContextType {
     notifications: Notification[];
     pendingNotifications: Notification[];
     unreadCount: number;
     isLoading: boolean;
+    hasUnseenUpdates: boolean;
+    settings: PortalSettings | null;
+    isLoadingSettings: boolean;
     markAsRead: (id: string) => Promise<void>;
     markAllAsRead: () => Promise<void>;
     dismissNotification: (id: string) => void;
     fetchNotifications: () => Promise<void>;
     markVersionAsSeen: (version: string) => Promise<void>;
+    latestChangelog: Changelog | null;
+    setLatestVersion: (version: string) => void;
 }
 
 const NotificationEngineContext = createContext<NotificationEngineContextType | null>(null);
@@ -31,6 +38,8 @@ export function useNotifications() {
 interface NotificationEngineProviderProps {
     children: ReactNode;
     role?: string;
+    serverLatestLog?: any;
+    serverSettings?: PortalSettings;
 }
 
 /**
@@ -42,7 +51,7 @@ interface NotificationEngineProviderProps {
  * - Recovers pending notifications on login
  * - Shows "What's New" modal for new versions
  */
-export function NotificationEngineProvider({ children, role }: NotificationEngineProviderProps) {
+export function NotificationEngineProvider({ children, role, serverLatestLog, serverSettings }: NotificationEngineProviderProps) {
     const {
         notifications,
         pendingNotifications,
@@ -51,13 +60,15 @@ export function NotificationEngineProvider({ children, role }: NotificationEngin
         isLoading,
         latestChangelog,
         showWhatsNew,
+        hasUnseenUpdates,
         acknowledgeNotification,
         markAsRead,
         markAllAsRead,
         dismissNotification,
         fetchNotifications,
-        markVersionAsSeen
-    } = useNotificationEngine(role);
+        markVersionAsSeen,
+        setLatestVersion
+    } = useNotificationEngine(role, serverLatestLog);
 
     return (
         <NotificationEngineContext.Provider
@@ -66,11 +77,16 @@ export function NotificationEngineProvider({ children, role }: NotificationEngin
                 pendingNotifications,
                 unreadCount,
                 isLoading,
+                hasUnseenUpdates,
+                settings: serverSettings || null,
+                isLoadingSettings: false, // Settings are pre-loaded from server
                 markAsRead,
                 markAllAsRead,
                 dismissNotification,
                 fetchNotifications,
-                markVersionAsSeen
+                markVersionAsSeen,
+                latestChangelog: latestChangelog || null,
+                setLatestVersion
             }}
         >
             {children}
@@ -82,10 +98,12 @@ export function NotificationEngineProvider({ children, role }: NotificationEngin
             />
 
             {/* What's New modal - show once after update */}
-            <WhatsNewModal
-                changelog={latestChangelog}
-                onClose={markVersionAsSeen}
-            />
+            {showWhatsNew && (
+                <WhatsNewModal
+                    changelog={latestChangelog}
+                    onClose={markVersionAsSeen}
+                />
+            )}
         </NotificationEngineContext.Provider>
     );
 }

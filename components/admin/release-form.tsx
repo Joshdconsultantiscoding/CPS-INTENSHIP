@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,14 +9,33 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Plus, Trash2, Rocket, RotateCcw } from "lucide-react";
+import { Plus, Trash2, Rocket, RotateCcw, Zap, Bug, Sparkles, AlertTriangle } from "lucide-react";
+import { useNotifications } from "@/components/notifications/notification-engine";
 
-export function ReleaseForm() {
+interface ReleaseFormProps {
+    currentVersion?: string;
+}
+
+export function ReleaseForm({ currentVersion = "v1.0.0" }: ReleaseFormProps) {
     const router = useRouter();
+    const { setLatestVersion } = useNotifications();
     const [isLoading, setIsLoading] = useState(false);
 
+    // Helper to increment version robustly
+    const incrementVersion = (v: string) => {
+        const parts = v.match(/\d+/g);
+        if (parts && parts.length >= 1) {
+            const lastPart = parts[parts.length - 1];
+            const nextPatch = parseInt(lastPart) + 1;
+            return v.replace(new RegExp(`${lastPart}$`), nextPatch.toString());
+        }
+        return v;
+    };
+
+    const initialVersion = incrementVersion(currentVersion);
+
     const [form, setForm] = useState({
-        version: "v1.0.0",
+        version: initialVersion,
         title: "",
         description: "",
         is_major: false,
@@ -25,6 +44,17 @@ export function ReleaseForm() {
         improvements: [""] as string[],
         breaking_changes: [""] as string[]
     });
+
+    // Sync header on mount
+    useEffect(() => {
+        setLatestVersion(initialVersion);
+    }, [setLatestVersion, initialVersion]);
+
+    // Update global version preview when typing
+    const handleVersionChange = (val: string) => {
+        setForm(prev => ({ ...prev, version: val }));
+        setLatestVersion(val);
+    };
 
     const addField = (field: keyof typeof form) => {
         if (Array.isArray(form[field])) {
@@ -84,12 +114,15 @@ export function ReleaseForm() {
         }
     };
 
-    const renderListInput = (label: string, field: keyof typeof form, placeholder: string) => {
+    const renderListInput = (label: string, field: keyof typeof form, placeholder: string, icon?: React.ReactNode) => {
         const values = form[field] as string[];
         return (
             <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                    <Label className="text-sm font-semibold">{label}</Label>
+                    <div className="flex items-center gap-2">
+                        {icon}
+                        <Label className="text-sm font-semibold">{label}</Label>
+                    </div>
                     <Button type="button" variant="outline" size="sm" onClick={() => addField(field)} className="h-8">
                         <Plus className="h-4 w-4 mr-1" /> Add
                     </Button>
@@ -132,7 +165,7 @@ export function ReleaseForm() {
                                 id="version"
                                 placeholder="e.g. v1.2.0"
                                 value={form.version}
-                                onChange={e => setForm(prev => ({ ...prev, version: e.target.value }))}
+                                onChange={e => handleVersionChange(e.target.value)}
                             />
                         </div>
                         <div className="flex items-center justify-between p-3 border rounded-lg h-[58px] bg-muted/50 mt-auto">
@@ -173,17 +206,17 @@ export function ReleaseForm() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
                     <CardContent className="pt-6 space-y-6">
-                        {renderListInput("🚀 New Features", "features", "Describe a new feature...")}
+                        {renderListInput("New Features", "features", "Describe a new feature...", <Zap className="h-4 w-4 mr-2" />)}
                         <hr className="border-dashed" />
-                        {renderListInput("💡 Improvements", "improvements", "Describe an improvement...")}
+                        {renderListInput("Improvements", "improvements", "Describe an improvement...", <Sparkles className="h-4 w-4 mr-2" />)}
                     </CardContent>
                 </Card>
 
                 <Card>
                     <CardContent className="pt-6 space-y-6">
-                        {renderListInput("🛠 Bug Fixes", "fixes", "Describe a fix...")}
+                        {renderListInput("Bug Fixes", "fixes", "Describe a fix...", <Bug className="h-4 w-4 mr-2" />)}
                         <hr className="border-dashed" />
-                        {renderListInput("⚠️ Breaking Changes", "breaking_changes", "Warning for users...")}
+                        {renderListInput("Breaking Changes", "breaking_changes", "Warning for users...", <AlertTriangle className="h-4 w-4 mr-2" />)}
                     </CardContent>
                 </Card>
             </div>

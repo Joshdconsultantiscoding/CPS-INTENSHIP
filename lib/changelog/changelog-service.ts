@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { Changelog, CreateChangelogParams } from "./changelog-types";
-import { NotificationService } from "@/lib/notifications/notification-service";
+import { createNotification } from "@/lib/notifications/notification-service";
 
 export class ChangelogService {
     /**
@@ -67,11 +67,13 @@ export class ChangelogService {
 
         // 2. Broadcast notification to all users
         try {
-            await NotificationService.createNotification({
+            await createNotification({
                 title: `✨ CPS Intern updated to ${params.version}`,
                 message: params.title || 'See what\'s new in the latest update!',
                 type: 'system',
                 link: '/dashboard/updates',
+                sound: 'success',
+                icon: 'Rocket',
                 priorityLevel: params.is_major ? 'IMPORTANT' : 'NORMAL',
                 targetType: 'ALL',
                 metadata: {

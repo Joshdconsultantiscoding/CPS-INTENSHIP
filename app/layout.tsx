@@ -66,9 +66,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <ClerkProvider>
-      <html lang="en" suppressHydrationWarning>
-        <body className={`${geist.className} antialiased`}>
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${geist.className} antialiased`}>
+        <ClerkProvider>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
             <LoadingProvider>
               {children}
@@ -77,8 +77,8 @@ export default function RootLayout({
               <Analytics />
             </LoadingProvider>
           </ThemeProvider>
-        </body>
-      </html>
-    </ClerkProvider>
+        </ClerkProvider>
+      </body>
+    </html>
   );
 }

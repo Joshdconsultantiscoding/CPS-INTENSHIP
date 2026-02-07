@@ -102,13 +102,16 @@ export const internNavItems: NavItem[] = [
         icon: Settings,
     },
     {
+        title: "Updates",
+        url: "/dashboard/updates",
+        icon: Rocket,
+    },
+    {
         title: "Send Feedback",
         url: "#",
         icon: Bug,
     },
 ];
-
-
 
 export const adminNavItems: NavItem[] = [
     {
@@ -205,9 +208,18 @@ export const adminNavItems: NavItem[] = [
         icon: Settings,
     },
     {
+        title: "Updates",
+        url: "/dashboard/updates",
+        icon: Rocket,
+    },
+    {
+        title: "Manage Updates",
+        url: "/dashboard/admin/releases",
+        icon: Sparkles,
+    },
+    {
         title: "Send Feedback",
         url: "#",
         icon: Bug,
     },
 ];
-
