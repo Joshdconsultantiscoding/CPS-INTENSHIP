@@ -150,9 +150,8 @@ export default async function LessonPage({ params }: LessonPageProps) {
                                             }
 
                                             return (
-                                                <Link
+                                                <div
                                                     key={lessonItem.id}
-                                                    href={`/dashboard/classroom/courses/${courseId}/lessons/${lessonItem.id}`}
                                                     className={cn(
                                                         "flex items-center gap-3 px-4 py-2.5 text-sm transition-colors border-l-2",
                                                         isActive
@@ -163,7 +162,7 @@ export default async function LessonPage({ params }: LessonPageProps) {
                                                     )}
                                                 >
                                                     {content}
-                                                </Link>
+                                                </div>
                                             );
                                         })}
                                     </div>

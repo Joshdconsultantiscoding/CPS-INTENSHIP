@@ -146,9 +146,8 @@ export default async function CourseDetailPage({ params }: CoursePageProps) {
                                         <AccordionContent className="px-6 pb-4 pt-0">
                                             <div className="space-y-1 pt-2">
                                                 {module.course_lessons?.map((lesson: any, lIdx: number) => (
-                                                    <Link
+                                                    <div
                                                         key={lesson.id}
-                                                        href={`/dashboard/classroom/courses/${course.id}/lessons/${lesson.id}`}
                                                         className={cn(
                                                             "flex items-center justify-between p-3 rounded-md transition-colors group",
                                                             lesson.completed
@@ -177,7 +176,7 @@ export default async function CourseDetailPage({ params }: CoursePageProps) {
                                                                 <div className="h-4 w-4 rounded-full border border-muted-foreground/30" />
                                                             )}
                                                         </div>
-                                                    </Link>
+                                                    </div>
                                                 ))}
                                             </div>
                                         </AccordionContent>

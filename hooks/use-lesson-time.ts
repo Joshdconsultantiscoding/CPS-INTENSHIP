@@ -50,46 +50,91 @@ export function useLessonTime({
     const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
     const lastActivityRef = useRef<number>(Date.now());
 
+    // Refs for stable value tracking (prevents closure issues)
+    const stateRef = useRef(state);
+    useEffect(() => {
+        stateRef.current = state;
+    }, [state]);
+
+    // Track session start time for accurate counting
+    const sessionStartTimeRef = useRef<number | null>(null);
+
     // Start tracking on mount
     useEffect(() => {
+        let isMounted = true;
         const initTracking = async () => {
-            const result = await startLessonTracking(lessonId, courseId);
-            if (result.success && result.tracking) {
-                const totalActive = result.tracking.total_active_seconds || 0;
-                const progress = requiredTimeSeconds > 0
-                    ? Math.min(100, Math.round((totalActive / requiredTimeSeconds) * 100))
-                    : 100;
+            console.log(`[useLessonTime] Initializing tracking for lesson: ${lessonId}`);
+            try {
+                const result = await startLessonTracking(lessonId, courseId);
+                if (!isMounted) return;
 
-                setState(prev => ({
-                    ...prev,
-                    totalActiveSeconds: totalActive,
-                    isTracking: true,
-                    requirementMet: totalActive >= requiredTimeSeconds,
-                    progress
-                }));
+                if (result.success) {
+                    const totalActive = result.tracking?.total_active_seconds || 0;
+                    console.log(`[useLessonTime] Tracking initialized. Total active: ${totalActive}s, Required: ${requiredTimeSeconds}s`);
+
+                    const progress = requiredTimeSeconds > 0
+                        ? Math.min(100, Math.round((totalActive / requiredTimeSeconds) * 100))
+                        : 100;
+
+                    sessionStartTimeRef.current = Date.now();
+
+                    setState(prev => ({
+                        ...prev,
+                        totalActiveSeconds: totalActive,
+                        isTracking: true,
+                        isPaused: false, // Ensure not paused initially
+                        requirementMet: totalActive >= requiredTimeSeconds,
+                        progress
+                    }));
+                } else {
+                    console.error("[useLessonTime] Failed to start tracking:", result.error);
+                }
+            } catch (error) {
+                console.error("[useLessonTime] Exception in initTracking:", error);
             }
         };
 
-        initTracking();
+        if (lessonId && courseId) {
+            initTracking();
+        }
 
         return () => {
+            isMounted = false;
             // Cleanup - sync on unmount
-            if (state.sessionSeconds > 0) {
-                syncActiveTime(lessonId, state.sessionSeconds, 0);
+            const currentState = stateRef.current;
+            if (currentState.sessionSeconds > 0) {
+                console.log(`[useLessonTime] Unmounting. Syncing ${currentState.sessionSeconds}s for lesson: ${lessonId}`);
+                syncActiveTime(lessonId, currentState.sessionSeconds, 0);
             }
         };
-    }, [lessonId, courseId]);
+    }, [lessonId, courseId, requiredTimeSeconds]);
 
     // Active timer
     useEffect(() => {
-        if (!state.isTracking || state.isPaused) {
+        if (!state.isTracking || state.isPaused || !sessionStartTimeRef.current) {
             return;
         }
 
+        // Use a start-time based approach for high accuracy
+        const baseTotalActive = state.totalActiveSeconds;
+        const baseSession = state.sessionSeconds;
+        const startTime = Date.now();
+
         timerRef.current = setInterval(() => {
+            const now = Date.now();
+            const elapsedSeconds = Math.floor((now - startTime) / 1000);
+
+            if (elapsedSeconds <= 0) return;
+
+            console.log(`[useLessonTime] TICK: lesson=${lessonId}, elapsed=${elapsedSeconds}s, total=${baseTotalActive + elapsedSeconds}s`);
+
             setState(prev => {
-                const newSession = prev.sessionSeconds + 1;
-                const newTotal = prev.totalActiveSeconds + 1;
+                const newSession = baseSession + elapsedSeconds;
+                const newTotal = baseTotalActive + elapsedSeconds;
+
+                // Only update if values actually changed to prevent excessive re-renders
+                if (newTotal === prev.totalActiveSeconds) return prev;
+
                 const progress = requiredTimeSeconds > 0
                     ? Math.min(100, Math.round((newTotal / requiredTimeSeconds) * 100))
                     : 100;
@@ -115,7 +160,7 @@ export function useLessonTime({
                 clearInterval(timerRef.current);
             }
         };
-    }, [state.isTracking, state.isPaused, requiredTimeSeconds, onTimeRequirementMet]);
+    }, [state.isTracking, state.isPaused, requiredTimeSeconds, onTimeRequirementMet, state.totalActiveSeconds, state.sessionSeconds]);
 
     // Auto-sync to server
     useEffect(() => {

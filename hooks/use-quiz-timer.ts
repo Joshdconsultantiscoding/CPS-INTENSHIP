@@ -44,6 +44,15 @@ export function useQuizTimer({
         }
     });
 
+    // Sync state when props change (especially after async load)
+    useEffect(() => {
+        setState(prev => ({
+            ...prev,
+            remainingSeconds: timeLimitSeconds,
+            isRunning: timeLimitSeconds > 0
+        }));
+    }, [timeLimitSeconds, attemptId]);
+
     const timerRef = useRef<NodeJS.Timeout | null>(null);
     const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
     const lastActivityRef = useRef<number>(Date.now());

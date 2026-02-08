@@ -276,7 +276,7 @@ export function QuizEngine({ quizId, onComplete, onExit }: QuizEngineProps) {
             <div className="flex flex-wrap gap-2">
                 {questions.map((q, i) => (
                     <Button
-                        key={q.id}
+                        key={q.id || `nav-${i}`}
                         size="sm"
                         variant={i === currentIndex ? "default" : answers[q.id] ? "secondary" : "outline"}
                         className={cn(
@@ -375,9 +375,9 @@ function QuestionInput({
                 onValueChange={(value) => onAnswer({ selected_options: [value] })}
                 className="space-y-3"
             >
-                {options.map((option) => (
+                {options.map((option, idx) => (
                     <div
-                        key={option.id}
+                        key={option.id || `mcq-${idx}`}
                         className={cn(
                             "flex items-center space-x-3 p-4 rounded-lg border-2 transition-colors cursor-pointer",
                             selectedOptions.includes(option.id)
@@ -398,9 +398,9 @@ function QuestionInput({
     if (type === "multi_select") {
         return (
             <div className="space-y-3">
-                {options.map((option) => (
+                {options.map((option, idx) => (
                     <div
-                        key={option.id}
+                        key={option.id || `multi-${idx}`}
                         className={cn(
                             "flex items-center space-x-3 p-4 rounded-lg border-2 transition-colors cursor-pointer",
                             selectedOptions.includes(option.id)

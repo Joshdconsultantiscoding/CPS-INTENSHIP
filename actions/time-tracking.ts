@@ -18,9 +18,22 @@ export async function startLessonTracking(lessonId: string, courseId: string) {
         const user = await getAuthUser();
         const supabase = await createAdminClient();
 
+        if (!lessonId || !courseId) {
+            console.error(`[startLessonTracking] Missing IDs: lessonId=${lessonId}, courseId=${courseId}`);
+            return { success: false, error: "Invalid lesson or course identification" };
+        }
+
+        // Relaxed UUID validation regex (allows any UUID v1-v5)
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(lessonId) || !uuidRegex.test(courseId)) {
+            console.error(`[startLessonTracking] Invalid UUID format: lessonId="${lessonId}", courseId="${courseId}"`);
+            return { success: false, error: "Invalid ID format" };
+        }
+
         const now = new Date().toISOString();
 
         // Upsert time tracking record
+        console.log(`[startLessonTracking] UPSERT: user=${user.id} lesson=${lessonId} course=${courseId}`);
         const { data, error } = await supabase
             .from("lesson_time_tracking")
             .upsert({
@@ -35,18 +48,19 @@ export async function startLessonTracking(lessonId: string, courseId: string) {
                 onConflict: "user_id,lesson_id",
                 ignoreDuplicates: false
             })
-            .select()
-            .single();
+            .select();
 
         if (error) {
-            console.error("Error starting time tracking:", error);
-            return { success: false, error: "Failed to start tracking" };
+            console.error("[startLessonTracking] Database error:", JSON.stringify(error, null, 2));
+            return { success: false, error: error.message || "Failed to start tracking" };
         }
 
-        return { success: true, tracking: data };
+        const trackingData = data && data.length > 0 ? data[0] : null;
+        console.log(`[startLessonTracking] SUCCESS: lesson=${lessonId}, tracking_id=${trackingData?.id}`);
+        return { success: true, tracking: trackingData };
     } catch (error: any) {
-        console.error("Error in startLessonTracking:", error);
-        return { success: false, error: error.message };
+        console.error("CRITICAL ERROR in startLessonTracking:", error);
+        return { success: false, error: error.message || "Internal server error" };
     }
 }
 

@@ -133,12 +133,19 @@ export async function getCourseWithProgress(courseId: string): Promise<CourseWit
                         previousLessonCompleted = false;
                     }
 
+                    // Calculate Required Time (Effective)
+                    let effectiveRequiredTime = lesson.required_time_seconds || 0;
+                    if (effectiveRequiredTime === 0 && lesson.duration_minutes > 0 && settings?.required_time_percentage > 0) {
+                        effectiveRequiredTime = Math.ceil((lesson.duration_minutes * 60) * (settings.required_time_percentage / 100));
+                    }
+
                     return {
                         ...lesson,
                         completed: isCompleted,
                         is_locked: isLocked, // OVERRIDE the DB value with dynamic calc
                         progress_percentage: lessonProgress?.progress_percentage || 0,
                         time_spent_seconds: lessonTime?.total_active_seconds || 0,
+                        effective_required_time: effectiveRequiredTime,
                         quiz_id: lessonQuiz?.id,
                         quiz: lessonQuiz,
                         quiz_attempt: quizAttempt
@@ -263,12 +270,19 @@ export async function getLessonWithProgress(lessonId: string): Promise<LessonWit
         }
     }
 
+    // Calculate Required Time (Effective)
+    let effectiveRequiredTime = lesson.required_time_seconds || 0;
+    if (effectiveRequiredTime === 0 && lesson.duration_minutes > 0 && settings?.required_time_percentage > 0) {
+        effectiveRequiredTime = Math.ceil((lesson.duration_minutes * 60) * (settings.required_time_percentage / 100));
+    }
+
     return {
         ...lesson,
         completed: progress?.status === "completed",
         is_locked: isLocked, // Securely calculated
         progress_percentage: progress?.progress_percentage || 0,
         time_spent_seconds: timeTracking?.total_active_seconds || 0,
+        effective_required_time: effectiveRequiredTime,
         quiz_id: lessonQuiz?.id,
         quiz: lessonQuiz,
         quiz_attempt: quizAttempt,

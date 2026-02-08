@@ -431,6 +431,7 @@ export interface LessonWithProgress {
   quiz_id: string | null;
   completed: boolean;
   time_spent_seconds: number;
+  effective_required_time?: number;
   quiz?: Quiz;
   quiz_attempt?: QuizAttempt;
 }

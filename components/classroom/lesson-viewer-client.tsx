@@ -54,14 +54,28 @@ export function LessonViewerClient({
     const [quizCompleted, setQuizCompleted] = useState(false);
     const [lessonCompleted, setLessonCompleted] = useState(lesson.completed);
 
+    // Initial validation
+    if (!lesson.id || !courseId) {
+        return (
+            <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                    Invalid lesson configuration. Missing ID for {!lesson.id ? "lesson" : "course"}.
+                </AlertDescription>
+            </Alert>
+        );
+    }
+
     // Time tracking hook
+    const onTimeRequirementMet = useCallback(() => {
+        toast.success("Time requirement met! You can now complete this lesson.");
+    }, []);
+
     const timeTracker = useLessonTime({
         lessonId: lesson.id,
         courseId,
-        requiredTimeSeconds: lesson.required_time_seconds || 0,
-        onTimeRequirementMet: () => {
-            toast.success("Time requirement met! You can now complete this lesson.");
-        }
+        requiredTimeSeconds: lesson.effective_required_time ?? lesson.required_time_seconds ?? 0,
+        onTimeRequirementMet
     });
 
     // Handle lesson completion
@@ -100,7 +114,7 @@ export function LessonViewerClient({
 
     // Determine if lesson can be completed
     const canComplete =
-        (timeTracker.requirementMet || lesson.allow_skip || lesson.required_time_seconds === 0) &&
+        (timeTracker.requirementMet || lesson.allow_skip || (lesson.effective_required_time ?? lesson.required_time_seconds) === 0) &&
         (!lesson.quiz_id || quizCompleted || lesson.quiz_attempt?.passed);
 
     // Locked State
@@ -308,7 +322,7 @@ export function LessonViewerClient({
                                 ) : (
                                     <>
                                         Complete the quiz to finish this lesson
-                                        {lesson.quiz?.time_limit_seconds > 0 && (
+                                        {lesson.quiz && lesson.quiz.time_limit_seconds > 0 && (
                                             <span className="ml-2 text-muted-foreground">
                                                 • {Math.floor(lesson.quiz.time_limit_seconds / 60)} min limit
                                             </span>

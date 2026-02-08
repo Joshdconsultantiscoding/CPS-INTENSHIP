@@ -12,6 +12,14 @@ interface LoadingContextType {
 
 const LoadingContext = createContext<LoadingContextType | undefined>(undefined);
 
+// Default state for when provider is missing (SSR/fallback)
+const defaultLoadingState: LoadingContextType = {
+    isLoading: false,
+    setIsLoading: () => { },
+    showLoader: () => { },
+    hideLoader: () => { },
+};
+
 function LoadingInner({ children }: { children: React.ReactNode }) {
     const [isLoading, setIsLoading] = useState(false);
     const [showOverlay, setShowOverlay] = useState(false);
@@ -41,8 +49,6 @@ function LoadingInner({ children }: { children: React.ReactNode }) {
     }, [isLoading]);
 
     // Auto-hide loader on path or search param change
-    // We add a tiny delay here because Next.js commits the path change
-    // before the new RSC page is fully hydrated.
     useEffect(() => {
         // Prolonged duration for cinematic effect (min 2s, max 4s)
         const randomDelay = Math.floor(Math.random() * (4000 - 2000 + 1)) + 2000;
@@ -65,7 +71,7 @@ function LoadingInner({ children }: { children: React.ReactNode }) {
 
 export function LoadingProvider({ children }: { children: React.ReactNode }) {
     return (
-        <Suspense fallback={null}>
+        <Suspense fallback={children}>
             <LoadingInner>{children}</LoadingInner>
         </Suspense>
     );
@@ -73,8 +79,5 @@ export function LoadingProvider({ children }: { children: React.ReactNode }) {
 
 export function useLoading() {
     const context = useContext(LoadingContext);
-    if (context === undefined) {
-        throw new Error("useLoading must be used within a LoadingProvider");
-    }
-    return context;
+    return context || defaultLoadingState;
 }
