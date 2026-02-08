@@ -168,6 +168,26 @@ export async function updateCourseAdvanced(id: string, data: any) {
     return { success: true };
 }
 
+export async function updateCourseSettings(courseId: string, settings: any) {
+    const { supabase } = await verifyAdmin();
+
+    const { error } = await supabase
+        .from("course_settings")
+        .upsert({
+            course_id: courseId,
+            ...settings,
+            updated_at: new Date().toISOString()
+        }, { onConflict: "course_id" });
+
+    if (error) {
+        console.error("Error updating course settings:", error);
+        throw new Error("Failed to update course settings: " + error.message);
+    }
+
+    revalidatePath(`/dashboard/admin/classroom/courses/${courseId}/edit`);
+    return { success: true };
+}
+
 // --- ASSIGNMENTS ---
 
 export async function assignCourseToUser(courseId: string, userId: string) {

@@ -103,6 +103,29 @@ export function LessonViewerClient({
         (timeTracker.requirementMet || lesson.allow_skip || lesson.required_time_seconds === 0) &&
         (!lesson.quiz_id || quizCompleted || lesson.quiz_attempt?.passed);
 
+    // Locked State
+    if (lesson.is_locked) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4 text-center">
+                <div className="h-16 w-16 bg-muted/50 rounded-full flex items-center justify-center">
+                    <Lock className="h-8 w-8 text-muted-foreground" />
+                </div>
+                <div className="space-y-2">
+                    <h2 className="text-2xl font-bold tracking-tight">Lesson Locked</h2>
+                    <p className="text-muted-foreground max-w-md mx-auto">
+                        This lesson is currently locked. To access this content, you must complete the previous lessons in sequential order.
+                    </p>
+                </div>
+                <Button asChild variant="outline">
+                    <Link href={`/dashboard/classroom/courses/${courseId}`}>
+                        <ChevronLeft className="mr-2 h-4 w-4" />
+                        Return to Course
+                    </Link>
+                </Button>
+            </div>
+        );
+    }
+
     // If showing quiz
     if (showQuiz && lesson.quiz_id) {
         return (

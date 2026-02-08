@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { getAuthUser } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { publishGlobalUpdate } from "@/lib/ably-server";
+import { getLessonWithProgress } from "@/actions/lms-progress";
 
 // =============================================
 // LESSON TIME TRACKING
@@ -190,6 +191,21 @@ export async function completeLessonTracking(lessonId: string) {
         const user = await getAuthUser();
         const supabase = await createAdminClient();
 
+        // 1. Security Check: Is the lesson locked?
+        // We use the central logic from lms-progress to determine lock status
+        try {
+            const lessonWithStatus = await getLessonWithProgress(lessonId);
+            if (lessonWithStatus.is_locked) {
+                return {
+                    success: false,
+                    error: "You cannot complete a locked lesson. Please complete previous lessons first."
+                };
+            }
+        } catch (error) {
+            // If lesson not found or other error, let the underlying checks handle it or fail safe
+            console.error("Error checking lock status:", error);
+        }
+
         // Get lesson and tracking
         const [{ data: lesson }, { data: tracking }] = await Promise.all([
             supabase.from("course_lessons").select("*, course_modules(course_id)").eq("id", lessonId).single(),
@@ -202,15 +218,39 @@ export async function completeLessonTracking(lessonId: string) {
 
         const courseId = lesson.course_modules?.course_id;
 
-        // Check if required time met
-        const requiredTime = lesson.required_time_seconds || 0;
+        // Get Course Settings
+        const { data: course } = await supabase
+            .from("courses")
+            .select("*, course_settings(*)")
+            .eq("id", courseId)
+            .single();
+
+        const settingsRaw = (course as any)?.course_settings;
+        const settings = Array.isArray(settingsRaw) ? settingsRaw[0] : settingsRaw;
+
+        // Calculate Required Time
+        // Priority: Lesson override > Course Setting > Default
+        const requiredTimePercentage = settings?.required_time_percentage || 0;
+        let requiredTime = lesson.required_time_seconds || 0;
+
+        // If lesson has no specific time set, but course has a percentage requirement
+        if (requiredTime === 0 && lesson.duration_minutes > 0 && requiredTimePercentage > 0) {
+            requiredTime = (lesson.duration_minutes * 60) * (requiredTimePercentage / 100);
+        }
+
         const totalTime = tracking?.total_active_seconds || 0;
 
+        // Strict Check
         if (requiredTime > 0 && totalTime < requiredTime && !lesson.allow_skip) {
-            const remainingMinutes = Math.ceil((requiredTime - totalTime) / 60);
+            const remainingSeconds = requiredTime - totalTime;
+            const remainingMinutes = Math.ceil(remainingSeconds / 60);
+
+            // If less than a minute, show seconds
+            const timeString = remainingMinutes > 1 ? `${remainingMinutes} more minutes` : `${remainingSeconds} more seconds`;
+
             return {
                 success: false,
-                error: `Please spend at least ${remainingMinutes} more minute(s) on this lesson`
+                error: `You need to spend at least ${timeString} on this lesson to complete it.`
             };
         }
 

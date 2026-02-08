@@ -27,8 +27,10 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Slider } from "@/components/ui/slider";
 import {
     updateCourseAdvanced,
+    updateCourseSettings,
     assignCourseToUser,
     unassignCourseFromUser,
     assignCourseToClass
@@ -49,15 +51,28 @@ export function SettingsTab({ course, interns, classes }: SettingsTabProps) {
     const [status, setStatus] = useState(course.status || "draft");
     const [price, setPrice] = useState(course.price || 0);
 
+    // Settings State
+    const settings = Array.isArray(course.course_settings) ? course.course_settings[0] : course.course_settings;
+    const [sequentialLock, setSequentialLock] = useState(settings?.lock_next_until_previous || false);
+    const [requiredTimePct, setRequiredTimePct] = useState(settings?.required_time_percentage || 0);
+
     const handleSaveSettings = async () => {
         setIsSaving(true);
         try {
+            // Update Base Course
             await updateCourseAdvanced(course.id, {
                 assignment_type: assignmentType,
                 status: status,
                 is_published: status === "published",
                 price: price
             });
+
+            // Update Course Settings
+            await updateCourseSettings(course.id, {
+                lock_next_until_previous: sequentialLock,
+                required_time_percentage: requiredTimePct
+            });
+
             toast.success("Course settings updated!");
             router.refresh();
         } catch (error: any) {
@@ -138,12 +153,45 @@ export function SettingsTab({ course, interns, classes }: SettingsTabProps) {
                                 </SelectContent>
                             </Select>
                         </div>
+                    </CardContent>
+                </Card>
 
-                        <div className="pt-4 border-t">
-                            <Button onClick={handleSaveSettings} disabled={isSaving} className="w-full">
-                                {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                                Update Visibility
-                            </Button>
+                {/* Progression & Locking */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-lg flex items-center gap-2">
+                            <Lock className="h-4 w-4 text-primary" />
+                            Progression & Locking
+                        </CardTitle>
+                        <CardDescription>Enforce strict progression rules.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                        <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                                <Label>Sequential Locking</Label>
+                                <p className="text-xs text-muted-foreground">Interns must complete lessons in order.</p>
+                            </div>
+                            <Switch
+                                checked={sequentialLock}
+                                onCheckedChange={setSequentialLock}
+                            />
+                        </div>
+
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                                <Label>Required Watch Time</Label>
+                                <span className="text-sm font-medium">{requiredTimePct}%</span>
+                            </div>
+                            <Slider
+                                value={[requiredTimePct]}
+                                min={0}
+                                max={100}
+                                step={10}
+                                onValueChange={(vals) => setRequiredTimePct(vals[0])}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                Percentage of video/content duration required to mark as complete.
+                            </p>
                         </div>
                     </CardContent>
                 </Card>
@@ -182,6 +230,13 @@ export function SettingsTab({ course, interns, classes }: SettingsTabProps) {
                         </div>
                     </CardContent>
                 </Card>
+            </div>
+
+            <div className="flex justify-end pt-4 border-t">
+                <Button onClick={handleSaveSettings} disabled={isSaving} size="lg" className="w-full md:w-auto">
+                    {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                    Save All Changes
+                </Button>
             </div>
 
             {/* Assignment Logic (Only if selective) */}
@@ -237,9 +292,6 @@ export function SettingsTab({ course, interns, classes }: SettingsTabProps) {
                                 </div>
                             </div>
                         </div>
-                        <p className="text-xs text-muted-foreground italic">
-                            Tip: Assigning a class will enroll all current members of that class.
-                        </p>
                     </CardContent>
                 </Card>
             )}

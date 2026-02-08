@@ -81,6 +81,16 @@ export async function getCourseWithProgress(courseId: string): Promise<CourseWit
     let completedLessons = 0;
     let totalTimeSpent = 0;
 
+    // Logic for Sequential Locking
+    // We treat all lessons as a flat list for locking purposes to keep it simple across modules
+    let previousLessonCompleted = true; // First lesson is always unlocked (if everything else is fine)
+
+    // Normalize settings
+    const settingsRaw = (course as any).course_settings;
+    const settings = Array.isArray(settingsRaw) ? settingsRaw[0] : settingsRaw;
+
+    const sequentialLock = settings?.lock_next_until_previous || false;
+
     const enhancedModules = (course.course_modules || [])
         .sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0))
         .map((module: any) => {
@@ -93,16 +103,40 @@ export async function getCourseWithProgress(courseId: string): Promise<CourseWit
                     const lessonQuiz = lesson.quizzes?.[0];
                     const quizAttempt = lessonQuiz ? quizAttemptMap.get(lessonQuiz.id) : null;
 
-                    if (lessonProgress?.status === "completed") {
+                    const isCompleted = lessonProgress?.status === "completed";
+
+                    if (isCompleted) {
                         completedLessons++;
                     }
                     if (lessonTime?.total_active_seconds) {
                         totalTimeSpent += lessonTime.total_active_seconds;
                     }
 
+                    // Calculate Lock Status
+                    // Default to DB value, then override with sequential logic
+                    let isLocked = lesson.is_locked || false;
+
+                    if (sequentialLock) {
+                        // If sequential lock is ON, this lesson is locked unless previous is completed
+                        if (!previousLessonCompleted) {
+                            isLocked = true;
+                        }
+                    }
+
+                    // Update tracker for NEXT lesson
+                    // Current lesson must be completed to unlock the next one
+                    // Also consider if quiz is required? (Assumed implicit in completion for now, or add specific check)
+                    if (isCompleted) {
+                        previousLessonCompleted = true;
+                    } else {
+                        // If this lesson is NOT completed, the NEXT one will be locked
+                        previousLessonCompleted = false;
+                    }
+
                     return {
                         ...lesson,
-                        completed: lessonProgress?.status === "completed",
+                        completed: isCompleted,
+                        is_locked: isLocked, // OVERRIDE the DB value with dynamic calc
                         progress_percentage: lessonProgress?.progress_percentage || 0,
                         time_spent_seconds: lessonTime?.total_active_seconds || 0,
                         quiz_id: lessonQuiz?.id,
@@ -126,10 +160,6 @@ export async function getCourseWithProgress(courseId: string): Promise<CourseWit
     const overallProgress = totalLessons > 0
         ? Math.round((completedLessons / totalLessons) * 100)
         : 0;
-
-    // Normalize course_settings from array to single object if needed
-    const settingsRaw = (course as any).course_settings;
-    const settings = Array.isArray(settingsRaw) ? settingsRaw[0] : settingsRaw;
 
     return {
         ...course,
@@ -204,9 +234,39 @@ export async function getLessonWithProgress(lessonId: string): Promise<LessonWit
         quizAttempt = attempt;
     }
 
+    // Check Lock Status
+    const course = lesson.course_modules?.courses;
+    const settingsRaw = (course as any)?.course_settings;
+    const settings = Array.isArray(settingsRaw) ? settingsRaw[0] : settingsRaw;
+    const sequentialLock = settings?.lock_next_until_previous || false;
+
+    let isLocked = lesson.is_locked || false;
+
+    if (sequentialLock) {
+        // Need to check if previous required lessons are completed
+        // This is expensive but necessary for security
+        // We fetch all lessons for the course to determine order and completion
+        const allCourseProgress = await getCourseWithProgress(courseId);
+
+        // Find this lesson in the enhanced structure
+        let foundLesson: any = null;
+        for (const m of allCourseProgress.course_modules) {
+            const l = m.course_lessons.find((l: any) => l.id === lessonId);
+            if (l) {
+                foundLesson = l;
+                break;
+            }
+        }
+
+        if (foundLesson && foundLesson.is_locked) {
+            isLocked = true;
+        }
+    }
+
     return {
         ...lesson,
         completed: progress?.status === "completed",
+        is_locked: isLocked, // Securely calculated
         progress_percentage: progress?.progress_percentage || 0,
         time_spent_seconds: timeTracking?.total_active_seconds || 0,
         quiz_id: lessonQuiz?.id,

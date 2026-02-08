@@ -108,23 +108,15 @@ export default async function LessonPage({ params }: LessonPageProps) {
                                         {module.course_lessons?.map((lessonItem: any, lIdx: number) => {
                                             const isActive = lessonItem.id === lessonId;
                                             const isCompleted = lessonItem.completed;
+                                            const isLocked = lessonItem.is_locked;
                                             const hasQuiz = !!lessonItem.quiz_id;
 
-                                            return (
-                                                <Link
-                                                    key={lessonItem.id}
-                                                    href={`/dashboard/classroom/courses/${courseId}/lessons/${lessonItem.id}`}
-                                                    className={cn(
-                                                        "flex items-center gap-3 px-4 py-2.5 text-sm transition-colors border-l-2",
-                                                        isActive
-                                                            ? "bg-primary/5 border-primary text-primary font-medium"
-                                                            : isCompleted
-                                                                ? "border-green-500 bg-green-50/50 text-muted-foreground hover:bg-green-50"
-                                                                : "border-transparent hover:bg-muted text-muted-foreground"
-                                                    )}
-                                                >
+                                            const content = (
+                                                <>
                                                     {isCompleted ? (
                                                         <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
+                                                    ) : isLocked ? (
+                                                        <Lock className="h-3.5 w-3.5 text-muted-foreground/70 shrink-0" />
                                                     ) : (
                                                         <PlayCircle className={cn(
                                                             "h-4 w-4 shrink-0",
@@ -139,6 +131,38 @@ export default async function LessonPage({ params }: LessonPageProps) {
                                                             Quiz
                                                         </Badge>
                                                     )}
+                                                    {isLocked && (
+                                                        <Lock className="h-3 w-3 text-muted-foreground/50 ml-auto" />
+                                                    )}
+                                                </>
+                                            );
+
+                                            if (isLocked) {
+                                                return (
+                                                    <div
+                                                        key={lessonItem.id}
+                                                        className="flex items-center gap-3 px-4 py-2.5 text-sm border-l-2 border-transparent text-muted-foreground/50 cursor-not-allowed bg-muted/20"
+                                                        title="Complete previous lesson to unlock"
+                                                    >
+                                                        {content}
+                                                    </div>
+                                                );
+                                            }
+
+                                            return (
+                                                <Link
+                                                    key={lessonItem.id}
+                                                    href={`/dashboard/classroom/courses/${courseId}/lessons/${lessonItem.id}`}
+                                                    className={cn(
+                                                        "flex items-center gap-3 px-4 py-2.5 text-sm transition-colors border-l-2",
+                                                        isActive
+                                                            ? "bg-primary/5 border-primary text-primary font-medium"
+                                                            : isCompleted
+                                                                ? "border-green-500 bg-green-50/50 text-muted-foreground hover:bg-green-50"
+                                                                : "border-transparent hover:bg-muted text-muted-foreground"
+                                                    )}
+                                                >
+                                                    {content}
                                                 </Link>
                                             );
                                         })}
