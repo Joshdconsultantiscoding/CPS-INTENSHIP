@@ -159,7 +159,7 @@ export const adminNavItems: NavItem[] = [
         icon: GraduationCap,
     },
     {
-        title: "Certificates",
+        title: "Certificate Management",
         url: "/dashboard/certificates",
         icon: Award,
     },
