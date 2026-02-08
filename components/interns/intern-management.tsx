@@ -73,6 +73,7 @@ interface UserStats {
 interface UserProfile {
   id: string;
   email: string;
+  username: string | null;
   first_name: string | null;
   last_name: string | null;
   full_name: string | null;
@@ -511,9 +512,9 @@ export function InternManagement({
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => setSelectedUser(user)}>
+                            <DropdownMenuItem onClick={() => router.push(`/profile/${user.username || user.id}`)}>
                               <Eye className="h-4 w-4 mr-2" />
-                              View Profile
+                              View Full Profile
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={(e) => {
@@ -559,7 +560,17 @@ export function InternManagement({
           {selectedUser && (
             <>
               <DialogHeader>
-                <DialogTitle>User Profile</DialogTitle>
+                <DialogTitle className="flex items-center justify-between">
+                  <span>User Profile</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mr-8"
+                    onClick={() => router.push(`/profile/${selectedUser.username || selectedUser.id}`)}
+                  >
+                    View Full Page
+                  </Button>
+                </DialogTitle>
               </DialogHeader>
 
               <div className="space-y-6">

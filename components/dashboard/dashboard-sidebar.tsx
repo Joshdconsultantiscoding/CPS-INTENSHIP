@@ -38,6 +38,7 @@ import {
   Send,
   Sparkles,
   Rocket,
+  User,
 } from "lucide-react";
 import { usePortalSettings, type PortalSettings } from "@/hooks/use-portal-settings";
 import Link from "next/link";
@@ -190,6 +191,14 @@ export function DashboardSidebar({ userId, profile: initialProfile }: DashboardS
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip="My Profile">
+                  <Link href={`/profile/${profile?.username || profile?.id || userId}`} onClick={(e) => handleNavClick(e, "My Profile")}>
+                    <User className="size-4" />
+                    <span>My Profile</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
                 <SidebarMenuButton asChild tooltip="Notifications">
                   <Link href="/dashboard/notifications" onClick={(e) => handleNavClick(e, "Notifications")}>
                     <Bell className="size-4" />
@@ -277,6 +286,12 @@ export function DashboardSidebar({ userId, profile: initialProfile }: DashboardS
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href={`/profile/${profile?.username || profile?.id || userId}`} onClick={(e) => handleNavClick(e)}>
+                    <User className="mr-2 size-4" />
+                    View Profile
+                  </Link>
+                </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href="/dashboard/settings" onClick={(e) => handleNavClick(e)}>
                     <Settings className="mr-2 size-4" />

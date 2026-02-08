@@ -2,9 +2,8 @@
 
 import type { User } from "@supabase/supabase-js";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { SettingsForm } from "@/components/settings/settings-form";
 import { ApiSettings } from "@/components/settings/api-settings";
-import { User as UserIcon, Key, Shield } from "lucide-react";
+import { Key, Shield } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,7 +26,6 @@ interface SettingsPageClientProps {
 }
 
 export function SettingsPageClient({ user, profile, isAdmin }: SettingsPageClientProps) {
-  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
@@ -52,7 +50,6 @@ export function SettingsPageClient({ user, profile, isAdmin }: SettingsPageClien
       if (error) throw error;
 
       toast.success("Password updated successfully");
-      setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
     } catch (error) {
@@ -63,12 +60,8 @@ export function SettingsPageClient({ user, profile, isAdmin }: SettingsPageClien
   };
 
   return (
-    <Tabs defaultValue="profile" className="space-y-6">
+    <Tabs defaultValue="security" className="space-y-6">
       <TabsList>
-        <TabsTrigger value="profile" className="gap-2">
-          <UserIcon className="h-4 w-4" />
-          Profile
-        </TabsTrigger>
         <TabsTrigger value="security" className="gap-2">
           <Shield className="h-4 w-4" />
           Security
@@ -80,10 +73,6 @@ export function SettingsPageClient({ user, profile, isAdmin }: SettingsPageClien
           </TabsTrigger>
         )}
       </TabsList>
-
-      <TabsContent value="profile">
-        <SettingsForm user={user} profile={profile} />
-      </TabsContent>
 
       <TabsContent value="security">
         <Card>
@@ -132,3 +121,4 @@ export function SettingsPageClient({ user, profile, isAdmin }: SettingsPageClien
     </Tabs>
   );
 }
+

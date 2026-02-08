@@ -233,13 +233,29 @@ export function AblyClientProvider({ children, userId }: AblyClientProviderProps
                 }
             }
             else if (newState === "suspended") {
-                console.warn("Ably connection suspended - attempting background recovery...");
-                // Don't close or disable yet, let Ably try to recover
-                // But notify user if it persists
-                if (reconnectAttempts.current > 3) {
-                    toast.warning("Real-time sync is lagging due to network.", { id: "ably-lag" });
-                }
+                // Connection suspended - Ably will auto-retry in background
+                // This is common on restricted networks, don't spam the user
+                console.warn("Ably connection suspended - falling back to polling");
+
+                // After 3 failed attempts, disable Ably gracefully to prevent further errors
                 reconnectAttempts.current++;
+                if (reconnectAttempts.current > 3) {
+                    console.warn("Ably suspended too many times - disabling real-time");
+                    ablyConfigured = false;
+                    setIsConfigured(false);
+                    setClient(null);
+
+                    // Close the client to prevent further connection attempts
+                    if (globalAblyClient) {
+                        globalAblyClient.close();
+                        globalAblyClient = null;
+                    }
+                }
+            }
+            else if (newState === "disconnected") {
+                // Normal disconnect - Ably will auto-reconnect
+                // Don't show errors for temporary disconnects
+                console.log("Ably disconnected - will auto-reconnect");
             }
         };
 

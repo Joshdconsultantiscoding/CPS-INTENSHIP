@@ -17,6 +17,7 @@ import {
     Bug,
     Home,
     Rocket,
+    Award,
     LucideIcon,
 } from "lucide-react";
 
@@ -60,6 +61,11 @@ export const internNavItems: NavItem[] = [
         title: "Classroom",
         url: "/dashboard/classroom",
         icon: GraduationCap,
+    },
+    {
+        title: "Certificates",
+        url: "/dashboard/certificates",
+        icon: Award,
     },
     {
         title: "Events",
@@ -151,6 +157,11 @@ export const adminNavItems: NavItem[] = [
         title: "Classroom",
         url: "/dashboard/classroom",
         icon: GraduationCap,
+    },
+    {
+        title: "Certificates",
+        url: "/dashboard/certificates",
+        icon: Award,
     },
     {
         title: "Events",

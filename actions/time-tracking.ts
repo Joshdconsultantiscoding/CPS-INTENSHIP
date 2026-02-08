@@ -247,12 +247,15 @@ export async function completeLessonTracking(lessonId: string) {
         const requiredTimePercentage = settings?.required_time_percentage || 0;
         let requiredTime = lesson.required_time_seconds || 0;
 
+        console.log(`[completeLessonTracking] Checking time: lesson_required=${lesson.required_time_seconds}, course_pct=${requiredTimePercentage}, duration=${lesson.duration_minutes}`);
+
         // If lesson has no specific time set, but course has a percentage requirement
         if (requiredTime === 0 && lesson.duration_minutes > 0 && requiredTimePercentage > 0) {
-            requiredTime = (lesson.duration_minutes * 60) * (requiredTimePercentage / 100);
+            requiredTime = Math.ceil((lesson.duration_minutes * 60) * (requiredTimePercentage / 100));
         }
 
         const totalTime = tracking?.total_active_seconds || 0;
+        console.log(`[completeLessonTracking] Result: required=${requiredTime}, actual=${totalTime}`);
 
         // Strict Check
         if (requiredTime > 0 && totalTime < requiredTime && !lesson.allow_skip) {
@@ -260,11 +263,11 @@ export async function completeLessonTracking(lessonId: string) {
             const remainingMinutes = Math.ceil(remainingSeconds / 60);
 
             // If less than a minute, show seconds
-            const timeString = remainingMinutes > 1 ? `${remainingMinutes} more minutes` : `${remainingSeconds} more seconds`;
+            const timeString = remainingSeconds > 60 ? `${remainingMinutes} more minutes` : `${remainingSeconds} more seconds`;
 
             return {
                 success: false,
-                error: `You need to spend at least ${timeString} on this lesson to complete it.`
+                error: `You need to spend at least ${timeString} on this lesson to complete it. (Goal: ${Math.ceil(requiredTime / 60)}m)`
             };
         }
 

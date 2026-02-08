@@ -113,8 +113,9 @@ export function LessonViewerClient({
     };
 
     // Determine if lesson can be completed
+    const requiredTime = lesson.effective_required_time ?? lesson.required_time_seconds ?? 0;
     const canComplete =
-        (timeTracker.requirementMet || lesson.allow_skip || (lesson.effective_required_time ?? lesson.required_time_seconds) === 0) &&
+        (timeTracker.requirementMet || lesson.allow_skip || requiredTime === 0) &&
         (!lesson.quiz_id || quizCompleted || lesson.quiz_attempt?.passed);
 
     // Locked State
@@ -203,7 +204,7 @@ export function LessonViewerClient({
                             )}
                         </div>
 
-                        {lesson.required_time_seconds > 0 && (
+                        {requiredTime > 0 && (
                             <>
                                 <Progress
                                     value={timeTracker.progress}
@@ -229,11 +230,11 @@ export function LessonViewerClient({
             </div>
 
             {/* Time requirement warning */}
-            {lesson.required_time_seconds > 0 && !timeTracker.requirementMet && !lesson.allow_skip && (
+            {requiredTime > 0 && !timeTracker.requirementMet && !lesson.allow_skip && (
                 <Alert>
                     <Clock className="h-4 w-4" />
                     <AlertDescription>
-                        You must spend at least {Math.ceil(lesson.required_time_seconds / 60)} minutes on this lesson before you can mark it as complete.
+                        You must spend at least {Math.ceil(requiredTime / 60)} minutes on this lesson before you can mark it as complete.
                     </AlertDescription>
                 </Alert>
             )}
@@ -375,7 +376,7 @@ export function LessonViewerClient({
                     {!canComplete ? (
                         <Button disabled variant="outline" className="gap-2 w-full sm:w-auto">
                             <Lock className="h-4 w-4" />
-                            {!timeTracker.requirementMet && !lesson.allow_skip && lesson.required_time_seconds > 0
+                            {!timeTracker.requirementMet && !lesson.allow_skip && requiredTime > 0
                                 ? "Time requirement not met"
                                 : "Complete quiz first"}
                         </Button>

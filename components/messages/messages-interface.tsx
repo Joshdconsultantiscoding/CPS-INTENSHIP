@@ -24,6 +24,7 @@ interface MessagesInterfaceProps {
     last_name: string | null;
     full_name: string | null;
     email: string;
+    username?: string | null;
     avatar_url: string | null;
     role: string;
     online_status?: string;
@@ -1063,7 +1064,7 @@ export function MessagesInterface({
                 onStartCall={startCall}
                 isOnline={!!(activeUser && isUserOnline(activeUser.id))}
                 onViewContact={() => {
-                  if (activeUser) router.push(`/dashboard/profile/${activeUser.id}`);
+                  if (activeUser) router.push(`/profile/${activeUser.username || activeUser.id}`);
                 }}
                 onClearMessages={async () => {
                   if (!selectedUser && !selectedChannel) return;

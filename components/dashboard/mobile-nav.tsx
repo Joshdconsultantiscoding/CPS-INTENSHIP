@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { MoreHorizontal } from "lucide-react";
+import { MoreHorizontal, User } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -107,6 +107,17 @@ export function MobileNav({ isAdmin }: MobileNavProps) {
                 </Link>
               </DropdownMenuItem>
             ))}
+            <div className="h-px bg-border my-1" />
+            <DropdownMenuItem asChild className="rounded-lg focus:bg-zinc-100 focus:text-zinc-900 py-2.5">
+              <Link
+                href="/profile/me"
+                onClick={(e) => handleNavClick(e, "My Profile")}
+                className="w-full cursor-pointer flex items-center gap-3"
+              >
+                <User className="h-4 w-4 text-muted-foreground" />
+                <span className="font-medium text-sm">My Profile</span>
+              </Link>
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

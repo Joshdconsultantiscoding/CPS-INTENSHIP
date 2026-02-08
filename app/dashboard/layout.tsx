@@ -75,6 +75,16 @@ export default async function DashboardLayout({
   }
   console.timeEnd(syncLabel);
 
+  // Profile completion check: redirect interns to setup if profile not complete
+  const profile = profileRes.data;
+  if (profile && profile.role === "intern" && !profile.profile_completed) {
+    // Check if they have at least started - if no headline/about, redirect to setup
+    const hasMinimalInfo = profile.headline || profile.about;
+    if (!hasMinimalInfo) {
+      redirect("/setup-profile");
+    }
+  }
+
   const serverOnboarding = {
     hasAcceptedTerms: !!termsRes.data,
     isCompleted: !!progressRes.data?.is_completed,

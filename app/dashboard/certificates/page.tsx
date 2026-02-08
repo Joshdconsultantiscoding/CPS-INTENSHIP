@@ -12,7 +12,8 @@ import {
     Calendar,
     Trophy,
     CheckCircle2,
-    Share2
+    Share2,
+    GraduationCap
 } from "lucide-react";
 import Link from "next/link";
 import { CertificatePreview } from "@/components/classroom/certificate-preview";
@@ -38,7 +39,7 @@ export default async function CertificatesPage() {
                 {certificates.length === 0 ? (
                     <Card className="text-center py-16 max-w-lg mx-auto border-dashed">
                         <CardContent>
-                            <Award className="h-20 w-20 mx-auto text-muted-foreground/30 mb-6" />
+                            <GraduationCap className="h-20 w-20 mx-auto text-muted-foreground/30 mb-6" />
                             <h3 className="text-xl font-semibold mb-2 text-[#1e3a5f]">No Certificates Yet</h3>
                             <p className="text-muted-foreground mb-8 text-sm">
                                 Complete courses to earn your certificates and showcase your achievements.
@@ -58,7 +59,7 @@ export default async function CertificatesPage() {
                                     <div className="absolute inset-0 flex items-center justify-center p-6 transition-transform duration-500 group-hover:scale-105">
                                         <div className="text-center">
                                             <div className="bg-white/90 p-4 rounded-full shadow-sm mx-auto mb-4 inline-block backdrop-blur-sm">
-                                                <Award className="h-10 w-10 text-amber-500" />
+                                                <GraduationCap className="h-10 w-10 text-amber-500" />
                                             </div>
                                             <h4 className="font-bold text-xl line-clamp-2 text-[#1e3a5f] mb-2">{cert.course_title}</h4>
                                             <p className="text-sm text-muted-foreground font-medium uppercase tracking-wider">{cert.intern_name}</p>

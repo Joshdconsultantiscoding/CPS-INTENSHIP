@@ -104,7 +104,9 @@ export function DashboardHeader({ userId, profile: initialProfile }: DashboardHe
     if (path.includes("/reports/")) return "Report Details";
     if (path.includes("/classroom/courses/") && path !== "/dashboard/classroom/courses") return "Course Details";
     if (path.includes("/classroom/lessons/")) return "Learning Session";
+    if (path.includes("/classroom/lessons/")) return "Learning Session";
     if (path.startsWith("/dashboard/community/")) return "Communities";
+    if (path.startsWith("/profile/")) return "Profile";
 
     return "Dashboard";
   };

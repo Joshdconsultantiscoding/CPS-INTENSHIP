@@ -53,6 +53,8 @@ const lessonSchema = z.object({
     content: z.string().optional(),
     video_url: z.string().url().optional().or(z.literal("")),
     status: z.enum(["draft", "published"]),
+    duration_minutes: z.coerce.number().min(0).default(0),
+    required_time_seconds: z.coerce.number().min(0).default(0),
     resources: z.array(z.object({
         name: z.string(),
         url: z.string().url()
@@ -96,6 +98,8 @@ export function LessonContentTab({ course }: LessonContentTabProps) {
                 content: lesson.content || "",
                 video_url: lesson.video_url || "",
                 status: lesson.status || "published",
+                duration_minutes: lesson.duration_minutes || 0,
+                required_time_seconds: lesson.required_time_seconds || 0,
                 resources: lesson.resources || [],
             });
         }
@@ -292,6 +296,38 @@ export function LessonContentTab({ course }: LessonContentTabProps) {
                                             </FormItem>
                                         )}
                                     />
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <FormField
+                                            control={form.control}
+                                            name="duration_minutes"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Duration (min)</FormLabel>
+                                                    <FormControl>
+                                                        <Input type="number" {...field} />
+                                                    </FormControl>
+                                                    <FormDescription className="text-[10px]">Estimated total length.</FormDescription>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                        <FormField
+                                            control={form.control}
+                                            name="required_time_seconds"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Min Stay (sec)</FormLabel>
+                                                    <FormControl>
+                                                        <Input type="number" {...field} />
+                                                    </FormControl>
+                                                    <FormDescription className="text-[10px]">Lock until met.</FormDescription>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    </div>
+
                                     <Button type="submit" className="w-full" disabled={isSaving}>
                                         {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                                         Save Lesson
