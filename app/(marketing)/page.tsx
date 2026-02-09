@@ -232,6 +232,14 @@ export default function HomePage() {
             {/* Stats Section */}
             <section className="py-16 border-y border-border/40 bg-muted/30">
                 <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                    <div className="flex flex-col items-center justify-center mb-10 text-center">
+                        <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-500 text-xs font-medium uppercase tracking-wider mb-2">
+                            Projected Milestones
+                        </span>
+                        <p className="text-muted-foreground text-sm max-w-xl">
+                            We envision hitting these targets in a few months as we scale our impact.
+                        </p>
+                    </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
                         {stats.map((stat, i) => (
                             <StatsCard key={stat.label} value={stat.value} label={stat.label} delay={i * 0.1} />
