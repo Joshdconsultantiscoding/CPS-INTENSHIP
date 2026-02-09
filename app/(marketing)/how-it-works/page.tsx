@@ -34,31 +34,36 @@ export default function HowItWorksPage() {
     return (
         <>
             {/* Hero */}
-            <section className="py-24 relative overflow-hidden">
-                <div className="absolute inset-0 -z-10 bg-gradient-to-br from-sky-500/5 via-transparent to-amber-500/5" />
-                <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <section className="py-32 relative overflow-hidden bg-white dark:bg-slate-950">
+                <div className="absolute inset-x-0 -top-px h-px bg-linear-to-r from-transparent via-sky-500/20 to-transparent" />
+                <div className="mx-auto max-w-7xl px-6 sm:px-8 lg:px-12">
                     <SectionHeading
-                        badge="How It Works"
-                        title="From Sign Up to Hired"
-                        subtitle="A clear path from your first day to your dream job. Here's how CPS Intern makes it happen."
+                        badge="The Journey"
+                        title="Your Path to Global Success"
+                        subtitle="A structured, AI-guided roadmap from your first sign-up to landing your dream role at a top organization."
                     />
                 </div>
             </section>
 
             {/* Timeline */}
-            <section className="pb-24">
-                <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
-                    <div className="space-y-0">
-                        {steps.map((step, i) => (
-                            <TimelineStep
-                                key={step.step}
-                                step={step.step}
-                                title={step.title}
-                                description={step.description}
-                                isLast={i === steps.length - 1}
-                                delay={i * 0.15}
-                            />
-                        ))}
+            <section className="pb-32 bg-white dark:bg-slate-950">
+                <div className="mx-auto max-w-4xl px-6 sm:px-8 lg:px-12">
+                    <div className="relative">
+                        {/* Vertical Line (Desktop) */}
+                        <div className="hidden md:block absolute left-8 top-10 bottom-10 w-1 bg-linear-to-b from-sky-500/50 via-blue-500/50 to-emerald-500/50 rounded-full" />
+
+                        <div className="space-y-12">
+                            {steps.map((step, i) => (
+                                <TimelineStep
+                                    key={step.step}
+                                    step={step.step}
+                                    title={step.title}
+                                    description={step.description}
+                                    isLast={i === steps.length - 1}
+                                    delay={i * 0.1}
+                                />
+                            ))}
+                        </div>
                     </div>
                 </div>
             </section>

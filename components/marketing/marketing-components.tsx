@@ -19,13 +19,13 @@ interface SectionHeadingProps {
 
 export function SectionHeading({ badge, title, subtitle, centered = true, className }: SectionHeadingProps) {
     return (
-        <div className={cn(centered && "text-center", "max-w-3xl", centered && "mx-auto", className)}>
+        <div className={cn(centered && "text-center", "max-w-4xl", centered && "mx-auto", className)}>
             {badge && (
                 <motion.span
                     initial={{ opacity: 0, y: 10 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
-                    className="inline-block mb-4 px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded-full"
+                    className="inline-block mb-4 px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-sky-600 dark:text-sky-400 bg-sky-500/10 rounded-full border border-sky-500/20"
                 >
                     {badge}
                 </motion.span>
@@ -35,7 +35,7 @@ export function SectionHeading({ badge, title, subtitle, centered = true, classN
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: 0.1 }}
-                className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-foreground"
+                className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-foreground leading-[1.1]"
             >
                 {title}
             </motion.h2>
@@ -45,7 +45,7 @@ export function SectionHeading({ badge, title, subtitle, centered = true, classN
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
                     transition={{ delay: 0.2 }}
-                    className="mt-4 text-lg text-muted-foreground"
+                    className="mt-6 text-base sm:text-lg lg:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed"
                 >
                     {subtitle}
                 </motion.p>
@@ -71,15 +71,15 @@ export function FeatureCard({ icon: Icon, title, description, delay = 0 }: Featu
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay, duration: 0.5 }}
-            className="group relative p-6 rounded-2xl bg-gradient-to-br from-background to-muted/30 border border-border/50 hover:border-amber-500/50 hover:shadow-xl hover:shadow-amber-500/5 transition-all duration-300"
+            className="group relative p-8 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-sky-500/50 hover:shadow-2xl hover:shadow-sky-500/10 transition-all duration-500 overflow-hidden"
         >
-            <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-amber-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div className="absolute inset-x-0 -top-px h-px bg-linear-to-r from-transparent via-sky-500/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
             <div className="relative">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500/20 to-sky-500/20 text-amber-600 dark:text-amber-400 mb-4 group-hover:scale-110 transition-transform">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-500/10 text-sky-600 dark:text-sky-400 mb-6 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-500">
                     <Icon className="h-6 w-6" />
                 </div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">{title}</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">{description}</p>
+                <h3 className="text-xl font-bold text-foreground mb-3">{title}</h3>
+                <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">{description}</p>
             </div>
         </motion.div>
     );
@@ -129,17 +129,19 @@ export function TestimonialCard({ quote, author, role, delay = 0 }: TestimonialC
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay, duration: 0.5 }}
-            className="relative p-6 rounded-2xl bg-gradient-to-br from-background to-muted/30 border border-border/50"
+            className="relative p-8 rounded-3xl bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 backdrop-blur-sm group hover:border-sky-500/30 transition-colors"
         >
-            <div className="absolute top-6 left-6 text-6xl text-sky-500/20 font-serif">"</div>
-            <p className="relative text-muted-foreground leading-relaxed mb-6 pt-4">{quote}</p>
-            <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-gradient-to-br from-sky-500 to-amber-500 flex items-center justify-center text-white font-semibold text-sm">
+            <div className="absolute top-8 left-8 text-7xl text-sky-500/10 font-serif leading-none select-none group-hover:text-sky-500/20 transition-colors pointer-events-none">"</div>
+            <p className="relative text-base sm:text-lg text-foreground italic leading-relaxed mb-8 pt-4">
+                {quote}
+            </p>
+            <div className="flex items-center gap-4">
+                <div className="h-12 w-12 rounded-2xl bg-linear-to-br from-sky-500 to-blue-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-sky-500/20">
                     {author.charAt(0)}
                 </div>
                 <div>
-                    <div className="font-semibold text-foreground text-sm">{author}</div>
-                    <div className="text-xs text-muted-foreground">{role}</div>
+                    <div className="font-bold text-foreground">{author}</div>
+                    <div className="text-xs sm:text-sm text-muted-foreground font-medium uppercase tracking-wider">{role}</div>
                 </div>
             </div>
         </motion.div>
@@ -244,20 +246,17 @@ export function TimelineStep({ step, title, description, isLast = false, delay =
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
             transition={{ delay, duration: 0.5 }}
-            className="relative flex gap-6"
+            className="relative flex gap-8 items-start"
         >
-            {/* Line */}
-            {!isLast && (
-                <div className="absolute left-5 top-12 bottom-0 w-px bg-gradient-to-b from-amber-500 to-transparent" />
-            )}
             {/* Step Number */}
-            <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-500 to-amber-600 text-white font-bold shadow-lg shadow-amber-500/25">
+            <div className="relative z-10 flex h-16 w-16 shrink-0 items-center justify-center rounded-4xl bg-white dark:bg-slate-950 border-4 border-slate-100 dark:border-slate-800 text-2xl font-black text-sky-500 shadow-2xl">
                 {step}
             </div>
+
             {/* Content */}
-            <div className="pb-12">
-                <h3 className="text-lg font-semibold text-foreground mb-2">{title}</h3>
-                <p className="text-muted-foreground leading-relaxed">{description}</p>
+            <div className={cn("pb-16 pt-2", !isLast && "border-l-2 border-dashed border-slate-200 dark:border-slate-800 -ml-14 pl-20 md:ml-0 md:pl-0 md:border-0")}>
+                <h3 className="text-2xl font-black text-foreground mb-3 tracking-tight">{title}</h3>
+                <p className="text-lg text-muted-foreground leading-relaxed font-medium max-w-2xl">{description}</p>
             </div>
         </motion.div>
     );
@@ -284,15 +283,17 @@ export function CTASection({
     secondaryHref = "/auth/sign-in",
 }: CTASectionProps) {
     return (
-        <section className="relative py-24 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-sky-600/10 via-transparent to-amber-500/10" />
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,var(--tw-gradient-stops))] from-sky-500/10 via-transparent to-transparent" />
-            <div className="relative mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 text-center">
+        <section className="relative py-32 overflow-hidden bg-slate-950">
+            <div className="absolute inset-0">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,var(--tw-gradient-stops))] from-sky-500/20 via-slate-950 to-slate-950" />
+                <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 brightness-100 contrast-150" />
+            </div>
+            <div className="relative mx-auto max-w-4xl px-6 sm:px-8 lg:px-12 text-center">
                 <motion.h2
                     initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
-                    className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-foreground mb-4"
+                    className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-white mb-6 leading-tight"
                 >
                     {title}
                 </motion.h2>
@@ -302,7 +303,7 @@ export function CTASection({
                         whileInView={{ opacity: 1, y: 0 }}
                         viewport={{ once: true }}
                         transition={{ delay: 0.1 }}
-                        className="text-lg text-muted-foreground mb-8"
+                        className="text-lg sm:text-xl text-sky-100/70 mb-12 max-w-2xl mx-auto"
                     >
                         {subtitle}
                     </motion.p>
@@ -314,13 +315,13 @@ export function CTASection({
                     transition={{ delay: 0.2 }}
                     className="flex flex-col sm:flex-row items-center justify-center gap-4"
                 >
-                    <Button asChild size="lg" className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 shadow-lg shadow-amber-500/25">
+                    <Button asChild size="lg" className="h-14 px-8 rounded-full bg-sky-500 hover:bg-sky-600 text-white font-bold text-lg shadow-2xl shadow-sky-500/20 w-full sm:w-auto">
                         <Link href={primaryHref}>
                             {primaryLabel}
-                            <ArrowRight className="ml-2 h-4 w-4" />
+                            <ArrowRight className="ml-2 h-5 w-5" />
                         </Link>
                     </Button>
-                    <Button asChild size="lg" variant="outline">
+                    <Button asChild size="lg" variant="outline" className="h-14 px-8 rounded-full border-white/10 hover:bg-white/5 text-white font-bold text-lg w-full sm:w-auto">
                         <Link href={secondaryHref}>{secondaryLabel}</Link>
                     </Button>
                 </motion.div>
