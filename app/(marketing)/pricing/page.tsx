@@ -24,6 +24,18 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 
 export default function PricingPage() {
+    return (
+        <React.Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center bg-background">
+                <div className="h-10 w-10 border-4 border-sky-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+        }>
+            <PricingPageContent />
+        </React.Suspense>
+    );
+}
+
+function PricingPageContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
 
