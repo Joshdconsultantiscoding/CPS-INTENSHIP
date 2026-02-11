@@ -4,15 +4,14 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { getAuthUser } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
-import { Achievement, Reward } from "@/lib/types";
+import { Reward, RewardClaim } from "@/lib/types";
 import { createNotification } from "@/lib/notifications/notification-service";
 import { getAblyAdmin } from "@/lib/ably-server";
 
 /**
- * Creates a new reward in the catalog.
- * Only accessible by admins.
+ * Creates a new reward in the catalogue.
  */
-export async function createRewardAction(data: Omit<Reward, "id" | "created_at">) {
+export async function createRewardAction(data: Omit<Reward, "id" | "created_at" | "updated_at">) {
     try {
         const user = await getAuthUser();
 
@@ -22,47 +21,21 @@ export async function createRewardAction(data: Omit<Reward, "id" | "created_at">
 
         const adminClient = await createAdminClient();
 
-        // Helper to try insert
-        const tryInsert = async (name: string) => {
-            return await adminClient
-                .from("rewards")
-                .insert({
-                    name: name.trim(), // Ensure trimmed
-                    description: data.description,
-                    points_required: data.points_required,
-                    icon: data.icon,
-                    is_active: data.is_active ?? true,
-                })
-                .select()
-                .single();
-        };
-
-        // 1. First attempt
-        let { data: reward, error } = await tryInsert(data.name);
-
-        // 2. Handle unique constraint violation (code 23505)
-        if (error && error.code === '23505') {
-            const copyName = `${data.name.trim()} (Copy)`;
-            const retry1 = await tryInsert(copyName);
-
-            if (retry1.error && retry1.error.code === '23505') {
-                // Try one more time with random suffix just in case
-                const finalName = `${data.name.trim()} (${Math.floor(Math.random() * 1000)})`;
-                const retry2 = await tryInsert(finalName);
-                reward = retry2.data;
-                error = retry2.error;
-            } else {
-                reward = retry1.data;
-                error = retry1.error;
-            }
-        }
+        const { data: reward, error } = await adminClient
+            .from("reward_items")
+            .insert({
+                name: data.name.trim(),
+                description: data.description,
+                points_required: data.points_required,
+                icon: data.icon,
+                is_active: data.is_active ?? true,
+                expires_at: data.expires_at,
+            })
+            .select()
+            .single();
 
         if (error) {
             console.error("Error creating reward:", error);
-            // Return user-friendly error if it still fails
-            if (error.code === '23505') {
-                return { success: false, error: "A reward with this name already exists. Please choose a unique name." };
-            }
             return { success: false, error: error.message };
         }
 
@@ -87,10 +60,9 @@ export async function createRewardAction(data: Omit<Reward, "id" | "created_at">
 }
 
 /**
- * Updates an existing reward in the catalog.
- * Only accessible by admins.
+ * Updates an existing reward in the catalogue.
  */
-export async function updateRewardAction(id: string, data: Partial<Omit<Reward, "id" | "created_at">>) {
+export async function updateRewardAction(id: string, data: Partial<Omit<Reward, "id" | "created_at" | "updated_at">>) {
     try {
         const user = await getAuthUser();
 
@@ -100,17 +72,17 @@ export async function updateRewardAction(id: string, data: Partial<Omit<Reward, 
 
         const adminClient = await createAdminClient();
         const { data: reward, error } = await adminClient
-            .from("rewards")
-            .update(data)
+            .from("reward_items")
+            .update({
+                ...data,
+                updated_at: new Date().toISOString()
+            })
             .eq("id", id)
             .select()
             .single();
 
         if (error) {
             console.error("Error updating reward:", error);
-            if (error.code === '23505') {
-                return { success: false, error: "A reward with this name already exists. Please choose a unique name." };
-            }
             return { success: false, error: error.message };
         }
 
@@ -135,25 +107,28 @@ export async function updateRewardAction(id: string, data: Partial<Omit<Reward, 
 }
 
 /**
- * Deletes a reward from the catalog.
- * Only accessible by admins.
+ * Archives a reward (soft delete).
  */
 export async function deleteRewardAction(id: string) {
     try {
         const user = await getAuthUser();
 
         if (user.role !== "admin") {
-            throw new Error("Unauthorized: Only admins can delete rewards");
+            throw new Error("Unauthorized: Only admins can archive rewards");
         }
 
         const adminClient = await createAdminClient();
         const { error } = await adminClient
-            .from("rewards")
-            .delete()
+            .from("reward_items")
+            .update({
+                archived_at: new Date().toISOString(),
+                is_active: false,
+                updated_at: new Date().toISOString()
+            })
             .eq("id", id);
 
         if (error) {
-            console.error("Error deleting reward:", error);
+            console.error("Error archiving reward:", error);
             return { success: false, error: error.message };
         }
 
@@ -169,6 +144,20 @@ export async function deleteRewardAction(id: string) {
         }
 
         revalidatePath("/dashboard/rewards");
+
+        // Notify Interns
+        try {
+            const { broadcastNotification } = await import("@/lib/notifications/notification-service");
+            await broadcastNotification({
+                title: "Reward Removed",
+                message: `A reward has been removed from the catalog.`,
+                type: "system",
+                link: "/dashboard/rewards"
+            });
+        } catch (e) {
+            console.warn("Notification broadcast failed:", e);
+        }
+
         return { success: true };
     } catch (error: any) {
         if (isRedirectError(error)) throw error;
@@ -180,14 +169,14 @@ export async function deleteRewardAction(id: string) {
 /**
  * Handles intern claiming a reward securely.
  */
-export async function claimRewardAction(rewardId: string) {
+export async function claimRewardAction(rewardItemId: string) {
     try {
         const user = await getAuthUser();
         const adminClient = await createAdminClient();
 
         // 1. Fetch reward and profile
         const [{ data: reward, error: rErr }, { data: profile, error: pErr }] = await Promise.all([
-            adminClient.from("rewards").select("*").eq("id", rewardId).single(),
+            adminClient.from("reward_items").select("*").eq("id", rewardItemId).single(),
             adminClient.from("profiles").select("total_points, full_name, role").eq("id", user.id).single()
         ]);
 
@@ -196,26 +185,29 @@ export async function claimRewardAction(rewardId: string) {
 
         // 2. Validate
         if (profile.total_points < reward.points_required) {
-            throw new Error("Insufficient points");
+            throw new Error(`Insufficient points. You need ${reward.points_required} but have ${profile.total_points}.`);
         }
 
-        // 3. Check for existing achievement
+        // 3. Check for existing claim (if one per person)
         const { data: existing } = await adminClient
-            .from("achievements")
+            .from("reward_claims")
             .select("id")
             .eq("user_id", user.id)
-            .eq("reward_id", rewardId)
+            .eq("reward_item_id", rewardItemId)
+            .eq("status", "pending")
             .maybeSingle();
 
-        if (existing) throw new Error("Reward already claimed");
+        if (existing) throw new Error("You already have a pending claim for this reward.");
 
-        // 4. Atomic-ish update (Supabase doesn't have multi-table transactions in JS easily without RPC, but we'll sequentialize)
-        const { error: achievementErr } = await adminClient.from("achievements").insert({
+        // 4. Atomic operation via RPC or sequential (sequential here for simplicity, but RPC is better for high load)
+        const { error: claimErr } = await adminClient.from("reward_claims").insert({
             user_id: user.id,
-            reward_id: rewardId
+            reward_item_id: rewardItemId,
+            status: "pending"
         });
-        if (achievementErr) throw achievementErr;
+        if (claimErr) throw claimErr;
 
+        // Deduct points
         const { error: pointsErr } = await adminClient
             .from("profiles")
             .update({ total_points: profile.total_points - reward.points_required })
@@ -223,30 +215,24 @@ export async function claimRewardAction(rewardId: string) {
         if (pointsErr) throw pointsErr;
 
         // 5. Notifications
-        // celebrate for intern
         await createNotification({
             userId: user.id,
             title: "🎁 Reward Claimed!",
-            message: `Congratulations! You've successfully claimed: ${reward.name}`,
-            type: "reward",
+            message: `Congratulations! You've successfully claimed: ${reward.name}. Points deducted: ${reward.points_required}`,
+            type: "achievement",
             link: `/dashboard/rewards`,
-            priority: 'high',
-            sound: 'success',
-            metadata: { rewardId }
         });
 
-        // alert admins
+        // Notify Admins
         const { data: admins } = await adminClient.from("profiles").select("id").eq("role", "admin");
         if (admins) {
             for (const admin of admins) {
                 await createNotification({
                     userId: admin.id,
-                    title: "Reward Claimed",
+                    title: "New Reward Claim",
                     message: `${profile.full_name || user.email} just claimed '${reward.name}'`,
                     type: "system",
                     link: `/dashboard/rewards`,
-                    priority: 'normal',
-                    metadata: { internId: user.id, rewardId }
                 });
             }
         }

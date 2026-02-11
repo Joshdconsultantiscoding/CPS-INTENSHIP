@@ -1,5 +1,5 @@
 import { getAuthUser } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 import { MessagesInterface } from "@/components/messages/messages-interface";
 
 export const metadata = {
@@ -16,7 +16,8 @@ export default async function MessagesPage({
 
   // Use Clerk auth instead of Supabase
   const authUser = await getAuthUser();
-  const supabase = await createClient();
+  // Use admin client to bypass RLS — ensures all users are visible (admin, mentor, intern)
+  const supabase = await createAdminClient();
 
   // Build a user object compatible with the MessagesInterface
   const user = {
@@ -33,7 +34,7 @@ export default async function MessagesPage({
   try {
     const [profileRes, usersRes, channelsRes, messagesRes] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", user.id).single(),
-      supabase.from("profiles").select("id, full_name, email, username, avatar_url, role, online_status, last_seen_at, last_active_at").neq("id", user.id).order("full_name"),
+      supabase.from("profiles").select("id, full_name, first_name, last_name, email, username, avatar_url, role, online_status, last_seen_at, last_active_at").neq("id", user.id).order("full_name"),
       supabase.from("channels").select("*").order("created_at", { ascending: false }),
       supabase.from("messages").select("*").or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`).is("channel_id", null).order("created_at", { ascending: false }).limit(50),
     ]);

@@ -78,7 +78,7 @@ export function ReleaseForm({ currentVersion = "v1.0.0" }: ReleaseFormProps) {
         }
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent, status: 'draft' | 'published' = 'published') => {
         e.preventDefault();
         if (!form.version || !form.title) {
             toast.error("Version and Title are required");
@@ -92,6 +92,7 @@ export function ReleaseForm({ currentVersion = "v1.0.0" }: ReleaseFormProps) {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     ...form,
+                    status,
                     features: form.features.filter(f => f.trim()),
                     fixes: form.fixes.filter(f => f.trim()),
                     improvements: form.improvements.filter(f => f.trim()),
@@ -100,12 +101,12 @@ export function ReleaseForm({ currentVersion = "v1.0.0" }: ReleaseFormProps) {
             });
 
             if (res.ok) {
-                toast.success("Release published successfully!");
+                toast.success(status === 'draft' ? "Draft saved!" : "Release published successfully!");
                 router.push("/dashboard/updates");
                 router.refresh();
             } else {
                 const err = await res.json();
-                toast.error(err.error || "Failed to publish release");
+                toast.error(err.error || "Failed to save release");
             }
         } catch (error) {
             toast.error("Failed to publish release");
@@ -146,7 +147,7 @@ export function ReleaseForm({ currentVersion = "v1.0.0" }: ReleaseFormProps) {
     };
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-8">
+        <form onSubmit={(e) => handleSubmit(e, 'published')} className="space-y-8">
             <Card className="border-primary/20 shadow-lg">
                 <CardHeader className="bg-primary/5">
                     <CardTitle className="flex items-center gap-2">
@@ -225,6 +226,14 @@ export function ReleaseForm({ currentVersion = "v1.0.0" }: ReleaseFormProps) {
                 <Button type="button" variant="outline" onClick={() => router.back()} disabled={isLoading}>
                     <RotateCcw className="h-4 w-4 mr-2" />
                     Discard
+                </Button>
+                <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={isLoading}
+                    onClick={(e) => handleSubmit(e, 'draft')}
+                >
+                    {isLoading ? "Saving..." : "Save as Draft"}
                 </Button>
                 <Button type="submit" disabled={isLoading} className="min-w-[140px]">
                     {isLoading ? "Publishing..." : "Publish Release"}

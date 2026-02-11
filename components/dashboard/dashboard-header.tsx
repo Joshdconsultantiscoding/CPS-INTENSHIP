@@ -35,6 +35,7 @@ const pathTitles: Record<string, string> = {
   "/dashboard/calendar": "Calendar",
   "/dashboard/performance": "Performance",
   "/dashboard/analytics": "Analytics",
+  "/dashboard/referrals": "Referrals",
   "/dashboard/rewards": "Rewards",
   "/dashboard/assistant": "AI Assistant",
   "/dashboard/interns": "Interns",

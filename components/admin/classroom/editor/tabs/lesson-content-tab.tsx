@@ -85,6 +85,8 @@ export function LessonContentTab({ course }: LessonContentTabProps) {
             content: "",
             video_url: "",
             status: "published",
+            duration_minutes: 0,
+            required_time_seconds: 0,
             resources: [],
         },
     });

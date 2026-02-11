@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
     Phone,
     PhoneOff,
@@ -9,17 +9,12 @@ import {
     Video,
     VideoOff,
     Volume2,
-    VolumeX,
-    Maximize2,
+    UserPlus,
+    Grid3X3,
+    ScreenShare,
+    Loader2,
     MessageSquare,
     Clock,
-    UserPlus,
-    Users,
-    Plus,
-    BellOff,
-    Grid3X3,
-    MoreHorizontal,
-    ScreenShare
 } from "lucide-react";
 import {
     Dialog,
@@ -35,10 +30,9 @@ import {
     useConnectionState,
     useLocalParticipant,
     useParticipants,
-    VideoConference,
     VideoTrack,
 } from "@livekit/components-react";
-import { RoomEvent, Track, Participant } from "livekit-client";
+import { ConnectionState, Track, Participant } from "livekit-client";
 import { cn } from "@/lib/utils";
 
 const INCOMING_RINGTONE_URI = "https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3";
@@ -54,10 +48,11 @@ interface CallModalProps {
     } | null;
     isIncoming?: boolean;
     isVideo?: boolean;
-    room?: any;
     token?: string | null;
+    serverUrl?: string;
     onAnswer?: () => void;
     onEnd?: (duration: number, wasConnected: boolean) => void;
+    onReject?: () => void;
     onMessage?: () => void;
 }
 
@@ -67,175 +62,109 @@ export function CallModal({
     caller,
     isIncoming = false,
     isVideo = false,
-    room,
     token,
+    serverUrl,
     onAnswer,
     onEnd,
+    onReject,
     onMessage
 }: CallModalProps) {
-    const [status, setStatus] = useState<"idle" | "ringing" | "calling" | "connected" | "ended">("idle");
+    // Simple status: ringing (incoming, no answer yet), connecting, connected, ended
+    const [phase, setPhase] = useState<"ringing" | "connecting" | "connected" | "ended">("connecting");
     const [duration, setDuration] = useState(0);
+    const [hasAnswered, setHasAnswered] = useState(false);
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
+    const durationRef = useRef(0);
 
-    // 1. Sync internal status with props and external room state
+    // Keep duration ref in sync
+    useEffect(() => { durationRef.current = duration; }, [duration]);
+
+    // Reset on open/close
     useEffect(() => {
-        if (!isOpen) {
-            setStatus("idle");
+        if (isOpen) {
+            setPhase(isIncoming ? "ringing" : "connecting");
             setDuration(0);
-            return;
+            setHasAnswered(false);
+            durationRef.current = 0;
+        } else {
+            setPhase("connecting");
+            setDuration(0);
+            setHasAnswered(false);
+            stopAudio();
+            if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen, isIncoming]);
 
-        let targetStatus: typeof status = status;
-
-        if (status === "idle" || status === "ended") {
-            targetStatus = isIncoming ? "ringing" : "calling";
+    // --- Ringtone ---
+    const stopAudio = useCallback(() => {
+        if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current.currentTime = 0;
+            audioRef.current = null;
         }
+    }, []);
 
-        if (room?.state === "connected" || token) {
-            if (isIncoming || (room && room.remoteParticipants.size > 0)) {
-                targetStatus = "connected";
-            }
-        }
-
-        if (targetStatus !== status) {
-            setStatus(targetStatus);
-        }
-    }, [isOpen, isIncoming, room, token, status]);
-
-    // 2. Room Event Monitoring
     useEffect(() => {
-        if (!room) return;
+        if (!isOpen) return;
 
-        const onDisc = () => {
-            if (audioRef.current) {
-                audioRef.current.pause();
-                audioRef.current = null;
-            }
-            setStatus("ended");
-        };
+        const shouldPlayIncoming = phase === "ringing" && isIncoming;
+        const shouldPlayOutgoing = phase === "connecting" && !isIncoming;
 
-        const onConnect = () => {
-            if (!isIncoming && status === "calling" && room.remoteParticipants.size > 0) {
-                setStatus("connected");
-            }
-        };
+        if (shouldPlayIncoming || shouldPlayOutgoing) {
+            const uri = isIncoming ? INCOMING_RINGTONE_URI : OUTGOING_RINGTONE_URI;
 
-        room.on(RoomEvent.Disconnected, onDisc);
-        room.on(RoomEvent.ParticipantConnected, onConnect);
-        onConnect();
-
-        return () => {
-            room.off(RoomEvent.Disconnected, onDisc);
-            room.off(RoomEvent.ParticipantConnected, onConnect);
-        };
-    }, [room, isIncoming, status]);
-
-    // 3. Ringtone logic
-    useEffect(() => {
-        const isRinging = status === "ringing";
-        const isCalling = status === "calling";
-        const shouldPlay = (isRinging && isIncoming) || (isCalling && !isIncoming);
-
-        console.log(`[CallModal] Audio State Check: status=${status}, isIncoming=${isIncoming}, shouldPlay=${shouldPlay}`);
-
-        let isCancelled = false;
-        const uri = isIncoming ? INCOMING_RINGTONE_URI : OUTGOING_RINGTONE_URI;
-
-        const stopAudio = () => {
-            if (audioRef.current) {
-                console.log("[CallModal] Pausing and clearing audio ref");
-                audioRef.current.pause();
-                audioRef.current.currentTime = 0;
-                audioRef.current = null;
-            }
-        };
-
-        const playAudio = async () => {
-            // If already playing the same URI, don't interrupt
-            if (audioRef.current && audioRef.current.src === uri && !audioRef.current.paused) {
-                console.log("[CallModal] Audio already playing, skipping redundant play");
-                return;
-            }
+            // Don't restart if already playing the right audio
+            if (audioRef.current && audioRef.current.src === uri && !audioRef.current.paused) return;
 
             stopAudio();
-            console.log(`[CallModal] Creating new Audio instance for: ${uri}`);
             const audio = new Audio(uri);
             audio.loop = true;
             audioRef.current = audio;
-
-            try {
-                const playPromise = audio.play();
-                if (playPromise !== undefined) {
-                    await playPromise;
-                    if (isCancelled) {
-                        console.log("[CallModal] Play finished but effect was cancelled, pausing now");
-                        audio.pause();
-                    }
-                }
-            } catch (e: any) {
-                if (e.name !== "AbortError") {
-                    console.error("[CallModal] Audio play error:", e);
-                } else {
-                    console.log("[CallModal] Play was aborted intentionally");
-                }
-            }
-        };
-
-        if (shouldPlay) {
-            playAudio();
+            audio.play().catch(e => {
+                if (e.name !== "AbortError") console.warn("[CallModal] Ringtone play failed:", e);
+            });
         } else {
             stopAudio();
         }
 
-        return () => {
-            isCancelled = true;
-            if (audioRef.current) {
-                console.log("[CallModal] Cleaning up audio on effect unmount");
-                audioRef.current.pause();
-            }
-        };
-    }, [status, isIncoming]);
+        return () => { stopAudio(); };
+    }, [phase, isOpen, isIncoming, stopAudio]);
 
-    // 4. Timer
+    // --- Call Timer ---
     useEffect(() => {
-        if (status === "connected") {
-            timerRef.current = setInterval(() => setDuration(prev => prev + 1), 1000);
-        } else if (timerRef.current) {
-            clearInterval(timerRef.current);
-            timerRef.current = null;
+        if (phase === "connected") {
+            timerRef.current = setInterval(() => {
+                setDuration(prev => prev + 1);
+            }, 1000);
+        } else {
+            if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
         }
-        return () => {
-            if (timerRef.current) clearInterval(timerRef.current);
-        };
-    }, [status]);
+        return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    }, [phase]);
 
-    // 5. Mic Publisher Belt-and-Suspenders
-    useEffect(() => {
-        if (status === "connected" && room?.localParticipant) {
-            room.localParticipant.setMicrophoneEnabled(true).catch(console.warn);
-        }
-    }, [status, room]);
-
-    const handleAnswer = () => {
-        if (audioRef.current) {
-            audioRef.current.pause();
-            audioRef.current = null;
-        }
-        setStatus("connected");
+    // --- Handlers ---
+    const handleAnswer = useCallback(() => {
+        stopAudio();
+        setHasAnswered(true);
+        setPhase("connecting");
         onAnswer?.();
-    };
+    }, [onAnswer, stopAudio]);
 
-    const handleEndCall = () => {
-        if (audioRef.current) {
-            audioRef.current.pause();
-            audioRef.current = null;
-        }
-        const wasConnected = status === "connected" || status === "ended"; // ended means it was connected before
-        const finalDuration = duration;
-        setStatus("ended");
+    const handleEndCall = useCallback(() => {
+        stopAudio();
+        const wasConnected = phase === "connected";
+        const finalDuration = durationRef.current;
+        setPhase("ended");
         onEnd?.(finalDuration, wasConnected);
-    };
+    }, [phase, onEnd, stopAudio]);
+
+    const handleReject = useCallback(() => {
+        stopAudio();
+        setPhase("ended");
+        onReject?.();
+    }, [onReject, stopAudio]);
 
     const formatDuration = (secs: number) => {
         const h = Math.floor(secs / 3600);
@@ -246,39 +175,43 @@ export function CallModal({
 
     if (!caller) return null;
 
+    // Should we render LiveKitRoom? Only when we have a token and it's not the initial ringing phase
+    const shouldConnectRoom = !!token && !!serverUrl && phase !== "ringing" && phase !== "ended";
+    // For incoming calls: only connect after user has answered
+    const shouldRenderLiveKit = isIncoming ? (shouldConnectRoom && hasAnswered) : shouldConnectRoom;
+
     return (
         <Dialog open={isOpen} onOpenChange={(open) => {
-            if (!open && status === "ended") onClose();
-            else if (!open && status !== "connected" && status !== "ringing") handleEndCall();
+            if (!open) {
+                if (phase === "ended") onClose();
+                else if (phase !== "connected") handleEndCall();
+            }
         }}>
             <DialogContent className="sm:max-w-4xl w-full h-full sm:h-[650px] p-0 border-0 bg-[#0b141a] text-white shadow-2xl sm:rounded-[32px] overflow-hidden flex flex-col transition-all duration-500">
                 <VisuallyHidden>
                     <DialogTitle>Call with {caller.name}</DialogTitle>
                 </VisuallyHidden>
 
-                {/* --- UI CONTENT --- */}
-
-                {/* 1. RINGING VIEW (Receiver Only) */}
-                {status === "ringing" && isIncoming && (
+                {/* 1. RINGING VIEW (Incoming, before answer) */}
+                {phase === "ringing" && isIncoming && (
                     <div className="flex-1 flex flex-col items-center justify-center relative">
                         <RippleBackground />
-
                         <div className="z-10 flex flex-col items-center gap-8 mt-[-40px]">
                             <div className="relative">
                                 <RippleCircles />
-                                <Avatar className="h-32 w-32 sm:h-36 sm:w-36 border-4 border-[#1f2c33] shadow-2xl relative z-20 transition-all duration-500">
+                                <Avatar className="h-32 w-32 sm:h-36 sm:w-36 border-4 border-[#1f2c33] shadow-2xl relative z-20">
                                     <AvatarImage src={caller.avatar_url || ""} />
                                     <AvatarFallback className="bg-[#1f2c33] text-5xl">{caller.name[0]}</AvatarFallback>
                                 </Avatar>
                             </div>
-
                             <div className="text-center space-y-2">
                                 <h2 className="text-3xl font-medium tracking-tight text-white">{caller.name}</h2>
-                                <p className="text-[#00a884] text-sm font-semibold uppercase tracking-[0.2em] animate-pulse">Incoming Call</p>
+                                <p className="text-[#00a884] text-sm font-semibold uppercase tracking-[0.2em] animate-pulse">
+                                    {isVideo ? "Incoming Video Call" : "Incoming Voice Call"}
+                                </p>
                             </div>
-
                             <div className="flex gap-12 sm:gap-20 mt-4 opacity-70">
-                                <button className="flex flex-col items-center gap-2 group">
+                                <button className="flex flex-col items-center gap-2 group" onClick={onMessage}>
                                     <div className="p-3 bg-white/5 rounded-full group-hover:bg-white/10 transition-colors">
                                         <MessageSquare className="h-5 w-5" />
                                     </div>
@@ -298,7 +231,7 @@ export function CallModal({
                                 size="icon"
                                 variant="destructive"
                                 className="h-20 w-20 rounded-full shadow-2xl hover:scale-105 transition-transform"
-                                onClick={handleEndCall}
+                                onClick={handleReject}
                             >
                                 <PhoneOff className="h-8 w-8 fill-white" />
                             </Button>
@@ -316,65 +249,73 @@ export function CallModal({
                     </div>
                 )}
 
-                {/* 2. ACTIVE SESSION (Caller while calling, or anyone when connected) */}
-                {((!isIncoming && status === "calling") || status === "connected") && (token || room) && (
+                {/* 2. ACTIVE CALL (LiveKitRoom manages connection) */}
+                {shouldRenderLiveKit && (
                     <LiveKitRoom
                         video={isVideo}
                         audio={true}
-                        room={room || undefined}
-                        token={room ? undefined : (token || "")}
-                        serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL}
-                        onDisconnected={() => setStatus("ended")}
+                        token={token!}
+                        serverUrl={serverUrl}
+                        onConnected={() => {
+                            console.log("[CallModal] LiveKitRoom connected");
+                        }}
+                        onDisconnected={() => {
+                            console.log("[CallModal] LiveKitRoom disconnected");
+                            if (phase !== "ended") {
+                                setPhase("ended");
+                            }
+                        }}
+                        onError={(err) => {
+                            console.error("[CallModal] LiveKitRoom error:", err);
+                        }}
                         className="flex-1 relative flex flex-col"
                     >
                         <RoomAudioRenderer />
-
-                        <div className="flex-1 flex flex-col relative">
-                            {status === "connected" ? (
-                                isVideo ? (
-                                    <VideoCallView caller={caller} onEnd={handleEndCall} duration={formatDuration(duration)} />
-                                ) : (
-                                    <VoiceCallView
-                                        caller={caller}
-                                        duration={formatDuration(duration)}
-                                        onEnd={handleEndCall}
-                                    />
-                                )
-                            ) : (
-                                /* TRANSMITTER CALLING VIEW (Overlay inside LiveKitRoom to keep audio alive) */
-                                <div className="flex-1 flex flex-col items-center justify-center relative">
-                                    <RippleBackground />
-                                    <div className="z-10 flex flex-col items-center gap-8 mt-[-40px]">
-                                        <div className="relative">
-                                            <RippleCircles />
-                                            <Avatar className="h-32 w-32 sm:h-36 sm:w-36 border-4 border-[#1f2c33] shadow-2xl relative z-20 transition-all duration-500">
-                                                <AvatarImage src={caller.avatar_url || ""} />
-                                                <AvatarFallback className="bg-[#1f2c33] text-5xl">{caller.name[0]}</AvatarFallback>
-                                            </Avatar>
-                                        </div>
-                                        <div className="text-center space-y-2">
-                                            <h2 className="text-3xl font-medium tracking-tight text-white">{caller.name}</h2>
-                                            <p className="text-[#00a884] text-sm font-semibold uppercase tracking-[0.2em] animate-pulse">Calling</p>
-                                        </div>
-                                    </div>
-                                    <div className="absolute bottom-12 sm:bottom-16 inset-x-0 flex justify-center z-20">
-                                        <Button
-                                            size="icon"
-                                            variant="destructive"
-                                            className="h-20 w-20 rounded-full shadow-2xl hover:scale-105 transition-transform"
-                                            onClick={handleEndCall}
-                                        >
-                                            <PhoneOff className="h-8 w-8 fill-white" />
-                                        </Button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
+                        <ActiveCallContent
+                            caller={caller}
+                            isVideo={isVideo}
+                            isIncoming={isIncoming}
+                            phase={phase}
+                            setPhase={setPhase}
+                            duration={duration}
+                            formatDuration={formatDuration}
+                            onEnd={handleEndCall}
+                        />
                     </LiveKitRoom>
                 )}
 
-                {/* 3. ENDED STATE */}
-                {status === "ended" && (
+                {/* 3. OUTGOING CALL OVERLAY (no token yet / connecting) */}
+                {!shouldRenderLiveKit && phase === "connecting" && !isIncoming && (
+                    <div className="flex-1 flex flex-col items-center justify-center relative">
+                        <RippleBackground />
+                        <div className="z-10 flex flex-col items-center gap-8 mt-[-40px]">
+                            <div className="relative">
+                                <RippleCircles />
+                                <Avatar className="h-32 w-32 sm:h-36 sm:w-36 border-4 border-[#1f2c33] shadow-2xl relative z-20">
+                                    <AvatarImage src={caller.avatar_url || ""} />
+                                    <AvatarFallback className="bg-[#1f2c33] text-5xl">{caller.name[0]}</AvatarFallback>
+                                </Avatar>
+                            </div>
+                            <div className="text-center space-y-2">
+                                <h2 className="text-3xl font-medium tracking-tight text-white">{caller.name}</h2>
+                                <p className="text-[#00a884] text-sm font-semibold uppercase tracking-[0.2em] animate-pulse">Calling</p>
+                            </div>
+                        </div>
+                        <div className="absolute bottom-12 sm:bottom-16 inset-x-0 flex justify-center z-20">
+                            <Button
+                                size="icon"
+                                variant="destructive"
+                                className="h-20 w-20 rounded-full shadow-2xl hover:scale-105 transition-transform"
+                                onClick={handleEndCall}
+                            >
+                                <PhoneOff className="h-8 w-8 fill-white" />
+                            </Button>
+                        </div>
+                    </div>
+                )}
+
+                {/* 4. ENDED STATE */}
+                {phase === "ended" && (
                     <div className="flex-1 flex flex-col items-center justify-center relative bg-[#0b141a] animate-in fade-in duration-300">
                         <div className="z-10 flex flex-col items-center gap-8">
                             <Avatar className="h-28 w-28 border border-white/5 grayscale opacity-80">
@@ -382,6 +323,9 @@ export function CallModal({
                                 <AvatarFallback className="bg-slate-800 text-3xl">{caller.name[0]}</AvatarFallback>
                             </Avatar>
                             <h2 className="text-xl font-medium text-slate-300">Call ended</h2>
+                            {duration > 0 && (
+                                <p className="text-sm text-slate-500">{formatDuration(duration)}</p>
+                            )}
                             <div className="grid grid-cols-2 gap-4 w-full max-w-xs mt-4">
                                 <Button
                                     className="flex flex-col h-24 gap-2 bg-[#1f2c33] hover:bg-[#2a3942] border border-white/5 rounded-xl transition-all"
@@ -392,7 +336,7 @@ export function CallModal({
                                 </Button>
                                 <Button
                                     className="flex flex-col h-24 gap-2 bg-[#1f2c33] hover:bg-[#2a3942] border border-white/5 rounded-xl transition-all"
-                                    onClick={() => setStatus(isIncoming ? "ringing" : "calling")}
+                                    onClick={onClose}
                                 >
                                     <Phone className="h-6 w-6 text-[#00a884]" />
                                     <span className="text-xs font-medium text-slate-300">Call Again</span>
@@ -404,6 +348,124 @@ export function CallModal({
                 )}
             </DialogContent>
         </Dialog>
+    );
+}
+
+// ==========================================================
+// ACTIVE CALL CONTENT (rendered inside LiveKitRoom context)
+// ==========================================================
+function ActiveCallContent({
+    caller,
+    isVideo,
+    isIncoming,
+    phase,
+    setPhase,
+    duration,
+    formatDuration,
+    onEnd,
+}: {
+    caller: { id: string; name: string; avatar_url?: string };
+    isVideo: boolean;
+    isIncoming: boolean;
+    phase: string;
+    setPhase: (p: "ringing" | "connecting" | "connected" | "ended") => void;
+    duration: number;
+    formatDuration: (s: number) => string;
+    onEnd: () => void;
+}) {
+    const connectionState = useConnectionState();
+    const participants = useParticipants();
+    const remoteParticipants = participants.filter(p => !p.isLocal);
+
+    // Drive phase from actual LiveKit connection state
+    useEffect(() => {
+        if (connectionState === ConnectionState.Connected) {
+            // For outgoing calls: wait for remote participant before marking "connected"
+            if (!isIncoming && remoteParticipants.length === 0) {
+                // Stay in "connecting" until someone joins
+                return;
+            }
+            if (phase !== "connected") {
+                setPhase("connected");
+            }
+        }
+    }, [connectionState, remoteParticipants.length, isIncoming, phase, setPhase]);
+
+    // For outgoing: when remote participant joins, transition to connected
+    useEffect(() => {
+        if (!isIncoming && remoteParticipants.length > 0 && connectionState === ConnectionState.Connected) {
+            if (phase !== "connected") {
+                setPhase("connected");
+            }
+        }
+    }, [remoteParticipants.length, isIncoming, connectionState, phase, setPhase]);
+
+    // For incoming: mark connected immediately once LiveKit is connected
+    useEffect(() => {
+        if (isIncoming && connectionState === ConnectionState.Connected && phase !== "connected") {
+            setPhase("connected");
+        }
+    }, [isIncoming, connectionState, phase, setPhase]);
+
+    // Reconnecting overlay
+    const isReconnecting = connectionState === ConnectionState.Reconnecting;
+
+    return (
+        <div className="flex-1 flex flex-col relative">
+            {/* Reconnecting Overlay */}
+            {isReconnecting && (
+                <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center text-white animate-in fade-in duration-300">
+                    <div className="relative">
+                        <div className="absolute inset-0 bg-yellow-500/20 rounded-full animate-ping" />
+                        <Loader2 className="h-12 w-12 text-yellow-500 animate-spin relative z-10" />
+                    </div>
+                    <h3 className="mt-4 text-lg font-semibold tracking-wide">Reconnecting...</h3>
+                    <p className="text-sm text-white/50">Please wait while we restore your connection</p>
+                </div>
+            )}
+
+            {phase === "connected" ? (
+                isVideo ? (
+                    <VideoCallView caller={caller} onEnd={onEnd} duration={formatDuration(duration)} />
+                ) : (
+                    <VoiceCallView
+                        caller={caller}
+                        duration={formatDuration(duration)}
+                        onEnd={onEnd}
+                    />
+                )
+            ) : (
+                /* Still connecting / waiting for remote participant */
+                <div className="flex-1 flex flex-col items-center justify-center relative">
+                    <RippleBackground />
+                    <div className="z-10 flex flex-col items-center gap-8 mt-[-40px]">
+                        <div className="relative">
+                            <RippleCircles />
+                            <Avatar className="h-32 w-32 sm:h-36 sm:w-36 border-4 border-[#1f2c33] shadow-2xl relative z-20">
+                                <AvatarImage src={caller.avatar_url || ""} />
+                                <AvatarFallback className="bg-[#1f2c33] text-5xl">{caller.name[0]}</AvatarFallback>
+                            </Avatar>
+                        </div>
+                        <div className="text-center space-y-2">
+                            <h2 className="text-3xl font-medium tracking-tight text-white">{caller.name}</h2>
+                            <p className="text-[#00a884] text-sm font-semibold uppercase tracking-[0.2em] animate-pulse">
+                                {connectionState === ConnectionState.Connecting ? "Connecting..." : "Waiting for answer..."}
+                            </p>
+                        </div>
+                    </div>
+                    <div className="absolute bottom-12 sm:bottom-16 inset-x-0 flex justify-center z-20">
+                        <Button
+                            size="icon"
+                            variant="destructive"
+                            className="h-20 w-20 rounded-full shadow-2xl hover:scale-105 transition-transform"
+                            onClick={onEnd}
+                        >
+                            <PhoneOff className="h-8 w-8 fill-white" />
+                        </Button>
+                    </div>
+                </div>
+            )}
+        </div>
     );
 }
 
@@ -434,9 +496,7 @@ function RippleCircles() {
                 <div
                     key={i}
                     className="absolute inset-0 border border-[#00a884]/20 rounded-full animate-ripple w-full h-full"
-                    style={{
-                        animationDelay: `${i * 1.5}s`,
-                    }}
+                    style={{ animationDelay: `${i * 1.5}s` }}
                 />
             ))}
         </div>
@@ -471,7 +531,6 @@ function VoiceCallView({ caller, duration, onEnd }: { caller: any; duration: str
             </div>
 
             <div className="w-full max-w-sm flex flex-col gap-10">
-                {/* Control Pod */}
                 <div className="bg-white/5 backdrop-blur-2xl px-6 py-5 rounded-[40px] border border-white/10 flex items-center justify-between shadow-2xl">
                     <ControlIcon
                         icon={localParticipant.isMicrophoneEnabled ? <Mic /> : <MicOff />}
@@ -516,8 +575,6 @@ function ControlIcon({ icon, active, onClick, disabled }: { icon: React.ReactNod
 function VideoCallView({ caller, onEnd, duration }: { caller: any; onEnd: () => void; duration: string }) {
     const participants = useParticipants();
     const localParticipant = useLocalParticipant();
-
-    // Sort: put remote participants first, then local at the bottom
     const displayParticipants = [...participants].sort((a, b) => a.isLocal ? 1 : -1);
 
     return (
@@ -534,7 +591,7 @@ function VideoCallView({ caller, onEnd, duration }: { caller: any; onEnd: () => 
                 </div>
             </div>
 
-            {/* Main Video Display - STACKED like image */}
+            {/* Video Display */}
             <div className="flex-1 flex flex-col gap-2 p-2">
                 {displayParticipants.length > 0 ? (
                     displayParticipants.slice(0, 2).map((p) => (
@@ -586,7 +643,6 @@ function ParticipantTile({ participant }: { participant: Participant }) {
     const isCamOff = !participant.isCameraEnabled;
     const name = participant.name || participant.identity || "Unknown";
 
-    // Explicitly get the camera track for this participant
     const tracks = useTracks([{ source: Track.Source.Camera, participant }], { onlySubscribed: false });
     const trackRef = tracks[0];
 
@@ -606,12 +662,10 @@ function ParticipantTile({ participant }: { participant: Participant }) {
                 </div>
             )}
 
-            {/* Custom Label UI from Image */}
             <div className="absolute bottom-4 left-4 z-20 bg-white px-3 py-1.5 rounded-[4px] shadow-2xl">
                 <span className="text-black text-xs font-bold tracking-tight">{name}</span>
             </div>
 
-            {/* Status Icons from Image */}
             <div className="absolute bottom-4 right-4 z-20 flex gap-2">
                 {isMuted && (
                     <div className="bg-[#ea4335] p-2 rounded-full shadow-lg border border-white/10 backdrop-blur-sm">

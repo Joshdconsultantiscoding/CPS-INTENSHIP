@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Bug, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BugReportDialog } from "./bug-report-dialog";
@@ -10,6 +10,21 @@ export function BugReportFab({ userId, role }: { userId: string, role: string })
     const [isOpen, setIsOpen] = useState(false);
     const [currentMessage, setCurrentMessage] = useState<string | null>(null);
     const [isVisible, setIsVisible] = useState(true);
+    const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+
+    // Long-press-to-dismiss handlers
+    const handlePointerDown = useCallback(() => {
+        longPressTimer.current = setTimeout(() => {
+            setIsVisible(false);
+        }, 800);
+    }, []);
+
+    const handlePointerUp = useCallback(() => {
+        if (longPressTimer.current) {
+            clearTimeout(longPressTimer.current);
+            longPressTimer.current = null;
+        }
+    }, []);
 
     const isAdmin = role === 'admin';
 
@@ -53,7 +68,7 @@ export function BugReportFab({ userId, role }: { userId: string, role: string })
 
         const timer = setTimeout(() => {
             setIsVisible(false);
-        }, 120000); // 2 minutes
+        }, 30000); // 30 seconds
 
         return () => clearTimeout(timer);
     }, [isVisible, isOpen]);
@@ -78,7 +93,7 @@ export function BugReportFab({ userId, role }: { userId: string, role: string })
                 data.lastShown = now.getTime();
                 localStorage.setItem('bug-report-engagement', JSON.stringify(data));
 
-                setTimeout(() => setCurrentMessage(null), 120000);
+                setTimeout(() => setCurrentMessage(null), 30000);
             }
         };
 
@@ -90,7 +105,7 @@ export function BugReportFab({ userId, role }: { userId: string, role: string })
     return (
         <div className="bug-report-system">
             {!isAdmin && (
-                <div className="fixed bottom-20 md:bottom-6 right-6 z-60 flex flex-col items-end gap-3 pointer-events-none">
+                <div className="fixed bottom-20 md:bottom-6 right-6 z-60 flex flex-col items-end gap-3 pointer-events-none" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', paddingRight: 'env(safe-area-inset-right, 0px)' }} role="complementary" aria-label="Feedback">
                     <AnimatePresence>
                         {(isVisible || isOpen) && currentMessage && (
                             <motion.div
@@ -135,7 +150,11 @@ export function BugReportFab({ userId, role }: { userId: string, role: string })
                                         size="icon"
                                         className="h-14 w-14 rounded-full shadow-[0_0_20px_rgba(239,68,68,0.3)] bg-red-600 hover:bg-red-500 ring-4 ring-white/10 relative"
                                         onClick={() => setIsOpen(true)}
-                                        title="Send Feedback"
+                                        onPointerDown={handlePointerDown}
+                                        onPointerUp={handlePointerUp}
+                                        onPointerLeave={handlePointerUp}
+                                        title="Send Feedback (long-press to dismiss)"
+                                        aria-label="Send feedback or report a bug"
                                     >
                                         <Bug className="h-7 w-7" />
 

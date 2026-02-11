@@ -25,6 +25,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -53,10 +54,18 @@ import {
   Facebook,
   Smartphone,
 } from "lucide-react";
+import { Ban, ShieldOff, Trash2, RotateCcw } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { useRouter } from "next/navigation";
 import { usePresence } from "ably/react";
 import { useAbly, useOnlineUsers } from "@/providers/ably-provider";
+import {
+  SuspendDialog,
+  BlockRoutesDialog,
+  DeleteUserDialog,
+  RestoreUserDialog,
+} from "@/components/admin/intern-controls";
+import { toast } from "sonner";
 
 interface UserStats {
   totalTasks: number;
@@ -119,6 +128,13 @@ export function InternManagement({
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [filter, setFilter] = useState<"all" | "online" | "offline" | "interns" | "admins">("all");
+
+  // Admin controls state
+  const [controlTarget, setControlTarget] = useState<UserProfile | null>(null);
+  const [showSuspendDialog, setShowSuspendDialog] = useState(false);
+  const [showBlockDialog, setShowBlockDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showRestoreDialog, setShowRestoreDialog] = useState(false);
 
   // Use global online users context from Ably provider
   const ablyOnlineUsers = useOnlineUsers();
@@ -534,6 +550,59 @@ export function InternManagement({
                               <Mail className="h-4 w-4 mr-2" />
                               Send Email
                             </DropdownMenuItem>
+
+                            {/* Admin Controls */}
+                            {user.id !== currentUserId && user.role !== "admin" && (
+                              <>
+                                <DropdownMenuSeparator />
+                                {(user as any).account_status === "suspended" || (user as any).account_status === "deleted" ? (
+                                  <DropdownMenuItem
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setControlTarget(user);
+                                      setShowRestoreDialog(true);
+                                    }}
+                                  >
+                                    <RotateCcw className="h-4 w-4 mr-2 text-green-600" />
+                                    Restore Account
+                                  </DropdownMenuItem>
+                                ) : (
+                                  <>
+                                    <DropdownMenuItem
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setControlTarget(user);
+                                        setShowSuspendDialog(true);
+                                      }}
+                                    >
+                                      <Ban className="h-4 w-4 mr-2 text-amber-600" />
+                                      Suspend
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setControlTarget(user);
+                                        setShowBlockDialog(true);
+                                      }}
+                                    >
+                                      <ShieldOff className="h-4 w-4 mr-2 text-orange-600" />
+                                      Block Routes
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setControlTarget(user);
+                                    setShowDeleteDialog(true);
+                                  }}
+                                  className="text-red-600"
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Delete Account
+                                </DropdownMenuItem>
+                              </>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -811,6 +880,41 @@ export function InternManagement({
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Admin Control Dialogs */}
+      {controlTarget && (
+        <>
+          <SuspendDialog
+            open={showSuspendDialog}
+            onOpenChange={setShowSuspendDialog}
+            userId={controlTarget.id}
+            userName={controlTarget.full_name || controlTarget.email}
+            onActionComplete={() => router.refresh()}
+          />
+          <BlockRoutesDialog
+            open={showBlockDialog}
+            onOpenChange={setShowBlockDialog}
+            userId={controlTarget.id}
+            userName={controlTarget.full_name || controlTarget.email}
+            currentBlockedRoutes={(controlTarget as any).blocked_routes || []}
+            onActionComplete={() => router.refresh()}
+          />
+          <DeleteUserDialog
+            open={showDeleteDialog}
+            onOpenChange={setShowDeleteDialog}
+            userId={controlTarget.id}
+            userName={controlTarget.full_name || controlTarget.email}
+            onActionComplete={() => router.refresh()}
+          />
+          <RestoreUserDialog
+            open={showRestoreDialog}
+            onOpenChange={setShowRestoreDialog}
+            userId={controlTarget.id}
+            userName={controlTarget.full_name || controlTarget.email}
+            onActionComplete={() => router.refresh()}
+          />
+        </>
+      )}
     </div>
   );
 }

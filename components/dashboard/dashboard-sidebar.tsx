@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useAbly } from "@/providers/ably-provider";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useClerk, useUser } from "@clerk/nextjs";
+import { useUser, SignOutButton } from "@clerk/nextjs";
 import type { Profile } from "@/lib/types";
 import {
   Sidebar,
@@ -54,7 +54,7 @@ interface DashboardSidebarProps {
 
 export function DashboardSidebar({ userId, profile: initialProfile }: DashboardSidebarProps) {
   const pathname = usePathname();
-  const { signOut } = useClerk();
+
   const { user } = useUser();
   const { settings: portalSettings } = usePortalSettings();
   const { setOpenMobile, isMobile } = useSidebar();
@@ -115,10 +115,6 @@ export function DashboardSidebar({ userId, profile: initialProfile }: DashboardS
       // For normal links, show the cinematic loader
       showLoader();
     }
-  };
-
-  const handleSignOut = async () => {
-    await signOut({ redirectUrl: "/auth/sign-in" });
   };
 
   const getInitials = (name: string | null) => {
@@ -299,9 +295,13 @@ export function DashboardSidebar({ userId, profile: initialProfile }: DashboardS
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleSignOut}>
-                  <LogOut className="mr-2 size-4" />
-                  Sign out
+                <DropdownMenuItem asChild>
+                  <SignOutButton redirectUrl="/auth/sign-in">
+                    <button className="flex w-full items-center">
+                      <LogOut className="mr-2 size-4" />
+                      Sign out
+                    </button>
+                  </SignOutButton>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

@@ -48,13 +48,20 @@ export async function createClient() {
  * Use only for privileged server-side operations (like fetching roles or updating tracking).
  * We use the base createClient here to ensure direct service-role bypass without SSR overhead.
  */
+/**
+ * Creates a Supabase client with the SERVICE ROLE key.
+ * CAUTION: This client bypasses Row Level Security.
+ * Use only for privileged server-side operations (like fetching roles or updating tracking).
+ * We use the base createClient here to ensure direct service-role bypass without SSR overhead.
+ */
 export async function createAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  // Try both naming conventions just in case
+  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY)?.trim();
 
   if (!url || !key) {
     console.error("Supabase Admin Client Error: Missing URL or Service Role Key");
-    throw new Error("Missing Supabase configuration");
+    throw new Error("Missing Supabase configuration: SERVICE_ROLE_KEY");
   }
 
   return createBaseClient(url, key, {

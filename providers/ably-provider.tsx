@@ -17,6 +17,10 @@ const AblyContext = createContext<{
     isConfigured: boolean;
 }>({ client: null, status: "initialized", isOffline: false, isConfigured: true });
 
+// Presence data map: userId -> { status: 'online' | 'idle' }
+const PresenceDataContext = createContext<Map<string, { status: string }>>(new Map());
+export const usePresenceData = () => useContext(PresenceDataContext);
+
 // NEW: Global online users context for real-time presence tracking
 const OnlineUsersContext = createContext<Set<string>>(new Set());
 export const useOnlineUsers = () => useContext(OnlineUsersContext);
@@ -40,23 +44,27 @@ export const useUserActivity = () => useContext(UserActivityContext);
 export function useUnifiedPresence(users: any[]) {
     // We already have the set of online user IDs from Ably
     const onlineAblyUsers = useOnlineUsers();
+    const presenceData = usePresenceData();
 
-    // Helper to check status
+    // Helper to check status — returns 'online' | 'idle' | 'offline'
     const getStatus = useCallback((userId: string) => {
         // 1. Check Ably Realtime Presence (Primary)
-        if (onlineAblyUsers.has(userId)) return "online";
+        if (onlineAblyUsers.has(userId)) {
+            const data = presenceData.get(userId);
+            if (data?.status === "idle") return "idle";
+            return "online";
+        }
 
         // 2. Check Database Fallback (Secondary)
         const user = users.find(u => u.id === userId);
         if (user?.last_active_at) {
             const lastActive = new Date(user.last_active_at).getTime();
             const now = Date.now();
-            // If active within last 90 seconds, consider online (allowing for heartbeat skew)
-            if (now - lastActive < 90000) return "online";
+            if (now - lastActive < 120000) return "online";
         }
 
         return "offline";
-    }, [onlineAblyUsers, users]);
+    }, [onlineAblyUsers, presenceData, users]);
 
     return { getStatus };
 }
@@ -189,8 +197,9 @@ export function AblyClientProvider({ children, userId }: AblyClientProviderProps
             globalAblyClient = new Ably.Realtime({
                 authUrl: "/api/ably/auth",
                 autoConnect: true,
-                disconnectedRetryTimeout: 10000,
+                disconnectedRetryTimeout: 15000,
                 suspendedRetryTimeout: 30000,
+                channelRetryTimeout: 15000,
                 closeOnUnload: false, // Handle manually to prevent premature closure
             });
         }
@@ -300,6 +309,9 @@ export function AblyClientProvider({ children, userId }: AblyClientProviderProps
     // NEW: State for online users
     const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
 
+    // NEW: State for presence data (online/idle per user)
+    const [presenceData, setPresenceData] = useState<Map<string, { status: string }>>(new Map());
+
     // NEW: State for user activity
     const [userActivity, setUserActivity] = useState<UserActivity>({
         typing: new Map(),
@@ -318,9 +330,11 @@ export function AblyClientProvider({ children, userId }: AblyClientProviderProps
     const content = (
         <AblyContext.Provider value={{ client, status, isOffline, isConfigured }}>
             <OnlineUsersContext.Provider value={onlineUsers}>
-                <UserActivityContext.Provider value={userActivity}>
-                    {children}
-                </UserActivityContext.Provider>
+                <PresenceDataContext.Provider value={presenceData}>
+                    <UserActivityContext.Provider value={userActivity}>
+                        {children}
+                    </UserActivityContext.Provider>
+                </PresenceDataContext.Provider>
             </OnlineUsersContext.Provider>
         </AblyContext.Provider>
     );
@@ -333,7 +347,7 @@ export function AblyClientProvider({ children, userId }: AblyClientProviderProps
                 <ChannelProvider channelName="global">
                     {userId && (
                         <>
-                            <GlobalPresenceTracker userId={userId} onOnlineUsersChange={setOnlineUsers} />
+                            <GlobalPresenceTracker userId={userId} onOnlineUsersChange={setOnlineUsers} onPresenceDataChange={setPresenceData} />
                             <GlobalActivityTracker userId={userId} onActivityChange={setUserActivity} />
                         </>
                     )}
@@ -347,25 +361,81 @@ export function AblyClientProvider({ children, userId }: AblyClientProviderProps
 }
 
 // Internal component to handle presence registration
-function GlobalPresenceTracker({ userId, onOnlineUsersChange }: { userId: string; onOnlineUsersChange: (users: Set<string>) => void }) {
-    // This joins the 'global' presence channel automatically and returns presence data
-    const { presenceData, updateStatus } = usePresence({ channelName: "global", data: { userId } });
+function GlobalPresenceTracker({ userId, onOnlineUsersChange, onPresenceDataChange }: {
+    userId: string;
+    onOnlineUsersChange: (users: Set<string>) => void;
+    onPresenceDataChange: (data: Map<string, { status: string }>) => void;
+}) {
+    const { client } = useAbly();
+    // Use manual presence management to avoid hook version mismatches
+    useEffect(() => {
+        if (!client) return;
+
+        const channel = client.channels.get("global");
+        let retryTimer: NodeJS.Timeout | null = null;
+        let isMounted = true;
+
+        const updateOnlineUsers = async () => {
+            if (!isMounted) return;
+            try {
+                const members = await channel.presence.get();
+                if (!isMounted) return;
+                const onlineSet = new Set<string>();
+                const dataMap = new Map<string, { status: string }>();
+                members.forEach((member) => {
+                    const memberId = member.data?.userId || member.clientId;
+                    if (memberId) {
+                        onlineSet.add(memberId);
+                        dataMap.set(memberId, { status: member.data?.status || "online" });
+                    }
+                });
+                onOnlineUsersChange(onlineSet);
+                onPresenceDataChange(dataMap);
+            } catch (e) {
+                console.warn("Failed to fetch presence:", e);
+            }
+        };
+
+        const enterPresence = async (attempt = 1) => {
+            if (!isMounted) return;
+            try {
+                // Wait for channel to be attached before entering? 
+                // Ably handles this, but if we time out, we retry.
+                await channel.presence.enter({ userId, status: "online" });
+            } catch (err: any) {
+                if (!isMounted) return;
+                console.warn(`Presence enter failed (attempt ${attempt}):`, err);
+                if (attempt < 3) {
+                    retryTimer = setTimeout(() => enterPresence(attempt + 1), 2000 * attempt);
+                }
+            }
+        };
+
+        // 1. Subscribe to updates
+        channel.presence.subscribe(() => {
+            updateOnlineUsers();
+        }).then(() => {
+            // Only enter presence after subscription is active (optimization)
+            enterPresence();
+        }).catch(err => {
+            console.warn("Presence subscription failed, trying to enter anyway:", err);
+            enterPresence();
+        });
+
+        // 2. Initial fetch
+        updateOnlineUsers();
+
+        return () => {
+            isMounted = false;
+            if (retryTimer) clearTimeout(retryTimer);
+            channel.presence.leave().catch(() => { }); // Best effort leave
+            channel.presence.unsubscribe();
+        };
+    }, [client, userId, onOnlineUsersChange, onPresenceDataChange]);
     const supabase = useRef(createClient());
     const lastSeenUpdateRef = useRef<string | null>(null);
 
-    // Sync Ably presence to global context
-    useEffect(() => {
-        const onlineSet = new Set<string>();
-        // CRITICAL: presenceData can be undefined/null when Ably is not connected yet
-        if (presenceData && Array.isArray(presenceData)) {
-            presenceData.forEach((member) => {
-                // Extract userId from data (preferred) or clientId as fallback
-                const memberId = member.data?.userId || member.clientId;
-                if (memberId) onlineSet.add(memberId);
-            });
-        }
-        onOnlineUsersChange(onlineSet);
-    }, [presenceData, onOnlineUsersChange]);
+
 
     // Database heartbeat for fallback and last_seen tracking
     useEffect(() => {
@@ -404,18 +474,34 @@ function GlobalPresenceTracker({ userId, onOnlineUsersChange }: { userId: string
         };
 
         updatePresenceInDB();
-        updatePresenceInDB();
-        const interval = setInterval(updatePresenceInDB, 30000); // Increased to 30s for better accuracy without spamming
+        const interval = setInterval(updatePresenceInDB, 15000); // 15s heartbeat
 
         // CRITICAL: Handle browser close/refresh with beforeunload
         const handleBeforeUnload = () => {
             setOfflineInDB();
         };
 
-        // Handle visibility change (tab switch)
+        // Handle visibility change (tab switch → idle, tab focus → online)
         const handleVisibilityChange = () => {
             if (document.visibilityState === 'visible') {
+                // Tab focused: mark online in DB + update Ably presence
                 updatePresenceInDB();
+                if (client) {
+                    const ch = client.channels.get("global");
+                    ch.presence.update({ userId, status: "online" }).catch(() => { });
+                }
+            } else {
+                // Tab hidden: mark idle in DB + update Ably presence
+                const now = new Date().toISOString();
+                supabase.current
+                    .from("profiles")
+                    .update({ online_status: "idle", last_seen_at: now })
+                    .eq("id", userId)
+                    .then(() => { });
+                if (client) {
+                    const ch = client.channels.get("global");
+                    ch.presence.update({ userId, status: "idle" }).catch(() => { });
+                }
             }
         };
 

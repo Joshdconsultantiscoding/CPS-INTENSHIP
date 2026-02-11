@@ -6,9 +6,10 @@ import { cn } from "@/lib/utils";
 interface OnlineIndicatorProps {
     status: string;
     size?: "sm" | "md" | "lg";
+    className?: string;
 }
 
-export function OnlineIndicator({ status, size = "sm" }: OnlineIndicatorProps) {
+export function OnlineIndicator({ status, size = "sm", className }: OnlineIndicatorProps) {
     const sizeClass = size === "lg" ? "h-4 w-4" : size === "md" ? "h-3 w-3" : "h-2.5 w-2.5";
     const borderClass = size === "lg" ? "border-[3px]" : size === "md" ? "border-2" : "border-[1.5px]";
 
@@ -18,7 +19,20 @@ export function OnlineIndicator({ status, size = "sm" }: OnlineIndicatorProps) {
                 className={cn(
                     "absolute bottom-0 right-0 rounded-full bg-green-500 border-background shadow-[0_0_0_1px] shadow-white dark:shadow-black animate-pulse",
                     sizeClass,
-                    borderClass
+                    borderClass,
+                    className
+                )}
+            />
+        );
+    }
+    if (status === "idle") {
+        return (
+            <span
+                className={cn(
+                    "absolute bottom-0 right-0 rounded-full bg-amber-400 border-background shadow-[0_0_0_1px] shadow-white dark:shadow-black",
+                    sizeClass,
+                    borderClass,
+                    className
                 )}
             />
         );
@@ -29,7 +43,8 @@ export function OnlineIndicator({ status, size = "sm" }: OnlineIndicatorProps) {
                 className={cn(
                     "absolute bottom-0 right-0 rounded-full bg-yellow-500 border-background",
                     sizeClass,
-                    borderClass
+                    borderClass,
+                    className
                 )}
             />
         );
@@ -40,10 +55,21 @@ export function OnlineIndicator({ status, size = "sm" }: OnlineIndicatorProps) {
                 className={cn(
                     "absolute bottom-0 right-0 rounded-full bg-slate-300 border-background",
                     sizeClass,
-                    borderClass
+                    borderClass,
+                    className
                 )}
             />
         );
     }
-    return null;
+    // Default: always show grey offline dot for any unknown status
+    return (
+        <span
+            className={cn(
+                "absolute bottom-0 right-0 rounded-full bg-slate-300 border-background",
+                sizeClass,
+                borderClass,
+                className
+            )}
+        />
+    );
 }

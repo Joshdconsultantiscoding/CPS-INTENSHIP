@@ -28,8 +28,16 @@ import {
     X,
     Maximize2,
     Plus,
-    Music
+    Music,
+    Ban,
+    CheckSquare,
+    Flag,
+    Timer,
+    BellOff,
+    ChevronDown,
+    StickyNote
 } from "lucide-react";
+import { createNoteFromMessageAction } from "@/app/dashboard/notes/actions";
 import { cn } from "@/lib/utils";
 import type { Message, Channel } from "@/lib/types";
 import { OnlineIndicator } from "./online-indicator";
@@ -38,6 +46,7 @@ import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
+    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { VoiceRecorder } from "./voice-recorder";
@@ -63,7 +72,7 @@ interface ChatViewProps {
     aiTyping: boolean;
     isUploading?: boolean;
     onSendMessage: (e?: React.FormEvent, attachmentUrl?: string, contentOverride?: string) => void;
-    onNewMessageChange: (value: string) => void;
+    onNewMessageChange: (value: string | boolean) => void;
     onFileSelect?: (file: File) => void;
     onSendAttachment?: (file: File, caption: string) => void;
     onCloseChat: () => void;
@@ -72,8 +81,11 @@ interface ChatViewProps {
     onClearMessages?: () => void;
     onMute?: (muted: boolean) => void;
     isOnline?: boolean;
+    presenceStatus?: "online" | "idle" | "offline";
     onRecordingStart?: () => void;
     onRecordingEnd?: () => void;
+    onLoadMore?: () => Promise<void>;
+    hasMore?: boolean;
 }
 
 function formatTime(date: Date | string): string {
@@ -148,8 +160,11 @@ export function ChatView({
     onClearMessages,
     onMute,
     isOnline = false,
+    presenceStatus = "offline",
     onRecordingStart,
     onRecordingEnd,
+    onLoadMore,
+    hasMore = false,
 }: ChatViewProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -202,29 +217,82 @@ export function ChatView({
 
             // Scroll if forced, or if user was already near bottom
             if (force || isAtBottom || !userScrolledUp) {
-                chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+                chatContainerRef.current.scrollTo({
+                    top: chatContainerRef.current.scrollHeight,
+                    behavior: "smooth",
+                });
             }
         }
     };
 
-    // Detect if user scrolls up
-    const handleScroll = () => {
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+    // Detect if user scrolls up & Trigger Infinite Scroll
+    const handleScroll = async () => {
         if (chatContainerRef.current) {
             const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
             const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
             setUserScrolledUp(!isAtBottom);
+
+            // Trigger Load More when near top (and not already loading)
+            if (scrollTop < 50 && hasMore && !isLoadingMore && onLoadMore) {
+                setIsLoadingMore(true);
+                const oldHeight = scrollHeight;
+                const oldTop = scrollTop;
+
+                try {
+                    await onLoadMore();
+                    // Restore Scroll Position
+                    // We need to wait for DOM update (React render) -> typically automated by useEffect or layout effect, 
+                    // but for simple cases, we can try to adjust immediately if the parent awaited the state update.
+                    // Ideally, we depend on messages length change, but this is a self-contained handler.
+                    // Let's rely on the parent updating 'messages' prop.
+                    // However, we need to adjust scrollTop *after* the render.
+                    // We'll use a snapshot in a separate effect or use requestAnimationFrame here if the update is synchronous-ish.
+                    // Actually, let's use a specialized hook for this or a layout effect?
+                    // Simpler approach: We record we are loading, and use a generic useLayoutEffect to restore position if loading finished.
+                } catch (e) {
+                    console.error("Load more failed", e);
+                } finally {
+                    setIsLoadingMore(false);
+                }
+            }
         }
     };
 
+    // Scroll Position Restoration Logic
+    const previousMessagesLength = useRef(messages.length);
+    const previousScrollHeight = useRef(0);
+
+    React.useLayoutEffect(() => {
+        if (messages.length > previousMessagesLength.current && chatContainerRef.current) {
+            // Messages added (presumably at top)
+            const newHeight = chatContainerRef.current.scrollHeight;
+            const heightDiff = newHeight - previousScrollHeight.current;
+
+            // Only adjust if we were near the top (loading more)
+            if (chatContainerRef.current.scrollTop < 100) {
+                chatContainerRef.current.scrollTop += heightDiff;
+            }
+        }
+        previousMessagesLength.current = messages.length;
+        if (chatContainerRef.current) {
+            previousScrollHeight.current = chatContainerRef.current.scrollHeight;
+        }
+    }, [messages]);
+
     // Initial scroll and new message scroll
     useEffect(() => {
+        // Skip auto-scroll if we are just loading old messages (length increased but we are not at bottom)
+        if (isLoadingMore) return;
+
         // If it's a new message from ME, force scroll. 
         // If it's from others, only scroll if at bottom.
         const lastMsg = messages[messages.length - 1];
         const isOwn = lastMsg?.sender_id === currentUser.id;
 
         requestAnimationFrame(() => scrollToBottom(isOwn));
-    }, [messages, aiMessages.length, isRecording, aiTyping]);
+    }, [messages, aiMessages.length, isRecording, aiTyping]); // removed isLoadingMore dependency to avoid trigger
 
     const [showPollModal, setShowPollModal] = useState(false);
     const [pollQuestion, setPollQuestion] = useState("");
@@ -263,7 +331,7 @@ export function ChatView({
             onDrop={handleDrop}
         >
             <div
-                className="absolute inset-0 opacity-[0.03] dark:opacity-[0.02] pointer-events-none mix-blend-overlay bg-[url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')] bg-[length:400px_400px]"
+                className="absolute inset-0 opacity-[0.03] dark:opacity-[0.02] pointer-events-none mix-blend-overlay bg-[url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')] bg-size-[400px_400px]"
             />
 
             {/* Drag Overlay */}
@@ -335,7 +403,7 @@ export function ChatView({
                                 <AvatarImage src={selectedUser.avatar_url || ""} />
                                 <AvatarFallback className="bg-slate-400 text-white text-sm">{getInitials(selectedUser)}</AvatarFallback>
                             </Avatar>
-                            {selectedUser && !isAIChat && <OnlineIndicator status={isOnline ? "online" : "offline"} size="sm" className="absolute bottom-0 right-0 ring-2 ring-background" />}
+                            {selectedUser && !isAIChat && <OnlineIndicator status={presenceStatus || (isOnline ? "online" : "offline")} size="sm" className="absolute bottom-0 right-0 ring-2 ring-background" />}
                         </div>
                     ) : (
                         <div className="h-10 w-10 rounded-full bg-slate-500 flex items-center justify-center border border-white/10">
@@ -364,9 +432,13 @@ export function ChatView({
                         ) : (
                             <div className="text-[10px] text-muted-foreground truncate font-medium">
                                 {isAIChat ? "AI Assistant Active" : selectedUser ? (
-                                    isOnline ? (
+                                    presenceStatus === "online" || isOnline ? (
                                         <span className="text-green-500 font-bold flex items-center gap-1">
                                             Online
+                                        </span>
+                                    ) : presenceStatus === "idle" ? (
+                                        <span className="text-amber-500 font-bold flex items-center gap-1">
+                                            Idle
                                         </span>
                                     ) : (
                                         <span className="opacity-70">Last seen {formatLastSeen(selectedUser.last_seen_at)}</span>
@@ -393,7 +465,13 @@ export function ChatView({
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-56 p-1">
                                 <DropdownMenuItem className="rounded-lg cursor-pointer" onClick={onViewContact}><UserIcon className="h-4 w-4 mr-2" /> Contact info</DropdownMenuItem>
-                                <DropdownMenuItem className="rounded-lg cursor-pointer" onClick={() => onMute?.(true)}><Music className="h-4 w-4 mr-2" /> Mute notifications</DropdownMenuItem>
+                                <DropdownMenuItem className="rounded-lg cursor-pointer" onClick={() => onMute?.(true)}><BellOff className="h-4 w-4 mr-2" /> Mute notifications</DropdownMenuItem>
+                                <DropdownMenuItem className="rounded-lg cursor-pointer" onClick={() => toast.info("Select multiple coming soon")}><CheckSquare className="h-4 w-4 mr-2" /> Select messages</DropdownMenuItem>
+                                <DropdownMenuItem className="rounded-lg cursor-pointer" onClick={() => toast.info("Disappearing messages coming soon")}><Timer className="h-4 w-4 mr-2" /> Disappearing messages</DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="rounded-lg cursor-pointer text-orange-600 focus:text-orange-600 focus:bg-orange-50 dark:focus:bg-orange-950/30" onClick={() => toast.info("Report submitted")}><Flag className="h-4 w-4 mr-2" /> Report to admin</DropdownMenuItem>
+                                <DropdownMenuItem className="rounded-lg cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => toast.info("User blocked")}><Ban className="h-4 w-4 mr-2" /> Block user</DropdownMenuItem>
+                                <DropdownMenuSeparator />
                                 <DropdownMenuItem className="rounded-lg cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10" onClick={onClearMessages}><X className="h-4 w-4 mr-2" /> Clear messages</DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
@@ -403,6 +481,11 @@ export function ChatView({
 
             {/* Message Area */}
             <div ref={chatContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 py-4 z-10 scroll-smooth">
+                {isLoadingMore && (
+                    <div className="flex justify-center py-2">
+                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground/50" />
+                    </div>
+                )}
                 <AnimatePresence mode="popLayout">
                     {!isAIChat && messages.map((msg, idx) => {
                         const isOwn = msg.sender_id === currentUser.id;
@@ -431,7 +514,29 @@ export function ChatView({
                                         : "bg-white dark:bg-[#202c33] rounded-tl-sm text-[#111b21] dark:text-[#e9edef] border border-transparent dark:border-white/5",
                                     !isSameSender && (isOwn ? "rounded-tr-sm" : "rounded-tl-sm")
                                 )}>
-                                    {/* Tail (Refined) */}
+                                    {/* Message Actions Menu */}
+                                    <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20">
+                                                    <ChevronDown className="h-3 w-3 opacity-60" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align={isOwn ? "end" : "start"}>
+                                                <DropdownMenuItem
+                                                    onClick={async () => {
+                                                        const res = await createNoteFromMessageAction(msg.content, String(msg.id), isOwn ? "Me" : selectedUser?.full_name || "User");
+                                                        if (res.success) toast.success("Saved to notes");
+                                                        else toast.error("Failed to save note");
+                                                    }}
+                                                >
+                                                    <StickyNote className="h-4 w-4 mr-2" /> Save to Notes
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </div>
+
+                                    {/* Fail-safe Tail (Refined) */}
                                     {!isSameSender && (
                                         <div className={cn(
                                             "absolute top-0 w-3 h-3",
@@ -471,16 +576,20 @@ export function ChatView({
                                     <div className="flex items-end gap-2 px-1">
                                         {(msg.message_type === "call" || (msg as any).call_type) ? (() => {
                                             const type = (msg as any).call_type || "voice";
-                                            const isMissed = (msg as any).call_status === "missed";
+                                            const callStatus = (msg as any).call_status || "missed";
+                                            const isMissed = callStatus === "missed";
+                                            const isRejected = callStatus === "rejected";
                                             const durationStr = (msg as any).call_duration || "00:00";
                                             const Icon = type === "video" ? Video : Phone;
                                             return (
                                                 <div className="flex items-center gap-3 py-2 px-1 min-w-[180px]">
-                                                    <div className={cn("h-10 w-10 rounded-full flex items-center justify-center bg-background/50 backdrop-blur-sm", isMissed ? "text-red-500" : "text-primary")}>
+                                                    <div className={cn("h-10 w-10 rounded-full flex items-center justify-center bg-background/50 backdrop-blur-sm", (isMissed || isRejected) ? "text-red-500" : "text-primary")}>
                                                         <Icon className="h-5 w-5" />
                                                     </div>
                                                     <div className="flex flex-col">
-                                                        <span className="text-[14px] font-bold">{isMissed ? `Missed ${type} call` : `Call ended (${durationStr})`}</span>
+                                                        <span className="text-[14px] font-bold">
+                                                            {isMissed ? `Missed ${type} call` : isRejected ? `Rejected ${type} call` : `Call ended (${durationStr})`}
+                                                        </span>
                                                     </div>
                                                 </div>
                                             );
@@ -554,7 +663,7 @@ export function ChatView({
                             >
                                 {/* AI Avatar */}
                                 {msg.role === "assistant" && (
-                                    <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-primary to-primary/60 flex items-center justify-center mr-2 shrink-0">
+                                    <div className="h-8 w-8 rounded-full bg-linear-to-tr from-primary to-primary/60 flex items-center justify-center mr-2 shrink-0">
                                         <Bot className="h-4 w-4 text-white" />
                                     </div>
                                 )}
@@ -593,7 +702,7 @@ export function ChatView({
                             animate={{ opacity: 1, y: 0 }}
                             className="flex w-full mb-3 justify-start"
                         >
-                            <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-primary to-primary/60 flex items-center justify-center mr-2 shrink-0">
+                            <div className="h-8 w-8 rounded-full bg-linear-to-tr from-primary to-primary/60 flex items-center justify-center mr-2 shrink-0">
                                 <Bot className="h-4 w-4 text-white" />
                             </div>
                             <div className="flex items-center gap-2 rounded-2xl bg-white dark:bg-[#202c33] px-4 py-2.5 shadow-sm border border-transparent dark:border-white/5 rounded-tl-sm">
@@ -648,6 +757,7 @@ export function ChatView({
                                 rows={1}
                                 value={newMessage}
                                 onChange={(e) => onNewMessageChange(e.target.value)}
+                                onBlur={() => onNewMessageChange(false as any)}
                                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSendMessage(); } }}
                                 placeholder="Type a message"
                                 className="flex-1 bg-transparent border-0 focus:ring-0 resize-none py-2.5 px-3 text-[15px] max-h-32 min-h-[40px] outline-none"

@@ -10,7 +10,8 @@ import {
     Zap,
     HardDrive,
     ArrowRight,
-    CheckCircle2
+    CheckCircle2,
+    Globe,
 } from "lucide-react";
 
 import { SectionHeading } from "@/components/marketing/marketing-components";
@@ -22,6 +23,22 @@ import { PRICING_TIERS, calculatePrice, getRecommendedTier, PricingConfig } from
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+
+interface RegionInfo {
+    regionCode: string;
+    regionName: string;
+    currencyCode: string;
+    currencySymbol: string;
+    priceMultiplier: number;
+}
 
 export default function PricingPage() {
     return (
@@ -39,6 +56,17 @@ function PricingPageContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
 
+    // Region state
+    const [selectedRegion, setSelectedRegion] = React.useState<RegionInfo>({
+        regionCode: "americas",
+        regionName: "Americas",
+        currencyCode: "USD",
+        currencySymbol: "$",
+        priceMultiplier: 1.0,
+    });
+    const [allRegions, setAllRegions] = React.useState<RegionInfo[]>([]);
+    const [regionLoaded, setRegionLoaded] = React.useState(false);
+
     // State from URL or defaults
     const [config, setConfig] = React.useState<PricingConfig>({
         seats: Number(searchParams.get("seats")) || 10,
@@ -46,6 +74,25 @@ function PricingPageContent() {
         courses: Number(searchParams.get("courses")) || 5,
         storage: Number(searchParams.get("storage")) || 5,
     });
+
+    // Detect region on mount
+    React.useEffect(() => {
+        async function detectRegion() {
+            try {
+                const res = await fetch("/api/geo");
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.region) setSelectedRegion(data.region);
+                    if (data.allRegions?.length) setAllRegions(data.allRegions);
+                }
+            } catch (err) {
+                console.warn("[PricingPage] Geo detection failed, using defaults");
+            } finally {
+                setRegionLoaded(true);
+            }
+        }
+        detectRegion();
+    }, []);
 
     // Update URL when config changes
     React.useEffect(() => {
@@ -63,6 +110,13 @@ function PricingPageContent() {
         setConfig((prev) => ({ ...prev, [key]: value }));
     };
 
+    /**
+     * Convert a USD price to the selected region's local currency display.
+     */
+    const localizePrice = (usdPrice: number): number => {
+        return usdPrice * selectedRegion.priceMultiplier;
+    };
+
     return (
         <div className="min-h-screen bg-background">
             {/* Hero Section */}
@@ -76,24 +130,54 @@ function PricingPageContent() {
                         className="mb-12"
                     />
 
-                    {/* Billing Toggle */}
-                    <div className="flex items-center justify-center gap-4 mb-16">
-                        <Label htmlFor="billing-toggle" className={cn("text-sm font-medium transition-colors", config.billing === "monthly" ? "text-foreground" : "text-muted-foreground")}>
-                            Monthly
-                        </Label>
-                        <Switch
-                            id="billing-toggle"
-                            checked={config.billing === "annually"}
-                            onCheckedChange={(checked) => updateConfig("billing", checked ? "annually" : "monthly")}
-                            className="data-[state=checked]:bg-sky-500"
-                        />
-                        <div className="flex items-center gap-2">
-                            <Label htmlFor="billing-toggle" className={cn("text-sm font-medium transition-colors", config.billing === "annually" ? "text-foreground" : "text-muted-foreground")}>
-                                Annually
+                    {/* Region + Billing Controls */}
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-6 mb-16">
+                        {/* Currency / Region Selector */}
+                        {allRegions.length > 1 && (
+                            <div className="flex items-center gap-2">
+                                <Select
+                                    value={selectedRegion.regionCode}
+                                    onValueChange={(val) => {
+                                        const region = allRegions.find((r) => r.regionCode === val);
+                                        if (region) setSelectedRegion(region);
+                                    }}
+                                >
+                                    <SelectTrigger className="w-[180px] bg-background/80 backdrop-blur-sm rounded-full border-border h-10 px-4">
+                                        <div className="flex items-center gap-2">
+                                            <Globe className="h-3.5 w-3.5 text-sky-500" />
+                                            <SelectValue placeholder="Select region" />
+                                        </div>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {allRegions.map((r) => (
+                                            <SelectItem key={r.regionCode} value={r.regionCode}>
+                                                {r.regionName} ({r.currencySymbol} {r.currencyCode})
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+
+                        {/* Billing Toggle */}
+                        <div className="flex items-center gap-4">
+                            <Label htmlFor="billing-toggle" className={cn("text-sm font-medium transition-colors", config.billing === "monthly" ? "text-foreground" : "text-muted-foreground")}>
+                                Monthly
                             </Label>
-                            <span className="hidden sm:inline-block px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 text-[10px] font-bold uppercase tracking-wider">
-                                Save 20%
-                            </span>
+                            <Switch
+                                id="billing-toggle"
+                                checked={config.billing === "annually"}
+                                onCheckedChange={(checked) => updateConfig("billing", checked ? "annually" : "monthly")}
+                                className="data-[state=checked]:bg-sky-500"
+                            />
+                            <div className="flex items-center gap-2">
+                                <Label htmlFor="billing-toggle" className={cn("text-sm font-medium transition-colors", config.billing === "annually" ? "text-foreground" : "text-muted-foreground")}>
+                                    Annually
+                                </Label>
+                                <span className="hidden sm:inline-block px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 text-[10px] font-bold uppercase tracking-wider">
+                                    Save 20%
+                                </span>
+                            </div>
                         </div>
                     </div>
 
@@ -145,15 +229,30 @@ function PricingPageContent() {
             {/* Pricing Grid */}
             <section className="py-24">
                 <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                    {/* Region pricing info banner */}
+                    {regionLoaded && selectedRegion.regionCode !== "americas" && (
+                        <motion.div
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="mb-8 text-center"
+                        >
+                            <p className="text-sm text-muted-foreground">
+                                <Globe className="inline h-4 w-4 mr-1 text-sky-500" />
+                                Showing prices for <strong>{selectedRegion.regionName}</strong> in <strong>{selectedRegion.currencyCode}</strong>
+                            </p>
+                        </motion.div>
+                    )}
                     <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4 items-stretch">
                         {PRICING_TIERS.map((tier, i) => (
                             <AdvancedPricingCard
                                 key={tier.id}
                                 tier={tier}
-                                currentPrice={calculatePrice(tier.id, config)}
+                                currentPrice={localizePrice(calculatePrice(tier.id, config))}
                                 billing={config.billing}
                                 isRecommended={tier.id === recommendedTierId}
                                 delay={i * 0.1}
+                                currencySymbol={selectedRegion.currencySymbol}
+                                priceMultiplier={selectedRegion.priceMultiplier}
                             />
                         ))}
                     </div>
@@ -189,7 +288,7 @@ function PricingPageContent() {
                             transition={{ delay: 0.2 }}
                             className="mt-2 text-sm text-muted-foreground italic max-w-lg mx-auto"
                         >
-                            Building the bridge between today's top organizations and the next generation of global talent.
+                            Building the bridge between today&apos;s top organizations and the next generation of global talent.
                         </motion.p>
                     </div>
                     <div className="flex flex-wrap justify-center items-center gap-x-16 gap-y-12 grayscale opacity-40 hover:grayscale-0 hover:opacity-100 transition-all duration-700">
@@ -259,5 +358,3 @@ function PricingPageContent() {
         </div>
     );
 }
-
-import { cn } from "@/lib/utils";

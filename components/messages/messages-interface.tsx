@@ -13,7 +13,10 @@ import { ChatView } from "./chat-view";
 import { ListView } from "./list-view";
 import { useAbly, useUnifiedPresence, useUserActivity } from "@/providers/ably-provider";
 import { useLiveKit } from "@/hooks/use-livekit";
-import { generateResponse } from "@/lib/hg-core-knowledge";
+import { useNotificationSound } from "@/hooks/use-notification-sound";
+
+
+import { MessagesStore } from "@/lib/messages-store";
 
 interface MessagesInterfaceProps {
   currentUser: User;
@@ -71,6 +74,13 @@ function areMessagesEqual(a: Message[], b: Message[]) {
 }
 
 
+// WhatsApp-style status priority: never downgrade a message status
+const STATUS_PRIORITY: Record<string, number> = { sending: 0, sent: 1, delivered: 2, read: 3 };
+function higherStatus(a?: string, b?: string): string {
+  const pa = STATUS_PRIORITY[a || "sent"] ?? 1;
+  const pb = STATUS_PRIORITY[b || "sent"] ?? 1;
+  return pa >= pb ? (a || "sent") : (b || "sent");
+}
 
 /** Merge server messages with current state. Returns prev if no meaningful changes. */
 function mergeMessages(
@@ -80,57 +90,84 @@ function mergeMessages(
   currentRecipientId: string | null,
   currentChannelId: string | null
 ): Message[] {
-  // 1. Filter out invalid messages (no ID or empty ID) - Fixes "same key ``" error
+  // 1. Filter out invalid messages (no ID or empty ID)
   const validFromServer = fromServer.filter(m => m && m.id && String(m.id).trim() !== "");
   const validPrev = prev.filter(m => m && m.id && String(m.id).trim() !== "");
 
-  const recentMs = 2 * 60 * 1000;
+  const recentMs = 3 * 60 * 1000; // 3 mins window
   const now = Date.now();
 
-  // 2. Create Map for authoritative messages (server wins)
+  // 2. Create Map — merge with status priority (never downgrade)
   const messageMap = new Map<string, Message>();
-  validFromServer.forEach(m => messageMap.set(String(m.id), m));
 
-  // 3. Process previous messages (Optimistic/Temp)
-  validPrev.forEach(m => {
+  // Add all existing non-temp messages first
+  validPrev.filter(m => !String(m.id).startsWith("temp-")).forEach(m => messageMap.set(String(m.id), m));
+
+  // Merge incoming server messages, preserving higher status
+  validFromServer.forEach(m => {
     const id = String(m.id);
-
-    // If server already provided this message, skip the local/stale version
-    if (messageMap.has(id)) return;
-
-    // Filter out messages not relevant to the current conversation
-    if (currentRecipientId && m.recipient_id !== currentRecipientId) return; // DM safety
-    if (currentChannelId && m.channel_id !== currentChannelId) return; // Channel safety
-    if (m.sender_id === currentUserId && m.recipient_id !== currentRecipientId && !currentChannelId) return; // Self-sent check
-
-    // HEURISTIC: Deduplicate Temp vs Real
-    // If 'm' is a temp message, check if we have a matching real message in `validFromServer`
-    if (id.startsWith("temp-")) {
-      const isReplaced = validFromServer.some(realMsg =>
-        realMsg.sender_id === m.sender_id &&
-        realMsg.content === m.content &&
-        Math.abs(new Date(realMsg.created_at).getTime() - new Date(m.created_at).getTime()) < 10000 // 10s window
-      );
-      if (isReplaced) return; // Don't add temp message, it's effectively replaced/delivered
-
-      // Also expire very old temp messages (> 2 mins) to prevents ghosts
-      const created = m.created_at ? new Date(m.created_at).getTime() : 0;
-      if (now - created > recentMs) return;
+    const existing = messageMap.get(id);
+    if (existing) {
+      // Keep the higher status between existing and incoming
+      const bestStatus = higherStatus(existing.status, m.status);
+      const bestIsRead = existing.is_read || m.is_read;
+      messageMap.set(id, { ...m, status: bestStatus as any, is_read: bestIsRead });
+    } else {
+      messageMap.set(id, m);
     }
-
-    messageMap.set(id, m);
   });
 
-  // 4. Convert and Sort
-  const combined = Array.from(messageMap.values());
-  combined.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  // 3. Process optimistic/temp messages
+  const optimisticMessages = validPrev.filter(m => String(m.id).startsWith("temp-"));
+
+  optimisticMessages.forEach(tempMsg => {
+    const id = String(tempMsg.id);
+
+    // CRITICAL DEDUPLICATION: Check if this temp message matches ANY real message already in the map
+    const potentialMatch = Array.from(messageMap.values()).find(realMsg =>
+      !String(realMsg.id).startsWith("temp-") &&
+      realMsg.sender_id === tempMsg.sender_id &&
+      String(realMsg.content).trim() === String(tempMsg.content).trim() &&
+      Math.abs(new Date(realMsg.created_at).getTime() - new Date(tempMsg.created_at).getTime()) < 60000 // 60s window for server skew
+    );
+
+    if (potentialMatch) {
+      // Replaced by real message - do NOT add temp message
+      return;
+    }
+
+    // Also expire very old temp messages (> 3 mins) to prevent ghosts
+    const created = tempMsg.created_at ? new Date(tempMsg.created_at).getTime() : 0;
+    if (now - created > recentMs) return;
+
+    messageMap.set(id, tempMsg);
+  });
+
+  // 4. STRICT FILTERING: Only keep messages belonging to the ACTIVE conversation
+  // This is the primary defense against "data leakage" if the subscription is too broad.
+  const filtered = Array.from(messageMap.values()).filter(m => {
+    if (currentChannelId) {
+      return m.channel_id === currentChannelId;
+    }
+    if (currentRecipientId) {
+      // Message must be between ME and CURRENT PARTNER
+      const isFromPartnerToMe = m.sender_id === currentRecipientId && m.recipient_id === currentUserId;
+      const isFromMeToPartner = m.sender_id === currentUserId && m.recipient_id === currentRecipientId;
+      // Must not be a channel message
+      return (isFromPartnerToMe || isFromMeToPartner) && !m.channel_id;
+    }
+    return false;
+  });
+
+  // 5. Sort
+  filtered.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
   // Optimization: Return prev ref if identical
-  if (areMessagesEqual(prev, combined)) {
+  if (areMessagesEqual(prev, filtered)) {
     return prev;
   }
 
-  return combined;
+  return filtered;
 }
 
 export function MessagesInterface({
@@ -141,8 +178,9 @@ export function MessagesInterface({
   conversations: initialConversations,
   initialUserId,
 }: MessagesInterfaceProps) {
-  // Chat State
+  // --- Chat State ---
   const [usersState, setUsersState] = useState(users);
+  const [conversationsState, setConversationsState] = useState(initialConversations);
   const [selectedUser, setSelectedUser] = useState<typeof users[0] | null>(null);
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
   const [isAIChat, setIsAIChat] = useState(false);
@@ -155,21 +193,49 @@ export function MessagesInterface({
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [showChat, setShowChat] = useState(false);
-  // Use global online users context from Ably provider (single source of truth)
-  // Use global online users context from Ably provider (single source of truth)
-  // const globalOnlineUsers = useOnlineUsers(); // Replaced by useUnifiedPresence
+
   const { typing: typingUsers, recording: recordingUsers } = useUserActivity();
 
-  // Call State
+  // Fetch server-truth unread counts on mount
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { getConversationUnreadCountsAction } = await import("@/app/dashboard/messages/actions");
+        const counts = await getConversationUnreadCountsAction();
+        if (!cancelled && counts && typeof counts === "object") {
+          setConversationsState(prev =>
+            prev.map(c => {
+              const serverCount = (counts as Record<string, number>)[c.user.id];
+              if (typeof serverCount === "number") {
+                return { ...c, unread: serverCount };
+              }
+              return c;
+            })
+          );
+        }
+      } catch (e) {
+        console.warn("[MessagesInterface] Failed to fetch server unread counts:", e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // --- Call State ---
   const [showCallModal, setShowCallModal] = useState(false);
   const [callType, setCallType] = useState<"voice" | "video">("voice");
   const [incomingCaller, setIncomingCaller] = useState<{ id: string; name: string; avatar_url: string | null } | null>(null);
   const [callRoomName, setCallRoomName] = useState<string | null>(null);
+  const callTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Media State
+  // --- Media State ---
   const [isUploading, setIsUploading] = useState(false);
 
-  // Online dot: re-render every 10s so last_active_at-based online status updates (was 2s - too aggressive)
+  // --- Pagination State ---
+  const [hasMore, setHasMore] = useState(false);
+  const [oldestMessageCursor, setOldestMessageCursor] = useState<string | null>(null);
+
+  // Online dot: re-render every 10s
   const [, setPresenceTick] = useState(0);
   useEffect(() => {
     const t = setInterval(() => setPresenceTick((c) => c + 1), 10000);
@@ -178,319 +244,261 @@ export function MessagesInterface({
 
   const router = useRouter();
   const supabase = createClient();
-  const { client: ably, isOffline, isConfigured } = useAbly(); // Removed unused status
+  const { client: ably, isOffline, isConfigured } = useAbly();
   const livekit = useLiveKit();
 
-  // Check if Ably is available and connected
   const ablyAvailable = !isOffline && isConfigured && ably && ably.connection?.state === 'connected';
-
-  // Use unified presence hook (Ably + DB Fallback)
+  const { playSentSound, playReceivedSound } = useNotificationSound();
   const { getStatus: getUnifiedStatus } = useUnifiedPresence(usersState);
-
-  // Helper: Check if user is online based on unified status
   const isUserOnline = useCallback((userId: string) => {
     return getUnifiedStatus(userId) === "online";
   }, [getUnifiedStatus]);
 
-  // ============================================
-  // PRESENCE: Now using global Ably context
-  // The Supabase presence channel is no longer needed since ably-provider.tsx
-  // handles presence tracking and exposes it via useOnlineUsers hook.
-  // This keeps presence consistent across all pages.
-  // ============================================
-
-  // ============================================
-  // REAL-TIME PROFILE UPDATES (Last Seen / Status)
-  // ============================================
+  // 1. Profile Updates
   useEffect(() => {
     const channel = supabase.channel('public:profiles')
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'profiles' },
-        (payload) => {
-          const updatedProfile = payload.new;
-
-          setUsersState(prev => {
-            const exists = prev.find(u => u.id === updatedProfile.id);
-            if (exists) {
-              return prev.map(u => u.id === updatedProfile.id ? { ...u, ...updatedProfile } : u);
-            }
-            return [...prev, updatedProfile as any];
-          });
-
-          if (selectedUser?.id === updatedProfile.id) {
-            setSelectedUser(prev => prev ? ({ ...prev, ...updatedProfile } as any) : null);
-          }
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, (payload) => {
+        const updated = payload.new as any;
+        setUsersState(prev => prev.map(u => u.id === updated.id ? { ...u, ...updated } : u));
+        if (selectedUser?.id === updated.id) {
+          setSelectedUser(prev => prev ? ({ ...prev, ...updated } as any) : null);
         }
-      )
+      })
       .subscribe();
-
-    // Periodic bulk refresh every 2 mins as safety net
-    const fetchUsers = async () => {
-      const { data } = await supabase.from("profiles").select("*");
-      if (data) setUsersState(data);
-    };
-    fetchUsers(); // Fetch immediately on mount
-    const interval = setInterval(fetchUsers, 120000);
-
-    return () => {
-      supabase.removeChannel(channel);
-      clearInterval(interval);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [supabase, selectedUser?.id]);
 
-  // ============================================
-  // DATABASE PRESENCE & LAST SEEN
-  // ============================================
-  // Handled by AblyProvider via GlobalPresenceTracker
-  // No need for duplicate updates here.
-
-
-  // ============================================
-  // ABLY: Real-time messages (optional enhancement)
-  // ============================================
+  // 2. Global Notifications (Ably)
   useEffect(() => {
     if (!ablyAvailable || !ably) return;
-    if (isAIChat || (!selectedUser && !selectedChannel)) return;
+    const notificationChannel = ably.channels.get(`user-notifications:${currentUser.id}`);
+
+    const handleNewMessageNotification = (msg: any) => {
+      const { senderId } = msg.data.metadata || {};
+      if (!senderId) return;
+
+      const partner = usersState.find(u => u.id === senderId);
+      if (partner) {
+        setConversationsState(prev => {
+          const existing = prev.find(c => c.user.id === senderId);
+          if (existing) {
+            return prev.map(c => c.user.id === senderId ? { ...c, unread: (selectedUser?.id === senderId ? 0 : c.unread + 1) } : c);
+          }
+          return [...prev, { user: partner, lastMessage: { content: "New Message", created_at: new Date().toISOString() }, unread: 1 }];
+        });
+      }
+    };
+
+    notificationChannel.subscribe("message", handleNewMessageNotification);
+    return () => { try { notificationChannel.unsubscribe("message", handleNewMessageNotification); } catch (e) { } };
+  }, [ablyAvailable, ably, currentUser.id, usersState, selectedUser?.id]);
+
+  // 3. Active Chat Ably Subscriptions
+  useEffect(() => {
+    if (!ablyAvailable || !ably || isAIChat || (!selectedUser && !selectedChannel)) return;
 
     const chatChannelName = selectedUser
       ? `chat:${[currentUser.id, selectedUser.id].sort().join("-")}`
       : `channel:${selectedChannel!.id}`;
 
-    let chatChannel: any;
-    try {
-      chatChannel = ably.channels.get(chatChannelName);
+    const chatChannel = ably.channels.get(chatChannelName);
 
-      // Subscribe to messages for faster delivery
-      const messageHandler = (msg: any) => {
-        const newMsg = msg.data as Message;
-        setMessages((prev) => mergeMessages(prev, [newMsg], currentUser.id, selectedUser?.id || null, selectedChannel?.id || null));
-      };
+    const messageHandler = (msg: any) => {
+      const newMsg = msg.data as Message;
+      setMessages((prev) => mergeMessages(prev, [newMsg], currentUser.id, selectedUser?.id || null, selectedChannel?.id || null));
 
-      // Subscribe to typing indicators
-      const typingHandler = (msg: any) => {
-        if (msg.data?.userId !== currentUser.id) {
-          setPeerTyping(true);
-          setTimeout(() => setPeerTyping(false), 2500);
+      // Play received sound for incoming messages
+      if (newMsg.sender_id !== currentUser.id) {
+        playReceivedSound();
+      }
+
+      // Auto-mark as delivered if we received it through Ably
+      if (newMsg.sender_id !== currentUser.id && newMsg.status === "sent") {
+        chatChannel.publish("delivered-receipt", { messageIds: [newMsg.id], deliveredBy: currentUser.id }).catch(() => { });
+      }
+    };
+
+    const typingHandler = (msg: any) => {
+      if (msg.data?.userId !== currentUser.id) {
+        setPeerTyping(msg.data.isTyping);
+        if (msg.data.isTyping) {
+          setTimeout(() => setPeerTyping(false), 3000);
         }
-      };
+      }
+    };
 
-      // Subscribe to read receipts to update sender's message status
-      const readReceiptHandler = (msg: any) => {
-        const { messageIds, readBy } = msg.data;
-        if (readBy !== currentUser.id && messageIds?.length > 0) {
-          setMessages(prev => prev.map(m =>
-            messageIds.includes(m.id) ? { ...m, is_read: true, status: "read" } : m
-          ));
-        }
-      };
+    const receiptHandler = (msg: any) => {
+      const { messageIds, status } = msg.data;
+      const byUser = msg.data.readBy || msg.data.deliveredBy;
+      if (byUser !== currentUser.id && messageIds?.length > 0) {
+        setMessages(prev => prev.map(m =>
+          messageIds.includes(m.id) ? { ...m, status: status, is_read: status === "read" } : m
+        ));
+      }
+    };
 
-      chatChannel.subscribe("message", messageHandler);
-      chatChannel.subscribe("typing", typingHandler);
-      chatChannel.subscribe("read-receipt", readReceiptHandler);
+    chatChannel.subscribe("message", messageHandler);
+    chatChannel.subscribe("typing", typingHandler);
+    chatChannel.subscribe("read-receipt", (msg) => receiptHandler({ data: { ...msg.data, status: "read" } }));
+    chatChannel.subscribe("delivered-receipt", (msg) => receiptHandler({ data: { ...msg.data, status: "delivered" } }));
 
-      return () => {
-        try {
-          chatChannel.unsubscribe("message", messageHandler);
-          chatChannel.unsubscribe("typing", typingHandler);
-          chatChannel.unsubscribe("read-receipt", readReceiptHandler);
-        } catch (e) { /* ignore cleanup errors */ }
-      };
-    } catch (e) {
-      console.warn("Ably subscription failed:", e);
-    }
+    return () => {
+      try {
+        chatChannel.unsubscribe();
+      } catch (e) { }
+    };
   }, [ablyAvailable, ably, isAIChat, selectedUser, selectedChannel, currentUser.id]);
 
-  // ============================================
-  // ABLY: Incoming Call Notifications
-  // ============================================
+  // 4. Supabase Fetch & Mark Delivered (OFFLINE-FIRST)
+  const currentChatRef = useRef<string | null>(null);
   useEffect(() => {
-    // ONLY subscribe if Ably is actually connected to prevent "Connection closed" errors
-    if (!ably || !isConfigured || ably.connection.state !== 'connected') return;
+    if (isAIChat || (!selectedUser && !selectedChannel)) return;
 
-    let userChannel: any;
-    try {
-      userChannel = ably.channels.get(`user-notifications:${currentUser.id}`);
+    const chatId = selectedUser?.id || selectedChannel?.id || "";
+    if (!chatId) return;
 
-      const incomingCallHandler = (msg: any) => {
-        setIncomingCaller(msg.data.caller);
-        setCallType(msg.data.type);
-        setCallRoomName(msg.data.roomName);
-        setShowCallModal(true);
-      };
+    // 1. Reset state (show nothing until cache or fetch updates)
+    if (currentChatRef.current !== chatId) {
+      currentChatRef.current = chatId;
+      setMessages([]);
+      setHasMore(false);
+      setOldestMessageCursor(null);
 
-      const callEndedHandler = () => {
-        if (showCallModal) {
-          setShowCallModal(false);
-          setIncomingCaller(null);
-          livekit.disconnect();
-          toast.info("Call ended by other party");
+      // 2. INSTANT CACHE LOAD
+      MessagesStore.getMessages(currentUser.id, chatId).then((cached) => {
+        if (currentChatRef.current === chatId && cached.length > 0) {
+          console.log(`[MessagesInterface] Instant load ${cached.length} messages from cache`);
+          setMessages(cached);
         }
-      };
-
-      userChannel.subscribe("incoming-call", incomingCallHandler);
-      userChannel.subscribe("call-ended", callEndedHandler);
-
-      return () => {
-        try {
-          userChannel.unsubscribe("incoming-call", incomingCallHandler);
-          userChannel.unsubscribe("call-ended", callEndedHandler);
-        } catch (e) { /* ignore */ }
-      };
-    } catch (e) {
-      console.warn("Call notification subscription failed:", e);
+      });
     }
-  }, [ably, currentUser.id, showCallModal, livekit, isConfigured, ablyAvailable]);
 
-  // ============================================
-  // AUTO-SELECT USER FROM URL PARAM
-  // ============================================
+    const initChat = async () => {
+      const { getMessagesAction, markDeliveredAction } = await import("@/app/dashboard/messages/actions");
+
+      // 3. BACKGROUND SYNC (Fetch fresh from server)
+      const res = await getMessagesAction(selectedUser?.id ?? null, selectedChannel?.id ?? null, 50, null);
+      if (!res.success || !res.data) return;
+
+      setHasMore(!!res.nextCursor);
+      setOldestMessageCursor(res.nextCursor);
+
+      const normalized = res.data.map((m: any) => ({
+        ...m,
+        status: m.status || (m.is_read ? "read" : "sent"),
+      }));
+
+      // 4. MERGE & PERSIST
+      setMessages(prev => {
+        const merged = mergeMessages(prev, normalized, currentUser.id, selectedUser?.id || null, selectedChannel?.id || null);
+
+        // Update Cache in background
+        MessagesStore.saveMessages(currentUser.id, chatId, merged);
+
+        return merged;
+      });
+
+      // 5. READ RECEIPT & DELIVERED LOGIC (Background)
+      const toMarkDelivered = normalized.filter(
+        (m: any) => m.recipient_id === currentUser.id && m.status === "sent"
+      ).map((m: any) => m.id);
+
+      if (toMarkDelivered.length > 0) {
+        markDeliveredAction(toMarkDelivered).catch(() => { });
+        if (ably && selectedUser) {
+          const chatChannelName = `chat:${[currentUser.id, selectedUser.id].sort().join("-")}`;
+          ably.channels.get(chatChannelName).publish("delivered-receipt", { messageIds: toMarkDelivered, deliveredBy: currentUser.id }).catch(() => { });
+        }
+      }
+
+      const unread = normalized.filter((m: any) => m.sender_id !== currentUser.id && !m.is_read).map((m: any) => m.id);
+      if (unread.length > 0) {
+        supabase.from("messages").update({ is_read: true, status: "read", read_at: new Date().toISOString() }).in("id", unread).then(() => { });
+        if (ably && selectedUser) {
+          const chatChannelName = `chat:${[currentUser.id, selectedUser.id].sort().join("-")}`;
+          ably.channels.get(chatChannelName).publish("read-receipt", { messageIds: unread, readBy: currentUser.id }).catch(() => { });
+        }
+      }
+    };
+
+    // Delay slighty to allow cache render first
+    setTimeout(initChat, 10);
+
+  }, [selectedUser?.id, selectedChannel?.id, isAIChat, currentUser.id]);
+
+  // Persist messages on change (Debounced slightly preferred but direct is okay for now as set is async)
+  useEffect(() => {
+    if (!messages.length || isAIChat) return;
+    const chatId = selectedUser?.id || selectedChannel?.id;
+    if (chatId) {
+      MessagesStore.saveMessages(currentUser.id, chatId, messages);
+    }
+  }, [messages, selectedUser?.id, selectedChannel?.id, isAIChat, currentUser.id]);
+
+  const handleLoadMore = async () => {
+    if (!hasMore || !oldestMessageCursor) return;
+    const { getMessagesAction } = await import("@/app/dashboard/messages/actions");
+    const res = await getMessagesAction(selectedUser?.id ?? null, selectedChannel?.id ?? null, 50, oldestMessageCursor);
+
+    if (res.success && res.data) {
+      const normalized = res.data.map((m: any) => ({
+        ...m,
+        status: m.status || (m.is_read ? "read" : "sent"),
+      }));
+      setMessages(prev => mergeMessages(prev, normalized, currentUser.id, selectedUser?.id || null, selectedChannel?.id || null));
+
+      setHasMore(!!res.nextCursor);
+      setOldestMessageCursor(res.nextCursor);
+    } else {
+      setHasMore(false);
+    }
+  };
+
+
+  // AI & Calls placeholders
   useEffect(() => {
     if (initialUserId) {
-      const user = users.find((u) => u.id === initialUserId);
-      if (user) {
-        setSelectedUser(user);
-        setSelectedChannel(null);
-        setIsAIChat(false);
-        setShowChat(true);
-      }
+      const u = users.find(u => u.id === initialUserId);
+      if (u) { setSelectedUser(u); setSelectedChannel(null); setIsAIChat(false); setShowChat(true); }
     }
   }, [initialUserId, users]);
 
-  // ============================================
-  // SUPABASE: Fetch Messages + Real-time Subscription
-  // Helper to enrich message with sender details
-  const enrichMessage = useCallback((msg: any): Message => {
-    let sender = usersState.find(u => u.id === msg.sender_id);
-    if (!sender && msg.sender_id === currentUser.id) {
-      sender = profile as any;
-    }
-
-    return {
-      ...msg,
-      sender: sender || {
-        id: msg.sender_id,
-        full_name: "Unknown User",
-        email: "",
-        avatar_url: null
-      }
-    };
-  }, [usersState, profile, currentUser.id]);
-
-  // Initial Messages Fetch + Supabase Realtime Subscription
+  // Signaling for calls
   useEffect(() => {
-    // Clear messages when switching contexts to prevent bleed-over
-    setMessages([]);
+    if (!ably || !isConfigured || ably.connection.state !== 'connected') return;
+    const userChannel = ably.channels.get(`user-notifications:${currentUser.id}`);
 
-    if (isAIChat || (!selectedUser && !selectedChannel)) return;
-
-    const fetchMessages = async () => {
-      const { getMessagesAction, markDeliveredAction } = await import("@/app/dashboard/messages/actions");
-      const res = await getMessagesAction(selectedUser?.id ?? null, selectedChannel?.id ?? null);
-      if (!res.success || !res.data) return;
-
-      const toMarkDelivered = res.data.filter(
-        (m: any) => m.recipient_id === currentUser.id && m.status === "sent"
-      ).map((m: any) => m.id);
-      if (toMarkDelivered.length > 0) {
-        await markDeliveredAction(toMarkDelivered);
-      }
-      const deliveredSet = new Set(toMarkDelivered);
-      const nowIso = new Date().toISOString();
-      const enriched = res.data.map((m: any) =>
-        deliveredSet.has(m.id) ? { ...m, status: "delivered", delivered_at: nowIso } : m
-      );
-      setMessages((prev) => mergeMessages(prev, enriched, currentUser.id, selectedUser?.id || null, selectedChannel?.id || null));
-
-      // Mark unread incoming messages as read
-      const unreadFromOther = res.data.filter(
-        (m: any) => m.sender_id !== currentUser.id && !m.is_read
-      );
-      if (unreadFromOther.length > 0) {
-        const ids = unreadFromOther.map((m: any) => m.id);
-        await supabase
-          .from("messages")
-          .update({ is_read: true, read_at: new Date().toISOString(), status: "read" })
-          .in("id", ids);
-
-        if (ablyAvailable && ably && selectedUser) {
-          const receiptChannel = ably.channels.get(`chat:${[currentUser.id, selectedUser.id].sort().join("-")}`);
-          receiptChannel.publish("read-receipt", { messageIds: ids, readBy: currentUser.id }).catch(() => { });
-        }
-      }
+    const incomingCallHandler = (msg: any) => {
+      setIncomingCaller(msg.data.caller);
+      setCallType(msg.data.type);
+      setCallRoomName(msg.data.roomName);
+      setShowCallModal(true);
     };
 
-    const updatePresence = async () => {
-      const { data } = await supabase.from("profiles").select("id, last_active_at, last_seen_at");
-      if (!data) return;
-      setUsersState((prev) => {
-        const map = new Map(data.map((r: any) => [r.id, { last_active_at: r.last_active_at, last_seen_at: r.last_seen_at }]));
-        return prev.map((u) => {
-          const upd = map.get(u.id);
-          return upd ? { ...u, ...upd } : u;
-        });
-      });
+    const callEndedHandler = () => {
+      if (callTimeoutRef.current) { clearTimeout(callTimeoutRef.current); callTimeoutRef.current = null; }
+      setShowCallModal(false);
+      setIncomingCaller(null);
+      setCallRoomName(null);
+      livekit.disconnect();
+      toast.info("Call ended");
     };
 
-    fetchMessages();
-    updatePresence();
-
-    // Reduced from 2s to 10s for better performance (Ably handles real-time delivery)
-    const msgInterval = setInterval(fetchMessages, 10000);
-    const presInterval = setInterval(updatePresence, 15000);
-
-    // Supabase Realtime subscription (works without Ably)
-    const channelName = selectedUser
-      ? `messages-dm-${[currentUser.id, selectedUser.id].sort().join("-")}`
-      : `messages-channel-${selectedChannel!.id}`;
-
-    const realtimeChannel = supabase.channel(channelName)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'messages',
-      }, async (payload: any) => {
-        const newRow = payload.new;
-        const isRelevant = selectedUser
-          ? (newRow.sender_id === currentUser.id && newRow.recipient_id === selectedUser.id) ||
-          (newRow.sender_id === selectedUser.id && newRow.recipient_id === currentUser.id)
-          : newRow.channel_id === selectedChannel?.id;
-
-        if (!isRelevant) return;
-
-        // Determine sender
-        let sender = usersState.find(u => u.id === newRow.sender_id);
-        if (!sender && newRow.sender_id === currentUser.id) {
-          sender = profile as any;
-        }
-
-        // If still not found, fetch it
-        if (!sender) {
-          const { data: fetchedSender } = await supabase.from("profiles").select("*").eq("id", newRow.sender_id).single();
-          if (fetchedSender) sender = fetchedSender as any;
-        }
-
-        const newMsg: Message = {
-          ...newRow,
-          sender: sender || { id: newRow.sender_id, full_name: "Unknown", email: "", avatar_url: null }
-        };
-
-        setMessages((prev) => mergeMessages(prev, [newMsg], currentUser.id, selectedUser?.id || null, selectedChannel?.id || null));
-      })
-      .on('broadcast', { event: 'typing' }, ({ payload }: any) => {
-        if (payload.userId !== currentUser.id) {
-          setPeerTyping(true);
-          setTimeout(() => setPeerTyping(false), 3000);
-        }
-      })
-      .subscribe();
-
-    return () => {
-      clearInterval(msgInterval);
-      clearInterval(presInterval);
-      supabase.removeChannel(realtimeChannel);
+    const callRejectedHandler = () => {
+      if (callTimeoutRef.current) { clearTimeout(callTimeoutRef.current); callTimeoutRef.current = null; }
+      setShowCallModal(false);
+      setIncomingCaller(null);
+      setCallRoomName(null);
+      livekit.disconnect();
+      toast.info("Call was rejected");
     };
-  }, [selectedUser, selectedChannel, isAIChat, currentUser.id, supabase, enrichMessage, usersState, profile]);
+
+    userChannel.subscribe("incoming-call", incomingCallHandler);
+    userChannel.subscribe("call-ended", callEndedHandler);
+    userChannel.subscribe("call-rejected", callRejectedHandler);
+
+    return () => { try { userChannel.unsubscribe(); } catch (e) { } };
+  }, [ably, currentUser.id, livekit, isConfigured]);
 
   // ============================================
   // AI CHAT INITIALIZATION
@@ -520,7 +528,7 @@ export function MessagesInterface({
       return;
     }
 
-    const roomName = `room-${[currentUser.id, selectedUser.id].sort().join("-")}-${Math.floor(Date.now() / 60000)}`; // Increased stability to 1 minute
+    const roomName = `room-${[currentUser.id, selectedUser.id].sort().join("-")}-${Math.floor(Date.now() / 60000)}`;
     setCallType(type);
     setCallRoomName(roomName);
     setIncomingCaller(null);
@@ -531,7 +539,6 @@ export function MessagesInterface({
       console.log(`[MessagesInterface] Attempting to notify user ${selectedUser.id} of incoming call`);
       try {
         const notifyChannel = ably.channels.get(`user-notifications:${selectedUser.id}`);
-        // No await here to prevent blocking
         notifyChannel.publish("incoming-call", {
           type,
           roomName,
@@ -549,7 +556,14 @@ export function MessagesInterface({
       console.warn("[MessagesInterface] Ably not available for signaling");
     }
 
-    // 2. Then attempt to join room (Media Second)
+    // 2. Auto-timeout: if no answer within 30s, end call as missed
+    if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
+    callTimeoutRef.current = setTimeout(() => {
+      console.log("[MessagesInterface] Call auto-timeout (30s, no answer)");
+      handleEndCall(0, false);
+    }, 30000);
+
+    // 3. Then attempt to join room (Media Second)
     try {
       await livekit.connect(roomName, profile?.full_name || currentUser.email || "User");
     } catch (e) {
@@ -559,6 +573,9 @@ export function MessagesInterface({
   };
 
   const handleAnswerCall = async () => {
+    // Clear auto-timeout on answer
+    if (callTimeoutRef.current) { clearTimeout(callTimeoutRef.current); callTimeoutRef.current = null; }
+
     if (callRoomName) {
       const toastId = toast.loading("Joining call...");
       try {
@@ -572,12 +589,13 @@ export function MessagesInterface({
   };
 
   const handleEndCall = async (durationOrProxy: any = 0, wasConnected: any = false) => {
-    // If called from a component event (onClose), first arg might be a proxy or undefined.
-    // If called from onEnd, it passed (duration, connected).
     const finalDuration = typeof durationOrProxy === 'number' ? durationOrProxy : 0;
     const finalConnected = typeof wasConnected === 'boolean' ? wasConnected : false;
 
     console.log(`[MessagesInterface] handleEndCall: duration=${finalDuration}, connected=${finalConnected}`);
+
+    // Clear auto-timeout
+    if (callTimeoutRef.current) { clearTimeout(callTimeoutRef.current); callTimeoutRef.current = null; }
 
     // Guard: Prevent double execution if already cleaning up
     if (!showCallModal && !callRoomName) {
@@ -590,7 +608,7 @@ export function MessagesInterface({
 
     console.log(`[MessagesInterface] End Call Sync: isInitiator=${isInitiator}, target=${targetUserId}`);
 
-    // Disconnect from LiveKit
+    // Disconnect from LiveKit FIRST
     try {
       await livekit.disconnect();
     } catch (e) {
@@ -607,24 +625,21 @@ export function MessagesInterface({
       }
     }
 
-    // Log the call in chat history (Only for the initiator) – structured call message
+    // Log the call in chat history + call_logs table
     if (isInitiator && targetUserId) {
+      const callStatus = finalConnected ? "completed" : "missed";
+      const callDuration = finalConnected
+        ? `${String(Math.floor(finalDuration / 60)).padStart(2, "0")}:${String(finalDuration % 60).padStart(2, "0")}`
+        : "00:00";
+
       try {
-        const { sendCallLogAction } = await import("@/app/dashboard/messages/actions");
-        const callStatus = finalConnected ? "completed" : "missed";
-        const callDuration = finalConnected
-          ? `${String(Math.floor(finalDuration / 60)).padStart(2, "0")}:${String(finalDuration % 60).padStart(2, "0")}`
-          : "00:00";
-        const res = await sendCallLogAction(targetUserId, callType, callStatus, callDuration);
-        if (!res.success) throw new Error(res.error);
+        const { sendCallLogAction, createCallLogAction } = await import("@/app/dashboard/messages/actions");
+        // 1. Chat message log
+        await sendCallLogAction(targetUserId, callType, callStatus, callDuration);
+        // 2. Dedicated call_logs table (fails silently if table missing)
+        await createCallLogAction(targetUserId, callType, callStatus, finalDuration);
       } catch (e) {
         console.error("[MessagesInterface] Call log persistence failed:", e);
-        try {
-          const { sendMessageAction } = await import("@/app/dashboard/messages/actions");
-          await sendMessageAction(`[CALL_LOG]:${callType}:${finalConnected ? finalDuration : "missed"}`, targetUserId, null);
-        } catch (fallback) {
-          console.error("[MessagesInterface] Call log fallback failed:", fallback);
-        }
       }
     }
 
@@ -633,9 +648,46 @@ export function MessagesInterface({
     setCallRoomName(null);
   };
 
-  // ============================================
-  // FILE UPLOAD
-  // ============================================
+  // Reject incoming call (for the receiver)
+  const handleRejectCall = async () => {
+    // Clear auto-timeout
+    if (callTimeoutRef.current) { clearTimeout(callTimeoutRef.current); callTimeoutRef.current = null; }
+
+    const callerId = incomingCaller?.id;
+
+    // Disconnect from LiveKit
+    try {
+      await livekit.disconnect();
+    } catch (e) {
+      console.warn("[MessagesInterface] Disconnect error on reject:", e);
+    }
+
+    // Notify caller that call was rejected
+    if (callerId && ably) {
+      try {
+        const notifyChannel = ably.channels.get(`user-notifications:${callerId}`);
+        await notifyChannel.publish("call-rejected", { rejectedBy: currentUser.id });
+      } catch (e) {
+        console.warn("[MessagesInterface] Failed to notify caller of rejection:", e);
+      }
+    }
+
+    // Log the rejected call (from receiver's perspective, log under caller's name)
+    if (callerId) {
+      try {
+        const { sendCallLogAction } = await import("@/app/dashboard/messages/actions");
+        await sendCallLogAction(callerId, callType, "rejected", "00:00");
+      } catch (e) {
+        console.error("[MessagesInterface] Rejected call log failed:", e);
+      }
+    }
+
+    setShowCallModal(false);
+    setIncomingCaller(null);
+    setCallRoomName(null);
+    toast.info("Call rejected");
+  };
+
   // ============================================
   // FILE UPLOAD (Cloudinary via Server Proxy)
   // ============================================
@@ -798,9 +850,19 @@ export function MessagesInterface({
 
         const data = res.message;
 
-        // Replace optimistic with real message, keeping sender info
-        const realMsg = { ...data, sender: profile as any };
-        setMessages(prev => prev.map(m => m.id === tempId ? realMsg : m));
+        // Replace optimistic with real message — status = "sent" (single grey tick ✓)
+        const realMsg = { ...data, status: "sent", sender: profile as any };
+        setMessages(prev => {
+          // If the real message already exists in state (via realtime/Ably), just remove the temp one
+          if (prev.some(m => String(m.id) === String(data.id))) {
+            return prev.filter(m => m.id !== tempId);
+          }
+          // Otherwise replace the temp one with status="sent"
+          return prev.map(m => m.id === tempId ? realMsg : m);
+        });
+
+        // Play sent notification sound
+        playSentSound();
 
         // Broadcast via Ably for faster delivery to peer
         if (ablyAvailable && ably) {
@@ -825,52 +887,57 @@ export function MessagesInterface({
   // ============================================
   // TYPING INDICATOR
   // ============================================
-  // ============================================
-  // TYPING INDICATOR (Supabase Broadcast)
-  // ============================================
-  const handleTyping = async (value: string) => {
-    setNewMessage(value);
+  const handleTyping = async (valueOrIsTyping: string | boolean) => {
+    const isExplicitStop = valueOrIsTyping === false;
+    const value = typeof valueOrIsTyping === "string" ? valueOrIsTyping : newMessage;
 
-    if (!activeUser || !currentUser) return;
+    if (typeof valueOrIsTyping === "string") {
+      setNewMessage(value);
+    }
 
-    // Only broadcast every 2 seconds max
+    if (!selectedUser && !selectedChannel) return;
+
+    // 1. Explicit STOP Typing
+    if (isExplicitStop) {
+      setIsTyping(false);
+      broadcastTyping(false);
+      return;
+    }
+
+    // 2. Start Typing (Throttled)
     if (!isTyping && value.length > 0) {
       setIsTyping(true);
+      broadcastTyping(true);
 
-      const channelName = selectedUser
-        ? `messages-dm-${[currentUser.id, selectedUser.id].sort().join("-")}`
-        : `messages-channel-${selectedChannel!.id}`;
-
-      await supabase.channel(channelName).send({
-        type: 'broadcast',
-        event: 'typing',
-        payload: { userId: currentUser.id }
-      });
-
-      // Broadcast Global Typing via Ably
-      if (ablyAvailable) {
-        // 1. Publish to specific chat channel so the other user sees it immediately
-        const chatChannelName = selectedUser
-          ? `chat:${[currentUser.id, selectedUser.id].sort().join("-")}`
-          : `channel:${selectedChannel!.id}`;
-
-        ably?.channels.get(chatChannelName).publish('typing', {
-          userId: currentUser.id,
-          isTyping: true
-        }).catch(err => console.error("Failed to broadcast chat typing:", err));
-
-        // 2. Publish to global activity (optional, for lists)
-        if (selectedUser) {
-          ably?.channels.get('global-activity').publish('typing', {
-            userId: currentUser.id,
-            targetUserId: selectedUser.id,
-            isTyping: true
-          }).catch(err => console.error("Failed to broadcast global typing:", err));
-        }
-      }
-
-      setTimeout(() => setIsTyping(false), 2000);
+      // Auto-stop after 3s if no new input (fallback)
+      setTimeout(() => setIsTyping(false), 3000);
     }
+  };
+
+  const broadcastTyping = async (isTypingState: boolean) => {
+    // Broadcast Global Typing via Ably
+    if (ablyAvailable && ably) {
+      // 1. Publish to specific chat channel so the other user sees it immediately
+      const chatChannelName = selectedUser
+        ? `chat:${[currentUser.id, selectedUser.id].sort().join("-")}`
+        : `channel:${selectedChannel!.id}`;
+
+      ably.channels.get(chatChannelName).publish('typing', {
+        userId: currentUser.id,
+        isTyping: isTypingState
+      }).catch(err => console.error("Failed to broadcast chat typing:", err));
+
+      // 2. Publish to global activity (optional, for lists)
+      if (selectedUser) {
+        ably.channels.get('global-activity').publish('typing', {
+          userId: currentUser.id,
+          targetUserId: selectedUser.id,
+          isTyping: isTypingState
+        }).catch(err => console.error("Failed to broadcast global typing:", err));
+      }
+    }
+
+    // Supabase Realtime typing broadcast removed — Ably handles typing exclusively
   };
 
   const handleRecordingStart = () => {
@@ -893,12 +960,31 @@ export function MessagesInterface({
     }
   };
 
+
   // ============================================
   // OPEN CHAT
   // ============================================
   const openChat = (type: "ai" | "user" | "channel", item?: any) => {
-    setMessages([]);
-    setPeerTyping(false);
+    // Determine Target ID
+    let targetId = "";
+    if (type === "ai") targetId = "ai";
+    else if (type === "user") targetId = item.id;
+    else if (type === "channel") targetId = item.id;
+
+    // Determine Current ID
+    let currentId = "";
+    if (isAIChat) currentId = "ai";
+    else if (selectedUser) currentId = selectedUser.id;
+    else if (selectedChannel) currentId = selectedChannel.id;
+
+    // Only clear messages if we are switching to a DIFFERENT chat
+    if (targetId !== currentId) {
+      setMessages([]);
+      setPeerTyping(false);
+    } else {
+      console.log("[MessagesInterface] Re-opening same chat, preserving messages");
+    }
+
     if (type === "ai") {
       setIsAIChat(true);
       setSelectedUser(null);
@@ -909,6 +995,10 @@ export function MessagesInterface({
       setSelectedUser(freshUser);
       setSelectedChannel(null);
       setIsAIChat(false);
+      // Clear unread badge immediately on open
+      setConversationsState(prev =>
+        prev.map(c => c.user.id === item.id ? { ...c, unread: 0 } : c)
+      );
     } else if (type === "channel") {
       setSelectedChannel(item);
       setSelectedUser(null);
@@ -920,12 +1010,22 @@ export function MessagesInterface({
   // Online dot: if now - last_active_at < 10s → online, else offline (updates every 2s via presenceTick)
 
 
-  const getStatus = (id: string) => (isUserOnline(id) ? "online" : "offline");
+  const getStatus = (id: string) => getUnifiedStatus(id);
 
+  // Sync selected user with real-time state
   // Sync selected user with real-time state
   const activeUser = selectedUser
     ? (usersState.find(u => u.id === selectedUser.id) || selectedUser)
     : null;
+
+  // CRITICAL: Force clear unread when activeUser changes
+  useEffect(() => {
+    if (activeUser) {
+      setConversationsState(prev =>
+        prev.map(c => c.user.id === activeUser.id ? { ...c, unread: 0 } : c)
+      );
+    }
+  }, [activeUser?.id]);
 
   // ============================================
   // RENDER
@@ -943,9 +1043,10 @@ export function MessagesInterface({
         isVideo={callType === "video"}
         isIncoming={!!incomingCaller}
         token={livekit.token}
-        room={livekit.room}
+        serverUrl={livekit.serverUrl}
         onAnswer={handleAnswerCall}
         onEnd={handleEndCall}
+        onReject={handleRejectCall}
       />
 
       <div className="fixed inset-0 top-[56px] sm:top-[64px] bottom-[64px] md:bottom-0 md:relative md:inset-auto md:h-[calc(100dvh-8rem)] flex bg-background rounded-none md:rounded-xl md:border shadow-sm overflow-hidden z-20">
@@ -958,7 +1059,14 @@ export function MessagesInterface({
               selectedUser={activeUser}
               selectedChannel={selectedChannel}
               isAIChat={isAIChat}
-              messages={messages}
+              messages={messages.filter(m => {
+                if (isAIChat) return true;
+                if (selectedChannel) return m.channel_id === selectedChannel.id;
+                if (activeUser) {
+                  return (m.sender_id === activeUser.id || m.recipient_id === activeUser.id) && !m.channel_id;
+                }
+                return false;
+              })}
               aiMessages={aiMessages}
               newMessage={newMessage}
               aiTyping={aiTyping || peerTyping}
@@ -970,6 +1078,7 @@ export function MessagesInterface({
               onCloseChat={() => setShowChat(false)}
               onStartCall={startCall}
               isOnline={!!(activeUser && isUserOnline(activeUser.id))}
+              presenceStatus={activeUser ? (getUnifiedStatus(activeUser.id) as "online" | "idle" | "offline") : "offline"}
               onViewContact={() => {
                 if (activeUser) router.push(`/dashboard/profile/${activeUser.id}`);
               }}
@@ -1000,7 +1109,7 @@ export function MessagesInterface({
               currentUser={currentUser}
               users={usersState}
               channels={channels}
-              conversations={initialConversations}
+              conversations={conversationsState}
               showSearch={showSearch}
               searchQuery={searchQuery}
               onToggleSearch={() => setShowSearch(!showSearch)}
@@ -1022,7 +1131,7 @@ export function MessagesInterface({
               currentUser={currentUser}
               users={usersState}
               channels={channels}
-              conversations={initialConversations}
+              conversations={conversationsState}
               showSearch={showSearch}
               searchQuery={searchQuery}
               onToggleSearch={() => setShowSearch(!showSearch)}
@@ -1051,7 +1160,15 @@ export function MessagesInterface({
                 selectedUser={activeUser}
                 selectedChannel={selectedChannel}
                 isAIChat={isAIChat}
-                messages={messages}
+                messages={messages.filter(m => {
+                  // PARANOID CHECK: Ensure message belongs to this chat
+                  if (isAIChat) return true; // AI handled separately
+                  if (selectedChannel) return m.channel_id === selectedChannel.id;
+                  if (activeUser) {
+                    return (m.sender_id === activeUser.id || m.recipient_id === activeUser.id) && !m.channel_id;
+                  }
+                  return false;
+                })}
                 aiMessages={aiMessages}
                 newMessage={newMessage}
                 aiTyping={aiTyping || peerTyping}
@@ -1062,7 +1179,10 @@ export function MessagesInterface({
                 onSendAttachment={handleSendAttachment}
                 onCloseChat={() => setShowChat(false)}
                 onStartCall={startCall}
+                onLoadMore={handleLoadMore}
+                hasMore={hasMore}
                 isOnline={!!(activeUser && isUserOnline(activeUser.id))}
+                presenceStatus={activeUser ? (getUnifiedStatus(activeUser.id) as "online" | "idle" | "offline") : "offline"}
                 onViewContact={() => {
                   if (activeUser) router.push(`/profile/${activeUser.username || activeUser.id}`);
                 }}

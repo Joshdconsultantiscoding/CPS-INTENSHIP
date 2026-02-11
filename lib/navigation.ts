@@ -18,6 +18,8 @@ import {
     Home,
     Rocket,
     Award,
+    UserPlus,
+    StickyNote,
     LucideIcon,
 } from "lucide-react";
 
@@ -51,6 +53,11 @@ export const internNavItems: NavItem[] = [
         url: "/dashboard/messages",
         icon: MessageSquare,
         settingKey: "messages_enabled",
+    },
+    {
+        title: "Notes",
+        url: "/dashboard/notes",
+        icon: StickyNote,
     },
     {
         title: "Community",
@@ -90,6 +97,11 @@ export const internNavItems: NavItem[] = [
         url: "/dashboard/rewards",
         icon: Trophy,
         settingKey: "rewards_enabled",
+    },
+    {
+        title: "Referrals",
+        url: "/dashboard/referrals",
+        icon: UserPlus,
     },
     {
         title: "AI Assistant",
@@ -149,6 +161,11 @@ export const adminNavItems: NavItem[] = [
         settingKey: "messages_enabled",
     },
     {
+        title: "Notes",
+        url: "/dashboard/notes",
+        icon: StickyNote,
+    },
+    {
         title: "Community",
         url: "/dashboard/community",
         icon: Users2,
@@ -188,6 +205,11 @@ export const adminNavItems: NavItem[] = [
         settingKey: "rewards_enabled",
     },
     {
+        title: "Referrals",
+        url: "/dashboard/referrals",
+        icon: UserPlus,
+    },
+    {
         title: "AI Assistant",
         url: "/dashboard/assistant",
         icon: Sparkles,
@@ -202,11 +224,6 @@ export const adminNavItems: NavItem[] = [
         title: "Bug Reports",
         url: "/dashboard/admin/bug-reports",
         icon: Bug,
-    },
-    {
-        title: "Community Mgmt",
-        url: "/dashboard/admin/community",
-        icon: Home,
     },
     {
         title: "Notifications",

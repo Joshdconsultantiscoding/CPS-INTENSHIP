@@ -30,12 +30,27 @@ export async function markDeliveredAction(messageIds: string[]) {
 }
 
 /** Fetch messages for a conversation using admin client (bypasses RLS). Ensures sent messages are always visible. */
-export async function getMessagesAction(recipientId: string | null, channelId: string | null) {
+/** Fetch messages for a conversation using admin client (bypasses RLS). Ensures sent messages are always visible. */
+export async function getMessagesAction(
+    recipientId: string | null,
+    channelId: string | null,
+    limit: number = 50,
+    cursor: string | null = null
+) {
     try {
         const user = await getAuthUser();
         const supabase = await createAdminClient();
 
-        let query = supabase.from("messages").select("*").order("created_at", { ascending: true });
+        // Fetch latest messages first (DESC)
+        let query = supabase
+            .from("messages")
+            .select("*")
+            .order("created_at", { ascending: false })
+            .limit(limit);
+
+        if (cursor) {
+            query = query.lt("created_at", cursor);
+        }
 
         if (channelId) {
             query = query.eq("channel_id", channelId);
@@ -44,19 +59,36 @@ export async function getMessagesAction(recipientId: string | null, channelId: s
                 .or(`and(sender_id.eq.${user.id},recipient_id.eq.${recipientId}),and(sender_id.eq.${recipientId},recipient_id.eq.${user.id})`)
                 .is("channel_id", null);
         } else {
-            return { success: true, data: [] };
+            return { success: true, data: [], nextCursor: null };
         }
 
         const { data, error } = await query;
 
         if (error) {
             console.error("GetMessages Error:", error);
-            return { success: false, error: error.message, data: [] };
+            return { success: false, error: error.message, data: [], nextCursor: null };
         }
-        return { success: true, data: data || [] };
+
+        // Reverse to ASC for display (Oldest -> Newest)
+        const messages = (data || []).reverse();
+
+        // The cursor for the next page is the created_at of the oldest message we just fetched
+        // (which is now at index 0 after reverse, or index length-1 before reverse)
+        // Wait, if we requested DESC, the last item in 'data' is the oldest.
+        // If we reverse it, the first item in 'messages' is the oldest.
+        const nextCursor = messages.length > 0 ? messages[0].created_at : null;
+
+        // If we got fewer messages than the limit, we've reached the end
+        const hasMore = (data || []).length === limit;
+
+        return {
+            success: true,
+            data: messages,
+            nextCursor: hasMore ? nextCursor : null
+        };
     } catch (error: any) {
         console.error("GetMessagesAction Error:", error);
-        return { success: false, error: error.message, data: [] };
+        return { success: false, error: error.message, data: [], nextCursor: null };
     }
 }
 
@@ -197,7 +229,7 @@ export async function sendMessageAction(
 export async function sendCallLogAction(
     recipientId: string,
     callType: "voice" | "video",
-    callStatus: "missed" | "completed",
+    callStatus: "missed" | "completed" | "rejected",
     callDuration: string
 ) {
     try {
@@ -229,6 +261,103 @@ export async function sendCallLogAction(
     } catch (error: any) {
         console.error("SendCallLogAction Error:", error);
         return { success: false, error: error.message };
+    }
+}
+
+/** Create a dedicated call log entry in call_logs table. */
+export async function createCallLogAction(
+    receiverId: string,
+    callType: "voice" | "video",
+    status: "missed" | "completed" | "rejected",
+    durationSeconds: number = 0,
+    recordingUrl: string | null = null
+) {
+    try {
+        const user = await getAuthUser();
+        const supabase = await createAdminClient();
+
+        const now = new Date().toISOString();
+        const startedAt = durationSeconds > 0
+            ? new Date(Date.now() - durationSeconds * 1000).toISOString()
+            : now;
+
+        const { data, error } = await supabase
+            .from("call_logs")
+            .insert({
+                caller_id: user.id,
+                receiver_id: receiverId,
+                call_type: callType,
+                started_at: startedAt,
+                ended_at: now,
+                duration_seconds: durationSeconds,
+                status,
+                recording_url: recordingUrl,
+            })
+            .select("*")
+            .single();
+
+        if (error) {
+            // Table may not exist yet — fail silently
+            console.warn("CreateCallLog Error (call_logs table may not exist):", error.message);
+            return { success: false, error: error.message };
+        }
+        return { success: true, callLog: data };
+    } catch (error: any) {
+        console.warn("CreateCallLogAction Error:", error.message);
+        return { success: false, error: error.message };
+    }
+}
+
+/** Get server-truth unread message count for the current user. */
+export async function getUnreadCountAction() {
+    try {
+        const user = await getAuthUser();
+        const supabase = await createAdminClient();
+
+        const { count, error } = await supabase
+            .from("messages")
+            .select("*", { count: "exact", head: true })
+            .eq("recipient_id", user.id)
+            .eq("is_read", false)
+            .is("channel_id", null);
+
+        if (error) {
+            console.error("GetUnreadCount Error:", error);
+            return { success: false, count: 0 };
+        }
+        return { success: true, count: count || 0 };
+    } catch (error: any) {
+        return { success: false, count: 0 };
+    }
+}
+
+/** Get per-conversation unread counts for the current user (server truth). */
+export async function getConversationUnreadCountsAction() {
+    try {
+        const user = await getAuthUser();
+        const supabase = await createAdminClient();
+
+        const { data, error } = await supabase
+            .from("messages")
+            .select("sender_id")
+            .eq("recipient_id", user.id)
+            .eq("is_read", false)
+            .is("channel_id", null);
+
+        if (error) {
+            console.error("GetConversationUnreadCounts Error:", error);
+            return { success: false, counts: {} as Record<string, number> };
+        }
+
+        // Group by sender_id
+        const counts: Record<string, number> = {};
+        (data || []).forEach((msg: any) => {
+            counts[msg.sender_id] = (counts[msg.sender_id] || 0) + 1;
+        });
+
+        return { success: true, counts };
+    } catch (error: any) {
+        return { success: false, counts: {} as Record<string, number> };
     }
 }
 

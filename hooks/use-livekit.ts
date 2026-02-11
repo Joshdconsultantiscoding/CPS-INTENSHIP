@@ -1,42 +1,31 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
-import { Room, RoomEvent, VideoPresets } from "livekit-client";
+import { useState, useCallback, useRef } from "react";
 
+/**
+ * Simplified LiveKit hook — TOKEN-ONLY.
+ * This hook fetches a LiveKit JWT token for a given room.
+ * The actual WebRTC connection is managed by <LiveKitRoom> in the CallModal.
+ */
 export function useLiveKit() {
-    const [room, setRoom] = useState<Room | null>(null);
     const [token, setToken] = useState<string | null>(null);
+    const [roomName, setRoomName] = useState<string | null>(null);
     const [isConnecting, setIsConnecting] = useState(false);
     const [error, setError] = useState<Error | null>(null);
     const isConnectingRef = useRef(false);
-    const roomRef = useRef<Room | null>(null);
 
-    const wsUrl = process.env.NEXT_PUBLIC_LIVEKIT_URL;
+    const serverUrl = process.env.NEXT_PUBLIC_LIVEKIT_URL || "";
 
-    const cleanup = useCallback(async () => {
-        if (roomRef.current) {
-            console.log("[LiveKit] Cleaning up room session:", roomRef.current.name);
-            roomRef.current.removeAllListeners();
-            try {
-                await roomRef.current.disconnect();
-            } catch (e) {
-                console.warn("[LiveKit] Disconnect warning:", e);
-            }
-            roomRef.current = null;
-        }
-        setRoom(null);
-        setToken(null);
-    }, []);
-
-    const connect = useCallback(async (roomName: string, username: string) => {
+    const connect = useCallback(async (room: string, username: string) => {
         if (isConnectingRef.current) {
-            console.log("[LiveKit] Already connecting, skipping...");
-            return roomRef.current;
+            console.log("[LiveKit] Already fetching token, skipping...");
+            return;
         }
 
-        // If we already have a room and it's THE SAME room, keep it
-        if (roomRef.current && roomRef.current.name === roomName && roomRef.current.state === "connected") {
-            return roomRef.current;
+        // If we already have a token for the SAME room, reuse it
+        if (token && roomName === room) {
+            console.log("[LiveKit] Reusing existing token for room:", room);
+            return;
         }
 
         isConnectingRef.current = true;
@@ -44,96 +33,43 @@ export function useLiveKit() {
         setError(null);
 
         try {
-            await cleanup();
-
-            if (!wsUrl) throw new Error("NEXT_PUBLIC_LIVEKIT_URL is missing");
-
-            const resp = await fetch(`/api/livekit/token?room=${roomName}&username=${username}`);
+            console.log("[LiveKit] Fetching token for room:", room);
+            const resp = await fetch(`/api/livekit/token?room=${encodeURIComponent(room)}&username=${encodeURIComponent(username)}`);
             const data = await resp.json();
-            if (data.error) throw new Error(data.error);
 
-            console.log("[LiveKit] Joining room:", roomName);
-            const newRoom = new Room({
-                adaptiveStream: true,
-                dynacast: true,
-                videoCaptureDefaults: {
-                    resolution: VideoPresets.h720.resolution,
-                },
-                publishDefaults: {
-                    dtx: true,
-                    simulcast: true,
-                },
-                stopLocalTrackOnUnpublish: true,
-                disconnectOnPageLeave: true,
-            });
+            if (!resp.ok || data.error) {
+                throw new Error(data.error || `Token fetch failed (${resp.status})`);
+            }
 
-            // Set up listeners for deep debugging
-            newRoom.on(RoomEvent.Disconnected, () => {
-                console.log("[LiveKit] Room disconnected:", roomName);
-                if (roomRef.current === newRoom) {
-                    setRoom(null);
-                    setToken(null);
-                    roomRef.current = null;
-                }
-            });
-
-            newRoom.on(RoomEvent.ParticipantConnected, (p) => {
-                console.log("[LiveKit] Peer joined:", p.identity, "SID:", p.sid);
-            });
-
-            newRoom.on(RoomEvent.TrackSubscribed, (track, pub, p) => {
-                console.log(`[LiveKit] Subscribed to ${pub.source} from ${p.identity}`);
-            });
-
-            await newRoom.connect(wsUrl, data.token);
-            console.log("[LiveKit] Connection established for:", newRoom.localParticipant.identity);
-
-            // Proactive sharing with a slight delay to ensure signaling is ready
-            setTimeout(async () => {
-                try {
-                    if (newRoom.state === "connected" && newRoom.localParticipant) {
-                        await newRoom.localParticipant.setMicrophoneEnabled(true);
-                        console.log("[LiveKit] Local microphone enabled/published");
-                    }
-                } catch (e) {
-                    console.warn("[LiveKit] Media publishing failed:", e);
-                }
-            }, 500);
-
-            roomRef.current = newRoom;
-            setRoom(newRoom);
+            console.log("[LiveKit] Token acquired for room:", room);
             setToken(data.token);
-
-            return newRoom;
+            setRoomName(room);
         } catch (e: any) {
-            console.error("[LiveKit] Failed to join room:", e);
+            console.error("[LiveKit] Token fetch failed:", e);
             setError(e);
-            await cleanup();
+            setToken(null);
+            setRoomName(null);
             throw e;
         } finally {
             setIsConnecting(false);
             isConnectingRef.current = false;
         }
-    }, [wsUrl, cleanup]);
+    }, [token, roomName]);
 
-    const disconnect = useCallback(async () => {
-        await cleanup();
-    }, [cleanup]);
-
-    useEffect(() => {
-        return () => {
-            if (roomRef.current) {
-                roomRef.current.disconnect();
-            }
-        };
+    const disconnect = useCallback(() => {
+        console.log("[LiveKit] Clearing token and room state");
+        setToken(null);
+        setRoomName(null);
+        setError(null);
     }, []);
 
     return {
-        room,
         token,
+        roomName,
+        serverUrl,
         connect,
         disconnect,
         isConnecting,
-        error
+        error,
     };
 }

@@ -127,6 +127,10 @@ export const calculatePrice = (tierId: TierId, config: PricingConfig) => {
         price += (config.courses - tier.limits.courses) * 2;
     }
 
+    if (config.storage > tier.limits.storage) {
+        price += (config.storage - tier.limits.storage) * 0.5;
+    }
+
     if (config.billing === "annually") {
         return price * 0.8; // 20% discount
     }

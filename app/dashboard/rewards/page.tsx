@@ -19,23 +19,20 @@ export default async function RewardsPage() {
 
   const isAdmin = user.role === "admin";
 
-  // Get all rewards
+  // Get all rewards (active, non-archived, non-expired)
   const { data: rewards } = await supabase
-    .from("rewards")
+    .from("reward_items")
     .select("*")
     .eq("is_active", true)
+    .is("archived_at", null)
+    .or("expires_at.is.null,expires_at.gt." + new Date().toISOString())
     .order("points_required", { ascending: true });
 
-  // Get achievements
-  let achievementsQuery = supabase
-    .from("achievements")
-    .select("*, reward:rewards(*), user:profiles(*)");
-
-  if (!isAdmin) {
-    achievementsQuery = achievementsQuery.eq("user_id", user.id);
-  }
-
-  const { data: achievements } = await achievementsQuery.order("earned_at", { ascending: false });
+  // Get claimed rewards (using new reward_claims table)
+  const { data: claims } = await supabase
+    .from("reward_claims")
+    .select("*, reward_item:reward_items(*), user:profiles(*)")
+    .order("claimed_at", { ascending: false });
 
   // Get leaderboard (top 10)
   const { data: leaderboard } = await supabase
@@ -59,7 +56,7 @@ export default async function RewardsPage() {
       <RewardsOverview
         profile={profile}
         rewards={rewards || []}
-        achievements={achievements || []}
+        achievements={claims || []}
         leaderboard={leaderboard || []}
         isAdmin={isAdmin}
         userId={user.id}

@@ -1,6 +1,10 @@
 import { clerkMiddleware } from '@clerk/nextjs/server';
 
-export default clerkMiddleware();
+import { updateSession } from "@/lib/supabase/middleware";
+
+export default clerkMiddleware(async (auth, req) => {
+    return await updateSession(req);
+});
 
 export const config = {
     matcher: [

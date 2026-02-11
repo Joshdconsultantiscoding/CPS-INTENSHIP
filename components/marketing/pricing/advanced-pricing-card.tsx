@@ -14,6 +14,8 @@ interface AdvancedPricingCardProps {
     billing: "monthly" | "annually";
     isRecommended?: boolean;
     delay?: number;
+    currencySymbol?: string;
+    priceMultiplier?: number;
 }
 
 export function AdvancedPricingCard({
@@ -22,6 +24,8 @@ export function AdvancedPricingCard({
     billing,
     isRecommended = false,
     delay = 0,
+    currencySymbol = "$",
+    priceMultiplier = 1,
 }: AdvancedPricingCardProps) {
     const isEnterprise = tier.id === "enterprise";
     const monthlyPrice = billing === "annually" ? currentPrice / 12 : currentPrice;
@@ -69,7 +73,8 @@ export function AdvancedPricingCard({
                         ) : (
                             <>
                                 <span className="text-4xl font-bold text-foreground tracking-tight">
-                                    ${Number.isInteger(currentPrice) ? currentPrice : currentPrice.toFixed(0)}
+                                    {currencySymbol}
+                                    {Number.isInteger(currentPrice) ? currentPrice : currentPrice.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                                 </span>
                                 <span className="text-muted-foreground text-sm font-medium">/{billing === "annually" ? "yr" : "mo"}</span>
                             </>

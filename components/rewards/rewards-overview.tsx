@@ -43,7 +43,7 @@ import { deleteRewardAction, claimRewardAction } from "@/app/actions/rewards";
 interface RewardsOverviewProps {
   profile: Profile | null;
   rewards: Reward[];
-  achievements: (Achievement & { reward: Reward })[];
+  achievements: any[]; // We'll keep this generic for mapping
   leaderboard: {
     id: string;
     full_name: string | null;
@@ -90,22 +90,15 @@ export function RewardsOverview({
     const handleRewardCreated = (message: any) => {
       const newReward = message.data.reward as Reward;
       setRewards((prev) => {
-        // Prevent duplicates
-        if (prev.some(r => r.id === newReward.id)) {
-          return prev;
-        }
+        if (prev.some(r => r.id === newReward.id)) return prev;
         return [...prev, newReward].sort((a, b) => a.points_required - b.points_required);
       });
-      if (!isAdmin) {
-        toast.info(`New reward available: ${newReward.name}`);
-      }
+      if (!isAdmin) toast.info(`New reward available: ${newReward.name}`);
     };
 
     const handleRewardUpdated = (message: any) => {
       const updatedReward = message.data.reward as Reward;
-      setRewards((prev) =>
-        prev.map((r) => (r.id === updatedReward.id ? updatedReward : r))
-      );
+      setRewards((prev) => prev.map((r) => (r.id === updatedReward.id ? updatedReward : r)));
     };
 
     const handleRewardDeleted = (message: any) => {
@@ -126,33 +119,27 @@ export function RewardsOverview({
 
   const handleDeleteReward = async (rewardId: string) => {
     if (!confirm("Are you sure you want to delete this reward?")) return;
-
     const result = await deleteRewardAction(rewardId);
-
     if (!result.success) {
-      console.error("Failed to delete reward:", result.error);
       toast.error(`Failed to delete reward: ${result.error}`);
       return;
     }
-
-    // Update local state immediately
     setRewards((prev) => prev.filter((r) => r.id !== rewardId));
-
-    // Publish deletion via Ably for real-time sync
-    if (ablyClient) {
-      try {
-        const channel = ablyClient.channels.get("rewards:global");
-        await channel.publish("reward-deleted", { rewardId });
-      } catch (e) {
-        console.warn("Ably publish failed:", e);
-      }
-    }
-
     toast.success("Reward deleted successfully");
   };
 
-  const [userPoints, setUserPoints] = useState(profile?.total_points || 0);
-  const earnedRewardIds = achievements.map((a) => a.reward_id);
+  const userPoints = profile?.total_points || 0;
+
+  // Map claims to a consistent format
+  const earnedClaims = achievements.map(a => ({
+    id: a.id,
+    rewardId: a.reward_item_id || a.reward_id,
+    claimedAt: a.claimed_at || a.earned_at,
+    reward: a.reward_item || a.reward,
+    user: a.user
+  }));
+
+  const earnedRewardIds = earnedClaims.map((a) => a.rewardId);
 
   const claimReward = async (reward: Reward) => {
     if (userPoints < reward.points_required) {
@@ -161,23 +148,21 @@ export function RewardsOverview({
     }
 
     if (earnedRewardIds.includes(reward.id)) {
-      toast.error("You've already earned this reward");
+      toast.error("You've already claimed this reward");
       return;
     }
 
     setClaiming(reward.id);
-
     try {
       const result = await claimRewardAction(reward.id);
-
       if (!result.success) {
         toast.error(result.error || "Failed to claim reward");
       } else {
-        toast.success(`Congratulations! You've earned: ${reward.name}`);
+        toast.success(`Claim successful: ${reward.name}`);
         router.refresh();
       }
     } catch (error: any) {
-      toast.error("An unexpected error occurred while claiming your reward.");
+      toast.error("An unexpected error occurred.");
     } finally {
       setClaiming(null);
     }
@@ -378,7 +363,7 @@ export function RewardsOverview({
             </Card>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {Array.from(new Map(achievements.map(item => [item.id, item])).values()).map((achievement) => (
+              {earnedClaims.map((achievement) => (
                 <Card key={achievement.id} className="border-accent bg-accent/5 overflow-hidden">
                   {isAdmin && achievement.user && (
                     <div className="bg-accent/10 px-4 py-2 border-b border-accent/20 flex items-center gap-2">
@@ -396,24 +381,24 @@ export function RewardsOverview({
                   <CardHeader className="pb-2">
                     <div className="flex items-start justify-between">
                       <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-accent text-accent-foreground">
-                        {rewardIcons[achievement.reward.icon || "gift"] || (
+                        {rewardIcons[achievement.reward?.icon || "gift"] || (
                           <Gift className="h-6 w-6" />
                         )}
                       </div>
                       <div className="text-right flex flex-col items-end gap-1">
                         <Badge variant="outline" className="text-[10px]">
-                          {format(new Date(achievement.earned_at), "MMM d, yyyy")}
+                          {achievement.claimedAt ? format(new Date(achievement.claimedAt), "MMM d, yyyy") : "N/A"}
                         </Badge>
                         <span className="text-xs font-bold text-accent">
-                          {achievement.reward.points_required} Points
+                          {achievement.reward?.points_required || 0} Points
                         </span>
                       </div>
                     </div>
                     <CardTitle className="mt-2 text-base leading-tight">
-                      {achievement.reward.name}
+                      {achievement.reward?.name || "Unknown Reward"}
                     </CardTitle>
                     <CardDescription className="text-xs line-clamp-2">
-                      {achievement.reward.description}
+                      {achievement.reward?.description}
                     </CardDescription>
                   </CardHeader>
                 </Card>

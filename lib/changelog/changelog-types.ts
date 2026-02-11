@@ -11,6 +11,8 @@ export interface Changelog {
     breaking_changes: string[];
     created_by: string;
     is_major: boolean;
+    status: 'draft' | 'published';
+    published_at: string | null;
     created_at: string;
 }
 
@@ -23,4 +25,5 @@ export interface CreateChangelogParams {
     improvements?: string[];
     breaking_changes?: string[];
     is_major?: boolean;
+    status?: 'draft' | 'published';
 }

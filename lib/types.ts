@@ -128,24 +128,97 @@ export interface PerformanceScore {
   scorer?: Profile;
 }
 
+export type RewardType = 'coupon' | 'ai_credits' | 'free_course' | 'subscription_days' | 'badge';
+
 export interface Reward {
   id: string;
   name: string;
-  description: string | null;
+  description: string;
   points_required: number;
-  icon: string | null;
+  icon?: string;
+  reward_type?: "coupon" | "ai_credits" | "free_course" | "subscription_days" | "badge";
+  reward_value?: Record<string, any>;
   is_active: boolean;
+  max_redemptions?: number;
+  current_redemptions?: number;
+  expires_at?: string;
+  archived_at?: string;
   created_at: string;
+  updated_at: string;
+}
+
+export interface RewardClaim {
+  id: string;
+  user_id: string;
+  reward_item_id: string;
+  claimed_at: string;
+  status: "pending" | "delivered" | "rejected";
+  updated_at: string;
+  reward_item?: Reward;
+  user?: any;
 }
 
 export interface Achievement {
   id: string;
   user_id: string;
-  reward_id: string;
+  reward_id?: string; // Legacy
+  reward_item_id?: string; // New
   earned_at: string;
   // Joined fields
   user?: Profile;
   reward?: Reward;
+}
+
+// =============================================
+// REFERRAL SYSTEM TYPES
+// =============================================
+
+export interface ReferralCode {
+  id: string;
+  user_id: string;
+  code: string;
+  created_at: string;
+}
+
+export interface Referral {
+  id: string;
+  referrer_id: string;
+  referred_id: string;
+  status: 'pending' | 'confirmed' | 'rejected';
+  ip_address: string | null;
+  created_at: string;
+  confirmed_at: string | null;
+  // Joined
+  referrer?: Profile;
+  referred?: Profile;
+}
+
+export interface ReferralPoint {
+  id: string;
+  user_id: string;
+  points: number;
+  reason: string;
+  reference_id: string | null;
+  created_at: string;
+}
+
+export interface Redemption {
+  id: string;
+  user_id: string;
+  reward_id: string;
+  points_spent: number;
+  coupon_code: string | null;
+  status: 'completed' | 'revoked';
+  created_at: string;
+  // Joined
+  reward?: Reward;
+}
+
+export interface ReferralStats {
+  totalReferrals: number;
+  confirmedReferrals: number;
+  totalPoints: number;
+  leaderboardRank: number;
 }
 
 export interface Notification {
@@ -158,6 +231,20 @@ export interface Notification {
   reference_type: string | null;
   is_read: boolean;
   created_at: string;
+}
+
+export interface PlatformSettings {
+  id: string;
+  maintenance_mode: boolean;
+  portal_selection: boolean;
+  new_registrations: boolean;
+  ai_content_generation: boolean;
+  marketing_banner_active: boolean;
+  marketing_banner_text: string | null;
+  system_announcement: string | null;
+  referral_system_enabled: boolean;
+  updated_at: string;
+  updated_by: string | null;
 }
 
 export interface CalendarEvent {
