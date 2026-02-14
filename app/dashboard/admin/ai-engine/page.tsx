@@ -206,7 +206,7 @@ export default function AIEnginePage() {
 
     if (loading) {
         return (
-            <div className="flex h-screen items-center justify-center bg-[#030711]">
+            <div className="flex h-screen items-center justify-center bg-background">
                 <div className="text-center space-y-6">
                     <div className="relative">
                         <Loader2 className="h-20 w-20 animate-spin mx-auto text-primary opacity-20" />
@@ -222,13 +222,13 @@ export default function AIEnginePage() {
     }
 
     return (
-        <div className="min-h-screen bg-[#030711] text-foreground selection:bg-primary/30 selection:text-white pb-32">
+        <div className="min-h-screen bg-background text-foreground selection:bg-primary/30 selection:text-white pb-32">
             {/* Ambient background effects */}
             <div className="fixed inset-0 overflow-hidden pointer-events-none">
                 <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-primary/10 rounded-full blur-[120px] -translate-y-1/2"></div>
                 <div className="absolute bottom-0 right-1/4 w-[600px] h-[600px] bg-indigo-500/5 rounded-full blur-[150px] translate-y-1/2"></div>
-                {/* Neural grid */}
-                <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]"></div>
+                {/* Neural grid - adapted for light mode accessibility */}
+                <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,#80808022_1px,transparent_1px),linear-gradient(to_bottom,#80808022_1px,transparent_1px)] bg-[size:24px_24px]"></div>
             </div>
 
             <div className="relative z-10 p-4 md:p-8 max-w-[1600px] mx-auto space-y-10">
@@ -239,7 +239,7 @@ export default function AIEnginePage() {
                             <motion.div
                                 initial={{ scale: 0.8, opacity: 0 }}
                                 animate={{ scale: 1, opacity: 1 }}
-                                className="p-4 bg-primary/10 rounded-2xl border border-primary/20 shadow-[0_0_20px_rgba(59,130,246,0.2)]"
+                                className="p-4 bg-primary/10 rounded-2xl border border-primary/20 shadow-[0_0_20px_rgba(59,130,246,0.1)] dark:shadow-[0_0_20px_rgba(59,130,246,0.2)]"
                             >
                                 <Brain className="h-10 w-10 text-primary" />
                             </motion.div>
@@ -250,7 +250,7 @@ export default function AIEnginePage() {
                                     </Badge>
                                     <span className="text-[10px] font-mono text-muted-foreground opacity-50 uppercase tracking-widest">v4.0.5</span>
                                 </div>
-                                <h1 className="text-5xl font-black tracking-tight text-white italic drop-shadow-sm">
+                                <h1 className="text-4xl md:text-5xl font-black tracking-tight italic drop-shadow-sm">
                                     Intelligence <span className="text-primary not-italic font-extrabold underline decoration-primary/30 decoration-4 underline-offset-8">Engine</span>
                                 </h1>
                             </div>
@@ -261,12 +261,12 @@ export default function AIEnginePage() {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-4">
-                        <div className="flex items-center gap-3 bg-card/40 backdrop-blur-xl p-2 px-4 rounded-2xl border border-border/50 shadow-2xl">
+                        <div className="flex items-center gap-3 bg-card/40 backdrop-blur-xl p-2 px-4 rounded-2xl border border-border/50 shadow-xl dark:shadow-2xl">
                             <div className="flex flex-col">
                                 <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-none mb-1">Privacy Tunnel</span>
                                 <span className={cn(
                                     "text-xs font-mono font-bold uppercase",
-                                    settings?.privacy_mode_enabled ? "text-green-400" : "text-amber-400"
+                                    settings?.privacy_mode_enabled ? "text-green-500" : "text-amber-500 dark:text-amber-400"
                                 )}>
                                     {settings?.privacy_mode_enabled ? "Active_Hardened" : "Cloud_Hybrid"}
                                 </span>
@@ -278,10 +278,10 @@ export default function AIEnginePage() {
                             />
                         </div>
 
-                        <div className="flex items-center gap-3 bg-card/40 backdrop-blur-xl p-2 px-4 rounded-2xl border border-border/50 shadow-2xl">
+                        <div className="flex items-center gap-3 bg-card/40 backdrop-blur-xl p-2 px-4 rounded-2xl border border-border/50 shadow-xl dark:shadow-2xl">
                             <div className="flex flex-col">
                                 <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-none mb-1 text-right">System Status</span>
-                                <span className="text-xs font-mono font-bold text-green-400 uppercase text-right">NOMINAL</span>
+                                <span className="text-xs font-mono font-bold text-green-500 uppercase text-right">NOMINAL</span>
                             </div>
                             <div className="h-8 w-8 rounded-full border border-green-500/20 bg-green-500/10 flex items-center justify-center">
                                 <Activity className="h-4 w-4 text-green-500 animate-pulse" />
@@ -296,7 +296,7 @@ export default function AIEnginePage() {
                         <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-3">
                                 <Layers className="h-5 w-5 text-primary" />
-                                <h2 className="text-2xl font-bold tracking-tight text-white">Neural Processing Nodes</h2>
+                                <h2 className="text-2xl font-bold tracking-tight">Neural Processing Nodes</h2>
                             </div>
                             <div className="flex items-center gap-2">
                                 <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20 font-mono">
@@ -336,24 +336,24 @@ export default function AIEnginePage() {
                                                         <span className="text-[10px] font-mono font-bold mt-2">{provider.priority}</span>
                                                     </div>
 
-                                                    <div className="p-6 flex-1 flex items-center justify-between gap-8">
+                                                    <div className="p-6 flex-1 flex items-center justify-between gap-8 flex-wrap md:flex-nowrap">
                                                         <div className="flex items-center gap-6">
                                                             <div className={cn(
-                                                                "h-14 w-14 rounded-2xl flex items-center justify-center transition-all duration-500 shadow-inner border border-white/5",
+                                                                "h-14 w-14 rounded-2xl flex items-center justify-center transition-all duration-500 shadow-inner border border-primary/5 dark:border-white/5",
                                                                 provider.is_local
-                                                                    ? "bg-indigo-500/20 text-indigo-400 group-hover:shadow-[0_0_20px_rgba(99,102,241,0.3)]"
-                                                                    : "bg-blue-500/20 text-blue-400 group-hover:shadow-[0_0_20px_rgba(59,130,246,0.3)]"
+                                                                    ? "bg-indigo-500/20 text-indigo-500 dark:text-indigo-400 group-hover:shadow-[0_0_20px_rgba(99,102,241,0.2)]"
+                                                                    : "bg-blue-500/20 text-blue-500 dark:text-blue-400 group-hover:shadow-[0_0_20px_rgba(59,130,246,0.2)]"
                                                             )}>
                                                                 {provider.is_local ? <Lock className="h-7 w-7" /> : <Globe className="h-7 w-7" />}
                                                             </div>
 
                                                             <div className="space-y-1.5">
                                                                 <div className="flex items-center gap-3">
-                                                                    <h3 className="text-xl font-bold tracking-tight text-white capitalize group-hover:text-primary transition-colors">
+                                                                    <h3 className="text-xl font-bold tracking-tight capitalize group-hover:text-primary transition-colors">
                                                                         {provider.name}
                                                                     </h3>
                                                                     {provider.is_local && (
-                                                                        <Badge className="bg-indigo-600/20 text-indigo-400 border-indigo-500/30 text-[9px] h-4">LOCAL_SECURE</Badge>
+                                                                        <Badge className="bg-indigo-600/20 text-indigo-500 dark:text-indigo-400 border-indigo-500/30 text-[9px] h-4">LOCAL_SECURE</Badge>
                                                                     )}
                                                                     {settings?.default_provider_id === provider.id && (
                                                                         <Badge className="bg-primary/20 text-primary border-primary/30 text-[9px] h-4">MASTER_FALLBACK</Badge>
@@ -363,13 +363,13 @@ export default function AIEnginePage() {
                                                                     <div className="flex items-center gap-1.5">
                                                                         <Wifi className="h-3 w-3 text-muted-foreground" />
                                                                         <span className="text-muted-foreground uppercase tracking-widest text-[9px]">Endpoint:</span>
-                                                                        <span className="text-white/60 truncate max-w-[150px]">{provider.base_url || 'Cloud Default'}</span>
+                                                                        <span className="text-foreground/60 truncate max-w-[150px]">{provider.base_url || 'Cloud Default'}</span>
                                                                     </div>
                                                                     <div className="flex items-center gap-1.5">
                                                                         <Key className="h-3 w-3 text-muted-foreground" />
                                                                         <span className="text-muted-foreground uppercase tracking-widest text-[9px]">Auth:</span>
                                                                         {provider.has_api_key ? (
-                                                                            <span className="text-green-400 font-bold tracking-widest">••••••••</span>
+                                                                            <span className="text-green-600 dark:text-green-400 font-bold tracking-widest">••••••••</span>
                                                                         ) : (
                                                                             <span className="text-rose-500 font-bold uppercase tracking-tighter">Null_Key</span>
                                                                         )}
@@ -378,7 +378,7 @@ export default function AIEnginePage() {
                                                             </div>
                                                         </div>
 
-                                                        <div className="flex items-center gap-3">
+                                                        <div className="flex items-center gap-3 ml-auto md:ml-0">
                                                             <div className="flex flex-col items-end gap-1.5">
                                                                 <div className="flex items-center gap-2">
                                                                     <Button
@@ -408,14 +408,14 @@ export default function AIEnginePage() {
                                                                         }
                                                                     }}>
                                                                         <DialogTrigger asChild>
-                                                                            <Button variant="secondary" size="icon" className="h-8 w-8 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-all">
+                                                                            <Button variant="secondary" size="icon" className="h-8 w-8 rounded-lg bg-accent/10 border border-primary/10 hover:bg-accent/20 transition-all">
                                                                                 <Settings2 className="h-4 w-4 text-primary" />
                                                                             </Button>
                                                                         </DialogTrigger>
-                                                                        <DialogContent className="sm:max-w-md bg-[#0a0f1d] border-white/5 shadow-[0_0_50px_rgba(0,0,0,0.5)] rounded-2xl overflow-hidden backdrop-blur-3xl">
+                                                                        <DialogContent className="sm:max-w-md bg-background border-border/50 shadow-[0_0_50px_rgba(0,0,0,0.1)] dark:shadow-[0_0_50px_rgba(0,0,0,0.5)] rounded-2xl overflow-hidden backdrop-blur-3xl">
                                                                             <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-primary/50 to-transparent"></div>
                                                                             <DialogHeader>
-                                                                                <DialogTitle className="flex items-center gap-2 text-2xl font-bold tracking-tight text-white italic">
+                                                                                <DialogTitle className="flex items-center gap-2 text-2xl font-bold tracking-tight italic">
                                                                                     <Cpu className="h-6 w-6 text-primary" />
                                                                                     {provider.name.toUpperCase()} CONFIG
                                                                                 </DialogTitle>
@@ -432,7 +432,7 @@ export default function AIEnginePage() {
                                                                                             placeholder={provider.has_api_key ? "VALIDATED_KEY_STORED" : "ENTER NODE TOKEN"}
                                                                                             value={keyInput}
                                                                                             onChange={(e) => setKeyInput(e.target.value)}
-                                                                                            className="pl-12 h-14 bg-white/5 border-white/10 rounded-xl focus:ring-primary/20 focus:border-primary/40 text-sm"
+                                                                                            className="pl-12 h-14 bg-accent/5 border-border rounded-xl focus:ring-primary/20 focus:border-primary/40 text-sm"
                                                                                         />
                                                                                         <Key className="absolute left-4 top-4.5 h- 5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
                                                                                     </div>
@@ -444,7 +444,7 @@ export default function AIEnginePage() {
                                                                                             placeholder="HTTPS://API.ENDPOINT.V1"
                                                                                             value={urlInput}
                                                                                             onChange={(e) => setUrlInput(e.target.value)}
-                                                                                            className="pl-12 h-14 bg-white/5 border-white/10 rounded-xl focus:ring-primary/20 focus:border-primary/40 text-sm"
+                                                                                            className="pl-12 h-14 bg-accent/5 border-border rounded-xl focus:ring-primary/20 focus:border-primary/40 text-sm"
                                                                                         />
                                                                                         <Globe className="absolute left-4 top-4.5 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
                                                                                     </div>
@@ -453,7 +453,7 @@ export default function AIEnginePage() {
                                                                             <DialogFooter className="gap-3 sm:justify-between py-2">
                                                                                 <Button
                                                                                     variant="ghost"
-                                                                                    className="text-muted-foreground text-[10px] tracking-widest uppercase hover:bg-rose-500/10 hover:text-rose-400"
+                                                                                    className="text-muted-foreground text-[10px] tracking-widest uppercase hover:bg-rose-500/10 hover:text-rose-500"
                                                                                     onClick={() => {
                                                                                         handleToggleProvider(provider.id, !provider.is_enabled);
                                                                                         setEditingProvider(null);
@@ -462,7 +462,7 @@ export default function AIEnginePage() {
                                                                                     {provider.is_enabled ? "Suspend Node" : "Reactivate Node"}
                                                                                 </Button>
                                                                                 <Button
-                                                                                    className="h-12 bg-primary hover:bg-primary/80 px-8 rounded-xl font-bold uppercase tracking-widest text-[11px] shadow-[0_0_20px_rgba(59,130,246,0.2)]"
+                                                                                    className="h-12 bg-primary hover:bg-primary/80 px-8 rounded-xl font-bold uppercase tracking-widest text-[11px] shadow-[0_0_20px_rgba(59,130,246,0.1)] dark:shadow-[0_0_20px_rgba(59,130,246,0.2)]"
                                                                                     onClick={handleUpdateKey}
                                                                                     disabled={saving}
                                                                                 >
@@ -496,14 +496,14 @@ export default function AIEnginePage() {
                             >
                                 <Button
                                     variant="outline"
-                                    className="w-full h-20 bg-white/5 border-dashed border-white/10 hover:border-primary/50 hover:bg-primary/5 rounded-2xl group transition-all duration-500"
+                                    className="w-full h-20 bg-accent/5 border-dashed border-border hover:border-primary/50 hover:bg-primary/5 rounded-2xl group transition-all duration-500"
                                 >
                                     <div className="flex items-center gap-4">
-                                        <div className="p-2 rounded-lg bg-white/5 group-hover:bg-primary/20 transition-colors">
+                                        <div className="p-2 rounded-lg bg-accent/5 group-hover:bg-primary/20 transition-colors">
                                             <Plus className="h-5 w-5 text-muted-foreground group-hover:text-primary" />
                                         </div>
                                         <div className="text-left">
-                                            <p className="font-bold text-white group-hover:text-primary transition-colors">INTEGRATE NEW NEURAL NODE</p>
+                                            <p className="font-bold group-hover:text-primary transition-colors">INTEGRATE NEW NEURAL NODE</p>
                                             <p className="text-[10px] text-muted-foreground font-mono uppercase tracking-widest">Connect Custom API or Local VLLM Interface</p>
                                         </div>
                                     </div>
@@ -516,12 +516,12 @@ export default function AIEnginePage() {
                     {/* Sidebar Command Center - 4 cols */}
                     <div className="xl:col-span-4 space-y-8">
                         {/* Global Routing Card */}
-                        <Card className="bg-[#0a0f1d]/60 backdrop-blur-2xl border border-white/10 rounded-3xl overflow-hidden shadow-2xl">
-                            <div className="absolute top-0 right-0 p-4 opacity-10">
+                        <Card className="bg-card/60 backdrop-blur-2xl border border-border/50 rounded-3xl overflow-hidden shadow-2xl">
+                            <div className="absolute top-0 right-0 p-4 opacity-5 dark:opacity-10">
                                 <Database className="h-24 w-24 text-primary" />
                             </div>
                             <CardHeader className="p-8 pb-4 relative z-10">
-                                <CardTitle className="text-2xl font-black italic flex items-center gap-3 text-white">
+                                <CardTitle className="text-2xl font-black italic flex items-center gap-3">
                                     <TerminalIcon className="h-6 w-6 text-primary" />
                                     Orchestrator
                                 </CardTitle>
@@ -541,10 +541,10 @@ export default function AIEnginePage() {
                                         value={settings?.default_provider_id || "none"}
                                         onValueChange={(val) => handleSaveSettings({ default_provider_id: val === "none" ? null : val })}
                                     >
-                                        <SelectTrigger className="h-14 rounded-xl bg-white/5 border-white/10 hover:bg-white/10 transition-all font-mono text-xs">
+                                        <SelectTrigger className="h-14 rounded-xl bg-accent/5 border-border hover:bg-accent/10 transition-all font-mono text-xs">
                                             <SelectValue placeholder="AUTO_ORCHESTRATE" />
                                         </SelectTrigger>
-                                        <SelectContent className="bg-[#0a0f1d] border-white/10 shadow-3xl rounded-xl backdrop-blur-3xl">
+                                        <SelectContent className="bg-popover border-border shadow-3xl rounded-xl backdrop-blur-3xl">
                                             <SelectItem value="none" className="font-mono text-xs uppercase italic py-3 hover:bg-primary/20">Automatic_Priority_Logic</SelectItem>
                                             <Separator className="my-1 opacity-20" />
                                             {providers.filter(p => p.is_enabled).map(p => (
@@ -557,7 +557,7 @@ export default function AIEnginePage() {
                                     </p>
                                 </div>
 
-                                <Separator className="bg-white/5" />
+                                <Separator className="bg-border/10" />
 
                                 <div className="space-y-4">
                                     <div className="flex items-center justify-between">
@@ -567,7 +567,7 @@ export default function AIEnginePage() {
                                     <div className="relative group">
                                         <div className="absolute inset-0 bg-primary/5 rounded-2xl blur-xl group-focus-within:bg-primary/10 transition-all"></div>
                                         <textarea
-                                            className="relative w-full h-[320px] bg-[#030711]/80 backdrop-blur-sm border border-white/10 rounded-2xl p-6 text-sm font-mono text-primary/90 focus:ring-2 focus:ring-primary/20 focus:border-primary/40 outline-none transition-all resize-none shadow-inner leading-relaxed selection:bg-primary/40 scrollbar-hide"
+                                            className="relative w-full h-[320px] bg-background/80 backdrop-blur-sm border border-border rounded-2xl p-6 text-sm font-mono text-primary/90 focus:ring-2 focus:ring-primary/20 focus:border-primary/40 outline-none transition-all resize-none shadow-inner leading-relaxed selection:bg-primary/40 scrollbar-hide"
                                             placeholder="-- DEFINE SYSTEM PERSONALITY RULES --"
                                             value={settings?.system_instructions || ""}
                                             onChange={(e) => setSettings(s => s ? { ...s, system_instructions: e.target.value } : null)}
@@ -582,8 +582,8 @@ export default function AIEnginePage() {
                             </CardContent>
                         </Card>
 
-                        {/* Privacy Banner - Tech Overhaul */}
-                        <div className="relative group cursor-help overflow-hidden rounded-3xl transition-all duration-700">
+                        {/* Privacy Banner - Adaptive Tech */}
+                        <div className="relative group cursor-help overflow-hidden rounded-3xl transition-all duration-700 shadow-2xl">
                             <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 to-indigo-800 opacity-90 group-hover:opacity-100 transition-opacity"></div>
                             <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(255,255,255,0.2),transparent)]"></div>
                             <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-[80px] animate-pulse"></div>
@@ -594,13 +594,13 @@ export default function AIEnginePage() {
                                         <Shield className="h-6 w-6 text-white" />
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <span className="h-1.5 w-1.5 rounded-full bg-green-400 animate-ping"></span>
-                                        <span className="text-[10px] font-black tracking-widest uppercase">Encrypted_Path_Active</span>
+                                        <span className="h-1.5 w-1.5 rounded-full bg-green-400 animate-ping text-white"></span>
+                                        <span className="text-[10px] font-black tracking-widest uppercase text-white">Encrypted_Path_Active</span>
                                     </div>
                                 </div>
                                 <div className="space-y-2">
                                     <h3 className="text-xl font-black text-white italic tracking-tight">PROTECTED_FLOW</h3>
-                                    <p className="text-xs text-indigo-100/80 leading-relaxed font-medium">
+                                    <p className="text-xs text-indigo-50/90 dark:text-indigo-100/80 leading-relaxed font-medium">
                                         When Privacy Mode is engaged, all sensitive intern analysis is routed through a localized neural tunnel, bypassing external cloud gateways completely.
                                     </p>
                                 </div>
@@ -617,13 +617,13 @@ export default function AIEnginePage() {
                             <CardContent className="p-6">
                                 <div className="flex items-center justify-between gap-4">
                                     <div className="space-y-1">
-                                        <h4 className="text-sm font-bold text-rose-400 flex items-center gap-2 tracking-tight">
+                                        <h4 className="text-sm font-bold text-rose-500 dark:text-rose-400 flex items-center gap-2 tracking-tight">
                                             <AlertTriangle className="h-4 w-4" />
                                             FAILSAFE_INIT
                                         </h4>
                                         <p className="text-[10px] text-muted-foreground font-medium">Instantly suspend all external neural requests.</p>
                                     </div>
-                                    <Button variant="outline" size="sm" className="bg-transparent border-rose-500/30 text-rose-400 hover:bg-rose-500 hover:text-white transition-all font-mono text-[10px] px-6">
+                                    <Button variant="outline" size="sm" className="bg-transparent border-rose-500/30 text-rose-500 dark:text-rose-400 hover:bg-rose-500 hover:text-white transition-all font-mono text-[10px] px-6">
                                         PANIC_SUSPEND
                                     </Button>
                                 </div>
@@ -635,19 +635,19 @@ export default function AIEnginePage() {
 
             {/* Global toast system */}
             <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] pointer-events-none">
-                <div className="flex items-center gap-4 bg-[#0a0f1d]/80 backdrop-blur-2xl p-3 px-6 rounded-full border border-white/10 shadow-3xl pointer-events-auto transition-transform hover:scale-105 active:scale-95">
+                <div className="flex items-center gap-4 bg-card/80 backdrop-blur-2xl p-3 px-6 rounded-full border border-border/50 shadow-3xl pointer-events-auto transition-transform hover:scale-105 active:scale-95">
                     <div className="flex -space-x-2">
                         {providers.slice(0, 3).map((p, i) => (
                             <div key={p.id} className={cn(
-                                "h-6 w-6 rounded-full border-2 border-[#0a0f1d] z-[i]",
+                                "h-6 w-6 rounded-full border-2 border-background z-[i]",
                                 p.is_enabled ? "bg-primary" : "bg-muted"
                             )} />
                         ))}
                     </div>
-                    <div className="h-4 w-[1px] bg-white/20 mx-1"></div>
+                    <div className="h-4 w-[1px] bg-border/20 mx-1"></div>
                     <div className="flex flex-col">
                         <span className="text-[9px] font-black text-muted-foreground uppercase leading-none mb-1 tracking-widest">Active Fleet</span>
-                        <span className="text-xs font-mono font-bold text-white leading-none">
+                        <span className="text-xs font-mono font-bold leading-none">
                             {providers.filter(p => p.is_enabled).length} NODES_ONLINE
                         </span>
                     </div>
