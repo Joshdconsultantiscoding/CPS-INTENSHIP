@@ -250,12 +250,12 @@ export default function AIEnginePage() {
                                     </Badge>
                                     <span className="text-[10px] font-mono text-muted-foreground opacity-50 uppercase tracking-widest">v4.0.5</span>
                                 </div>
-                                <h1 className="text-4xl md:text-5xl font-black tracking-tight italic drop-shadow-sm">
+                                <h1 className="text-3xl md:text-5xl font-black tracking-tight italic drop-shadow-sm">
                                     Intelligence <span className="text-primary not-italic font-extrabold underline decoration-primary/30 decoration-4 underline-offset-8">Engine</span>
                                 </h1>
                             </div>
                         </div>
-                        <p className="text-muted-foreground text-lg max-w-2xl font-medium leading-relaxed">
+                        <p className="text-muted-foreground text-base md:text-lg max-w-2xl font-medium leading-relaxed">
                             Central command for neural processing nodes. Manage global routing, failover protocols, and privacy-hardened local inference.
                         </p>
                     </div>
@@ -331,7 +331,7 @@ export default function AIEnginePage() {
                                             <CardContent className="p-0">
                                                 <div className="flex items-center gap-0">
                                                     {/* Priority/Drag - hidden from eye usually */}
-                                                    <div className="w-12 flex flex-col items-center justify-center border-r border-border/20 py-8 opacity-20 group-hover:opacity-100 transition-opacity">
+                                                    <div className="hidden sm:flex w-12 flex-col items-center justify-center border-r border-border/20 py-8 opacity-20 group-hover:opacity-100 transition-opacity">
                                                         <GripVertical className="h-4 w-4 cursor-grab active:cursor-grabbing" />
                                                         <span className="text-[10px] font-mono font-bold mt-2">{provider.priority}</span>
                                                     </div>
@@ -359,11 +359,11 @@ export default function AIEnginePage() {
                                                                         <Badge className="bg-primary/20 text-primary border-primary/30 text-[9px] h-4">MASTER_FALLBACK</Badge>
                                                                     )}
                                                                 </div>
-                                                                <div className="flex items-center gap-4 text-xs font-mono">
+                                                                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                                                                     <div className="flex items-center gap-1.5">
                                                                         <Wifi className="h-3 w-3 text-muted-foreground" />
                                                                         <span className="text-muted-foreground uppercase tracking-widest text-[9px]">Endpoint:</span>
-                                                                        <span className="text-foreground/60 truncate max-w-[150px]">{provider.base_url || 'Cloud Default'}</span>
+                                                                        <span className="text-foreground/60 truncate max-w-[100px] sm:max-w-[150px]">{provider.base_url || 'Cloud Default'}</span>
                                                                     </div>
                                                                     <div className="flex items-center gap-1.5">
                                                                         <Key className="h-3 w-3 text-muted-foreground" />
@@ -633,8 +633,8 @@ export default function AIEnginePage() {
                 </div>
             </div>
 
-            {/* Global toast system */}
-            <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] pointer-events-none">
+            {/* Global toast system - hidden on mobile to avoid overlap with bottom nav */}
+            <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] pointer-events-none hidden md:block">
                 <div className="flex items-center gap-4 bg-card/80 backdrop-blur-2xl p-3 px-6 rounded-full border border-border/50 shadow-3xl pointer-events-auto transition-transform hover:scale-105 active:scale-95">
                     <div className="flex -space-x-2">
                         {providers.slice(0, 3).map((p, i) => (
