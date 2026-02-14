@@ -7,6 +7,21 @@ import { getAuthUser } from "@/lib/auth";
 export default async function CommunityPage() {
     const user = await getAuthUser();
 
+    // Enforce access control
+    const { enforceAccess } = await import("@/lib/middleware/access-guard");
+    const access = await enforceAccess(user.id, "/dashboard/community");
+
+    if (!access.allowed) {
+        const { BlockedRouteView } = await import("@/components/dashboard/blocked-route-view");
+        return (
+            <BlockedRouteView
+                reason={access.reason || "Access to the community has been restricted by an administrator."}
+                route="/dashboard/community"
+                routeName="Community"
+            />
+        );
+    }
+
     // Admins always go to their management hub
     if (user.role === 'admin') {
         redirect("/dashboard/admin/community");

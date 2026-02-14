@@ -28,6 +28,7 @@ import {
     blockRoutesAction,
     deleteUserAction,
     restoreUserAction,
+    hardDeleteUserAction,
 } from "@/actions/admin-controls";
 import { toast } from "sonner";
 
@@ -361,6 +362,90 @@ export function RestoreUserDialog({
                     <Button onClick={handleRestore} disabled={loading} className="bg-green-600 hover:bg-green-700">
                         {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                         Restore Account
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+// ── Hard Delete Dialog ─────────────────────────────────────────
+export function HardDeleteUserDialog({
+    open,
+    onOpenChange,
+    userId,
+    userName,
+    onActionComplete,
+}: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    userId: string;
+    userName: string;
+    onActionComplete?: () => void;
+}) {
+    const [confirmText, setConfirmText] = useState("");
+    const [loading, setLoading] = useState(false);
+
+    const handleHardDelete = async () => {
+        if (confirmText !== "PERMANENTLY DELETE") {
+            toast.error('Type "PERMANENTLY DELETE" to confirm');
+            return;
+        }
+        setLoading(true);
+        const result = await hardDeleteUserAction(userId);
+        setLoading(false);
+        if (result.success) {
+            toast.success(`${userName} has been permanently deleted`);
+            onOpenChange(false);
+            setConfirmText("");
+            onActionComplete?.();
+        } else {
+            toast.error(result.error || "Failed to hard-delete user");
+        }
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-md border-red-600/50">
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2 text-red-700">
+                        <Trash2 className="h-5 w-5" />
+                        Permanently Delete User
+                    </DialogTitle>
+                    <DialogDescription className="text-red-600/90 font-medium">
+                        WARNING: This action is IRREVERSIBLE.
+                    </DialogDescription>
+                    <DialogDescription>
+                        <strong>{userName}</strong> will be completely removed from the database and authentication system. All associated data will be lost.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="confirm-hard-delete">
+                            Type <Badge variant="destructive" className="mx-1 bg-red-700 text-white">PERMANENTLY DELETE</Badge> to confirm
+                        </Label>
+                        <input
+                            id="confirm-hard-delete"
+                            type="text"
+                            className="flex h-9 w-full rounded-md border border-red-200 bg-red-50 px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-red-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500 text-red-900"
+                            placeholder="PERMANENTLY DELETE"
+                            value={confirmText}
+                            onChange={(e) => setConfirmText(e.target.value)}
+                        />
+                    </div>
+                </div>
+                <DialogFooter className="gap-2 sm:gap-0">
+                    <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
+                        Cancel
+                    </Button>
+                    <Button
+                        variant="destructive"
+                        onClick={handleHardDelete}
+                        disabled={loading || confirmText !== "PERMANENTLY DELETE"}
+                        className="bg-red-700 hover:bg-red-800"
+                    >
+                        {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                        Permanently Delete
                     </Button>
                 </DialogFooter>
             </DialogContent>

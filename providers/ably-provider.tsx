@@ -186,21 +186,26 @@ export function AblyClientProvider({ children, userId }: AblyClientProviderProps
     }, []);
 
     useEffect(() => {
-        // Don't initialize if offline or not configured or if we hit a circuit break
-        if (isOffline || !isConfigured) {
+        // Don't initialize if offline or not configured or if we don't have a userId yet
+        if (isOffline || !isConfigured || !userId) {
             return;
         }
 
         // Initialize or recover client
         if (!globalAblyClient || ['closed', 'failed'].includes(globalAblyClient.connection.state)) {
             console.log("Initializing (or Recovering) Ably Client...");
+            const authUrl = typeof window !== 'undefined'
+                ? `${window.location.origin}/api/ably/auth`
+                : "/api/ably/auth";
+
             globalAblyClient = new Ably.Realtime({
-                authUrl: "/api/ably/auth",
+                authUrl,
                 autoConnect: true,
                 disconnectedRetryTimeout: 15000,
                 suspendedRetryTimeout: 30000,
                 channelRetryTimeout: 15000,
-                closeOnUnload: false, // Handle manually to prevent premature closure
+                closeOnUnload: false,
+                // Add realtimeHost if needed, but defaults are usually fine
             });
         }
 
@@ -243,20 +248,20 @@ export function AblyClientProvider({ children, userId }: AblyClientProviderProps
             }
             else if (newState === "suspended") {
                 // Connection suspended - Ably will auto-retry in background
-                // This is common on restricted networks, don't spam the user
-                console.warn("Ably connection suspended - falling back to polling");
+                console.warn("Ably connection suspended - falling back to polling if available");
 
                 // After 3 failed attempts, disable Ably gracefully to prevent further errors
                 reconnectAttempts.current++;
                 if (reconnectAttempts.current > 3) {
-                    console.warn("Ably suspended too many times - disabling real-time");
+                    console.warn("Ably suspended too many times - disabling real-time to prevent further errors");
                     ablyConfigured = false;
                     setIsConfigured(false);
                     setClient(null);
 
-                    // Close the client to prevent further connection attempts
                     if (globalAblyClient) {
-                        globalAblyClient.close();
+                        try {
+                            globalAblyClient.close();
+                        } catch (e) { }
                         globalAblyClient = null;
                     }
                 }

@@ -16,6 +16,22 @@ export default async function MessagesPage({
 
   // Use Clerk auth instead of Supabase
   const authUser = await getAuthUser();
+
+  // Enforce access control — ensures blocked routes are handled gracefully
+  const { enforceAccess } = await import("@/lib/middleware/access-guard");
+  const access = await enforceAccess(authUser.id, "/dashboard/messages");
+
+  if (!access.allowed) {
+    const { BlockedRouteView } = await import("@/components/dashboard/blocked-route-view");
+    return (
+      <BlockedRouteView
+        reason={access.reason || "Access to messaging has been restricted by an administrator."}
+        route="/dashboard/messages"
+        routeName="Messages"
+      />
+    );
+  }
+
   // Use admin client to bypass RLS — ensures all users are visible (admin, mentor, intern)
   const supabase = await createAdminClient();
 

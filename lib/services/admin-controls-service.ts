@@ -1,4 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/server";
+import { clerkClient } from "@clerk/nextjs/server";
+import { sendNotification, broadcastNotificationStatusUpdate } from "@/lib/notifications/notification-sender";
 
 export interface AuditLogEntry {
     id: string;
@@ -47,6 +49,18 @@ export class AdminControlsService {
         }
 
         await this.logAction(adminId, targetId, "suspend", reason);
+
+        // Notify User
+        await sendNotification({
+            userId: targetId,
+            title: "Account Suspended",
+            message: `Your account has been suspended: ${reason}`,
+            type: "error",
+            link: "/suspended",
+            priorityLevel: "CRITICAL",
+            sound: "warning"
+        });
+
         return { success: true };
     }
 
@@ -74,6 +88,50 @@ export class AdminControlsService {
         }
 
         await this.logAction(adminId, targetId, "unsuspend", null);
+
+        // Auto-acknowledge any pending "Account Suspended" notifications for this user
+        // so they don't see the alert after being restored.
+
+        // First fetch them
+        const { data: pendingCritical } = await supabase
+            .from("notifications")
+            .select("id")
+            .eq("user_id", targetId)
+            .eq("priority_level", "CRITICAL")
+            .eq("acknowledged", false);
+
+        if (pendingCritical && pendingCritical.length > 0) {
+            // 1. DELETE all traces of "Account Suspended" (CRITICAL) notifications
+            // This ensures "every trace" is removed from the user's history
+            const { error: delError } = await supabase
+                .from("notifications")
+                .delete()
+                .eq("user_id", targetId)
+                .eq("priority_level", "CRITICAL")
+                .eq("title", "Account Suspended")
+                .eq("acknowledged", false);
+
+            if (!delError) {
+                // Real-time dismissal
+                for (const n of pendingCritical) {
+                    await broadcastNotificationStatusUpdate(targetId, { id: n.id, acknowledged: true });
+                }
+            } else {
+                console.error("[AdminControls] Failed to clear suspension alerts:", delError);
+            }
+        }
+
+        // Notify User
+        await sendNotification({
+            userId: targetId,
+            title: "Account Restored",
+            message: "Your account access has been restored.",
+            type: "success",
+            link: "/dashboard",
+            priorityLevel: "IMPORTANT",
+            sound: "success"
+        });
+
         return { success: true };
     }
 
@@ -102,6 +160,17 @@ export class AdminControlsService {
 
         const action = routes.length > 0 ? "block" : "unblock";
         await this.logAction(adminId, targetId, action, null, { routes });
+
+        if (routes.length > 0) {
+            await sendNotification({
+                userId: targetId,
+                title: "Review Restricted",
+                message: "Some features have been restricted on your account.",
+                type: "warning",
+                priorityLevel: "IMPORTANT"
+            });
+        }
+
         return { success: true };
     }
 
@@ -159,6 +228,42 @@ export class AdminControlsService {
         }
 
         await this.logAction(adminId, targetId, "restore", null);
+        return { success: true };
+    }
+
+    /**
+     * Hard-delete a user (permanently remove from Clerk and Supabase).
+     */
+    static async hardDeleteUser(
+        adminId: string,
+        targetId: string
+    ): Promise<{ success: boolean; error?: string }> {
+        const supabase = await createAdminClient();
+        const client = await clerkClient();
+
+        // 1. Delete from Clerk
+        try {
+            await client.users.deleteUser(targetId);
+        } catch (error: any) {
+            console.error("[AdminControls] hardDeleteUser Clerk error:", error);
+            // If user not found in Clerk, proceed to delete from Supabase anyway to clean up valid orphans
+            if (error.status !== 404) {
+                return { success: false, error: `Clerk deletion failed: ${error.message}` };
+            }
+        }
+
+        // 2. Delete from Supabase
+        const { error } = await supabase
+            .from("profiles")
+            .delete()
+            .eq("id", targetId);
+
+        if (error) {
+            console.error("[AdminControls] hardDeleteUser Supabase error:", error);
+            return { success: false, error: error.message };
+        }
+
+        await this.logAction(adminId, targetId, "hard_delete", null);
         return { success: true };
     }
 

@@ -13,10 +13,24 @@ export const metadata = {
 };
 
 export default async function ClassroomPage() {
-    const [user, assignedClasses] = await Promise.all([
-        getAuthUser(),
-        getStudentClasses()
-    ]);
+    const user = await getAuthUser();
+
+    // Enforce access control
+    const { enforceAccess } = await import("@/lib/middleware/access-guard");
+    const access = await enforceAccess(user.id, "/dashboard/classroom");
+
+    if (!access.allowed) {
+        const { BlockedRouteView } = await import("@/components/dashboard/blocked-route-view");
+        return (
+            <BlockedRouteView
+                reason={access.reason || "Access to the classroom has been restricted by an administrator."}
+                route="/dashboard/classroom"
+                routeName="Classroom"
+            />
+        );
+    }
+
+    const assignedClasses = await getStudentClasses();
 
     if (user.role === "admin") {
         redirect("/dashboard/admin/classroom");

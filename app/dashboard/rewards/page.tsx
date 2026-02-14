@@ -9,6 +9,22 @@ export const metadata = {
 export default async function RewardsPage() {
   // Use Clerk auth
   const user = await getAuthUser();
+
+  // Enforce access control
+  const { enforceAccess } = await import("@/lib/middleware/access-guard");
+  const access = await enforceAccess(user.id, "/dashboard/rewards");
+
+  if (!access.allowed) {
+    const { BlockedRouteView } = await import("@/components/dashboard/blocked-route-view");
+    return (
+      <BlockedRouteView
+        reason={access.reason || "Access to rewards has been restricted by an administrator."}
+        route="/dashboard/rewards"
+        routeName="Rewards"
+      />
+    );
+  }
+
   const supabase = await createClient();
 
   const { data: profile } = await supabase

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -182,7 +183,7 @@ function PricingPageContent() {
                     </div>
 
                     {/* Interactive Sliders */}
-                    <div className="mx-auto max-w-4xl bg-white dark:bg-slate-900/50 border border-border/50 rounded-3xl p-8 sm:p-12 shadow-xl shadow-sky-500/5 relative">
+                    <div className="mx-auto max-w-4xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-border/50 rounded-3xl p-8 sm:p-12 shadow-xl shadow-sky-500/5 relative">
                         <div className="absolute -top-3 left-8 px-4 py-1 bg-sky-500 text-white text-[10px] font-bold rounded-full shadow-lg uppercase tracking-widest">
                             Configure Your Plan
                         </div>
@@ -214,9 +215,9 @@ function PricingPageContent() {
                                 icon={<HardDrive className="h-4 w-4" />}
                                 onChange={(val) => updateConfig("storage", val)}
                             />
-                            <div className="p-6 bg-sky-500/5 rounded-2xl border border-sky-500/10 flex flex-col justify-center items-center text-center">
+                            <div className="p-6 bg-white dark:bg-sky-500/5 rounded-2xl border border-slate-200 dark:border-sky-500/10 flex flex-col justify-center items-center text-center shadow-sm">
                                 <Zap className="h-6 w-6 text-sky-500 mb-2 animate-pulse" />
-                                <h4 className="text-sm font-bold text-foreground">AI Credits Included</h4>
+                                <h4 className="text-sm font-bold text-slate-900 dark:text-foreground">AI Credits Included</h4>
                                 <p className="text-xs text-muted-foreground mt-1">
                                     {(config.seats * 100).toLocaleString()} credits per month included in your selection.
                                 </p>
@@ -332,11 +333,11 @@ function PricingPageContent() {
                         Join companies of all sizes using CPS Intern to build their future talent pipeline.
                     </p>
                     <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                        <Button size="lg" className="bg-sky-500 hover:bg-sky-600 text-white px-8 rounded-full h-14 text-lg font-bold">
-                            Join CPS Intern for Free
+                        <Button asChild size="lg" className="bg-sky-500 hover:bg-sky-600 text-white px-8 rounded-full h-14 text-lg font-bold">
+                            <Link href="/auth/sign-up">Join CPS Intern for Free</Link>
                         </Button>
-                        <Button variant="outline" size="lg" className="border-white/20 hover:bg-white/10 text-white px-8 rounded-full h-14 text-lg font-bold">
-                            Contact Sales
+                        <Button asChild variant="outline" size="lg" className="border-white/20 hover:bg-white/10 text-white px-8 rounded-full h-14 text-lg font-bold">
+                            <Link href="/contact">Contact Sales</Link>
                         </Button>
                     </div>
                     <div className="mt-12 flex flex-wrap justify-center gap-8">

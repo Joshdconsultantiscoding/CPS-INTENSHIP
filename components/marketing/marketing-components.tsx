@@ -321,7 +321,7 @@ export function CTASection({
                             <ArrowRight className="ml-2 h-5 w-5" />
                         </Link>
                     </Button>
-                    <Button asChild size="lg" variant="outline" className="h-14 px-8 rounded-full border-white/10 hover:bg-white/5 text-white font-bold text-lg w-full sm:w-auto">
+                    <Button asChild size="lg" variant="outline" className="h-14 px-8 rounded-full border-white/20 hover:bg-white/5 text-white font-bold text-lg w-full sm:w-auto">
                         <Link href={secondaryHref}>{secondaryLabel}</Link>
                     </Button>
                 </motion.div>

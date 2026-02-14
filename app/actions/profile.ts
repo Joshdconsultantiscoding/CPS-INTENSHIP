@@ -2,7 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { isRedirectError } from "next/dist/client/components/redirect-error";
+import { isRedirectError } from "next/navigation";
 import { publishGlobalUpdate } from "@/lib/ably-server";
 
 export async function updateProfile(userId: string, data: {

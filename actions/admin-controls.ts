@@ -118,6 +118,31 @@ export async function restoreUserAction(targetId: string) {
 }
 
 /**
+ * Hard-delete an intern's account.
+ */
+export async function hardDeleteUserAction(targetId: string) {
+    try {
+        const user = await getAuthUser();
+        if (user.role !== "admin") {
+            return { success: false, error: "Unauthorized: Admin access required" };
+        }
+
+        if (targetId === user.id) {
+            return { success: false, error: "You cannot delete your own account" };
+        }
+
+        const result = await AdminControlsService.hardDeleteUser(user.id, targetId);
+        if (result.success) {
+            revalidatePath("/dashboard/interns");
+        }
+        return result;
+    } catch (error: any) {
+        console.error("[hardDeleteUserAction]", error);
+        return { success: false, error: error.message || "Failed to hard delete user" };
+    }
+}
+
+/**
  * Fetch the admin audit log.
  */
 export async function getAuditLogAction(filters?: {

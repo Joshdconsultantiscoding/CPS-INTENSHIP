@@ -64,8 +64,9 @@ export async function checkAccess(userId: string, currentPath: string): Promise<
 }
 
 /**
- * Enforce access — redirect if not allowed.
- * For use inside Server Components at the top of the render function.
+ * Enforce access.
+ * Returns the access object. The calling Server Component at the page level
+ * should handle rendering the appropriate "Blocked" view if allowed is false.
  */
 export async function enforceAccess(userId: string, currentPath: string) {
     const access = await checkAccess(userId, currentPath);
@@ -74,7 +75,8 @@ export async function enforceAccess(userId: string, currentPath: string) {
         if (access.status === "deleted") {
             redirect("/sign-in");
         }
-        redirect(`/dashboard?restricted=true&reason=${encodeURIComponent(access.reason || "")}`);
+        // We no longer forcefully redirect to dashboard for blocked/suspended routes here.
+        // This allows the page to render a BlockedView with an appeal form.
     }
 
     return access;

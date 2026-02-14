@@ -124,9 +124,16 @@ export function useNotificationEngine(role?: string, serverLatestLog?: Changelog
 
     const retryTimers = useRef<Map<string, NodeJS.Timeout>>(new Map());
     const alarmAudio = useRef<HTMLAudioElement | null>(null);
+    const locallyAcknowledgedIds = useRef<Set<string>>(new Set());
 
     // Process a notification based on priority level
     const processNotification = useCallback((notification: Notification, silent = false) => {
+        // Skip if we already acknowledged this locally in this session
+        if (locallyAcknowledgedIds.current.has(notification.id)) {
+            console.log("[NotificationEngine] Skipping locally acknowledged notification:", notification.id);
+            return;
+        }
+
         const level = notification.priority_level || "NORMAL";
 
         switch (level) {
@@ -203,11 +210,44 @@ export function useNotificationEngine(role?: string, serverLatestLog?: Changelog
         });
     }, []);
 
+    // Process status updates (e.g. marking as acknowledged from another session or admin)
+    const processStatusUpdate = useCallback((update: { id: string, acknowledged?: boolean, is_read?: boolean }) => {
+        setState(prev => {
+            // If the current critical notification is the one being acknowledged/read, clear it
+            const isCriticalAffected = prev.criticalNotification?.id === update.id && (update.acknowledged || update.is_read);
+
+            const updatedAll = prev.notifications.map(n =>
+                n.id === update.id
+                    ? { ...n, ...(update.acknowledged !== undefined ? { acknowledged: update.acknowledged } : {}), ...(update.is_read !== undefined ? { is_read: update.is_read } : {}) }
+                    : n
+            );
+
+            return {
+                ...prev,
+                criticalNotification: isCriticalAffected ? null : prev.criticalNotification,
+                notifications: updatedAll,
+                unreadCount: updatedAll.filter(n => !n.is_read).length,
+                pendingNotifications: (update.acknowledged || update.is_read)
+                    ? prev.pendingNotifications.filter(n => n.id !== update.id)
+                    : prev.pendingNotifications
+            };
+        });
+
+        // Stop sound if it was the critical one
+        if (update.acknowledged || update.is_read) {
+            if (state.criticalNotification?.id === update.id && alarmAudio.current) {
+                alarmAudio.current.pause();
+                alarmAudio.current.currentTime = 0;
+            }
+        }
+    }, [state.criticalNotification]);
+
     // Fetch all notifications
     const fetchNotifications = useCallback(async () => {
         if (!userId) return;
         try {
-            const res = await fetch(`/api/notifications?userId=${userId}`);
+            const roleParam = role ? `&role=${role}` : "";
+            const res = await fetch(`/api/notifications?userId=${userId}${roleParam}`);
             if (res.ok) {
                 const data = await res.json();
                 setState(prev => ({
@@ -254,29 +294,49 @@ export function useNotificationEngine(role?: string, serverLatestLog?: Changelog
 
     // Acknowledge CRITICAL notification
     const acknowledgeNotification = useCallback(async (notificationId: string) => {
+        console.log("[NotificationEngine] USER ACKNOWLEDGING UI:", notificationId);
+
+        // 1. Instantly update local trackers
+        locallyAcknowledgedIds.current.add(notificationId);
+
+        // 2. STOP AUDIO 
+        if (alarmAudio.current) {
+            alarmAudio.current.pause();
+            alarmAudio.current.currentTime = 0;
+            alarmAudio.current = null;
+        }
+
+        // 3. Optimistically clear critical state to unblock UI immediately
+        setState(prev => ({
+            ...prev,
+            criticalNotification: prev.criticalNotification?.id === notificationId ? null : prev.criticalNotification,
+            pendingNotifications: prev.pendingNotifications.filter(n => n.id !== notificationId),
+            notifications: prev.notifications.map(n => n.id === notificationId ? { ...n, acknowledged: true, is_read: true } : n)
+        }));
+
         try {
-            await fetch("/api/notifications/acknowledge", {
+            // 4. Background Server Update
+            console.log("[NotificationEngine] Sending API acknowledge...");
+            const res = await fetch("/api/notifications/acknowledge", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ notificationId })
             });
 
-            // Stop alarm and close modal
-            if (alarmAudio.current) {
-                alarmAudio.current.pause();
-                alarmAudio.current.currentTime = 0;
+            if (res.ok) {
+                console.log("[NotificationEngine] API acknowledge SUCCESS");
+            } else {
+                console.warn("[NotificationEngine] API acknowledge non-ok result");
             }
 
-            const notification = state.criticalNotification;
-            setState(prev => ({
-                ...prev,
-                criticalNotification: null,
-                pendingNotifications: prev.pendingNotifications.filter(n => n.id !== notificationId)
-            }));
-
-            // Redirect to link if present
-            if (notification?.link) {
-                window.location.href = notification.link;
+            // 5. Check for current notification link AFTER API call (or before, but let's do it after for safety)
+            const currentCritical = state.criticalNotification;
+            if (currentCritical?.link) {
+                console.log("[NotificationEngine] Redirecting to:", currentCritical.link);
+                // Use setTimeout to ensure state updates have flushed
+                setTimeout(() => {
+                    window.location.href = currentCritical.link!;
+                }, 100);
             }
         } catch (e) {
             console.error("Failed to acknowledge notification:", e);
@@ -385,37 +445,34 @@ export function useNotificationEngine(role?: string, serverLatestLog?: Changelog
 
                 if (pendingRes.ok) {
                     const { notifications: pending } = await pendingRes.json();
-                    const sorted = [...pending].sort((a, b) => {
-                        const score: Record<string, number> = { CRITICAL: 3, IMPORTANT: 2, NORMAL: 1 };
-                        return (score[b.priority_level] || 0) - (score[a.priority_level] || 0);
-                    });
-                    sorted.forEach((n, index) => processNotification(n, index > 0));
+                    if (pending && pending.length > 0) {
+                        const sorted = [...pending].sort((a, b) => {
+                            const score: Record<string, number> = { CRITICAL: 3, IMPORTANT: 2, NORMAL: 1 };
+                            return (score[b.priority_level] || 0) - (score[a.priority_level] || 0);
+                        });
+                        sorted.forEach((n, index) => processNotification(n, index > 0));
+                    }
                 }
 
-                // CHECK VERSION FROM PROFILE (Parallel with notification recovery)
+                // CHECK VERSION FROM PROFILE (Separate from recovery triggers)
                 const profileRes = await fetch(`/api/profiles/current`);
                 if (profileRes.ok) {
                     const profile = await profileRes.json();
-                    const latest = state.latestChangelog;
-
-                    if (latest && profile.last_seen_version !== latest.version) {
-                        playSound('success');
-                        setState(prev => ({
-                            ...prev,
-                            showWhatsNew: true,
-                            hasUnseenUpdates: true
-                        }));
+                    // We only show it once per mount or if updated
+                    if (state.latestChangelog && profile.last_seen_version !== state.latestChangelog.version) {
+                        setState(prev => ({ ...prev, showWhatsNew: true, hasUnseenUpdates: true }));
                     }
                 }
             } catch (e) {
-                // Silently fail to avoid console clutter
+                console.warn("[NotificationEngine] Background fetch failed:", e);
             } finally {
                 setState(prev => ({ ...prev, isLoading: false }));
             }
         };
 
         fetchPending();
-    }, [isSignedIn, userId, processNotification, state.latestChangelog]);
+        // Removed state.latestChangelog from deps to avoid loop when changelog_push arrives
+    }, [isSignedIn, userId]);
 
     // Subscribe to Ably channels for real-time notifications
     useEffect(() => {
@@ -426,22 +483,34 @@ export function useNotificationEngine(role?: string, serverLatestLog?: Changelog
         try {
             // User-specific channel
             const userChannel = ably.channels.get(`notifications:${userId}`);
+
             userChannel.subscribe("notification", (msg: any) => {
+                console.log("[NotificationEngine] Received user notification:", msg.data);
                 processNotification(msg.data);
             });
+
+            // Handle real-time dismissals/acknowledgments
+            userChannel.subscribe("notification_update", (msg: any) => {
+                console.log("[NotificationEngine] Received status update via Ably:", msg.data);
+                processStatusUpdate(msg.data);
+            });
+
             channels.push(userChannel);
 
             // Global broadcast channel
             const allChannel = ably.channels.get("notifications:all");
             allChannel.subscribe("notification", (msg: any) => {
+                console.log("[NotificationEngine] Received global notification:", msg.data);
                 processNotification(msg.data);
             });
             channels.push(allChannel);
 
             // Role-specific channel (e.g., notifications:interns)
             if (role) {
-                const roleChannel = ably.channels.get(`notifications:${role.toLowerCase()}s`);
+                const normalizedRole = role.toLowerCase() + "s"; // intern -> interns, admin -> admins
+                const roleChannel = ably.channels.get(`notifications:${normalizedRole}`);
                 roleChannel.subscribe("notification", (msg: any) => {
+                    console.log(`[NotificationEngine] Received ${normalizedRole} notification:`, msg.data);
                     processNotification(msg.data);
                 });
                 channels.push(roleChannel);

@@ -4,7 +4,7 @@ import { getAuthUser } from "@/lib/auth";
 import { ReferralService } from "@/lib/services/referral-service";
 import { createAdminClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { isRedirectError } from "next/dist/client/components/redirect-error";
+import { isRedirectError } from "next/navigation";
 
 /**
  * Get the current user's referral link.

@@ -3,7 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { getAuthUser } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
-import { isRedirectError } from "next/dist/client/components/redirect-error";
+import { isRedirectError } from "next/navigation";
 import { createBulkNotifications } from "@/lib/notifications/notification-service";
 
 /**

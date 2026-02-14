@@ -41,16 +41,34 @@ export function MarketingHeader() {
         return () => window.removeEventListener("scroll", handleScroll);
     }, []);
 
+    // Lock body scroll when mobile menu is open
+    useEffect(() => {
+        if (mobileMenuOpen) {
+            document.body.style.overflow = "hidden";
+        } else {
+            document.body.style.overflow = "unset";
+        }
+        return () => {
+            document.body.style.overflow = "unset";
+        };
+    }, [mobileMenuOpen]);
+
     return (
         <header
             className={cn(
-                "sticky top-0 z-50 w-full transition-all duration-300",
-                scrolled
-                    ? "bg-white/70 dark:bg-slate-950/70 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 py-2 shadow-sm"
-                    : "bg-transparent py-4"
+                "w-full transition-all duration-300 left-0 right-0",
+                mobileMenuOpen
+                    ? "fixed inset-0 h-screen bg-white dark:bg-slate-950 z-[100] overflow-y-auto"
+                    : "sticky top-0 z-50",
+                scrolled && !mobileMenuOpen
+                    ? "bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 py-2 shadow-sm"
+                    : !mobileMenuOpen && "bg-transparent py-4"
             )}
         >
-            <nav className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+            <nav className={cn(
+                "mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8 transition-all",
+                mobileMenuOpen && "h-20 border-b border-slate-100 dark:border-slate-800 sticky top-0 bg-white dark:bg-slate-950 z-[110]"
+            )}>
                 {/* Logo */}
                 <Link href="/" className="flex items-center gap-2 md:gap-3 group relative z-50">
                     <div className="relative h-8 w-8 md:h-9 md:w-9 transition-all duration-500 group-hover:scale-110 group-hover:rotate-6">
@@ -138,17 +156,16 @@ export function MarketingHeader() {
                 </div>
             </nav>
 
-            {/* Mobile Menu Overlay */}
+            {/* Mobile Menu Content */}
             <AnimatePresence>
                 {mobileMenuOpen && (
                     <motion.div
-                        initial={{ opacity: 0, y: -20 }}
+                        initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -20 }}
-                        transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                        className="fixed inset-0 z-40 lg:hidden bg-white/80 dark:bg-slate-950/80 backdrop-blur-3xl"
+                        exit={{ opacity: 0, y: 10 }}
+                        className="lg:hidden px-6 py-8"
                     >
-                        <div className="flex flex-col h-full pt-28 px-6 pb-12 overflow-y-auto">
+                        <div className="flex flex-col gap-8 pb-20">
                             {/* Section: Main Navigation */}
                             <div className="flex flex-col gap-3">
                                 <span className="text-[10px] font-black text-sky-500 uppercase tracking-[0.2em] px-2 mb-2">Navigation</span>
@@ -180,11 +197,11 @@ export function MarketingHeader() {
                                         ) : (
                                             <Link
                                                 href={link.href}
-                                                className="group flex items-center justify-between p-5 bg-white dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm active:scale-[0.98] transition-all"
+                                                className="group flex items-center justify-between p-5 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs active:scale-[0.98] transition-all"
                                                 onClick={() => setMobileMenuOpen(false)}
                                             >
-                                                <span className="text-xl font-black text-foreground tracking-tight group-hover:text-sky-500 transition-colors">{link.label}</span>
-                                                <div className="h-8 w-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center group-hover:bg-sky-500 group-hover:text-white transition-all">
+                                                <span className="text-xl font-black text-slate-900 dark:text-foreground tracking-tight group-hover:text-sky-500 transition-colors uppercase">{link.label}</span>
+                                                <div className="h-8 w-8 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center group-hover:bg-sky-500 group-hover:text-white transition-all">
                                                     <ChevronDown className="h-4 w-4 -rotate-90" />
                                                 </div>
                                             </Link>
@@ -194,20 +211,20 @@ export function MarketingHeader() {
                             </div>
 
                             {/* Section: Action Center */}
-                            <div className="mt-12 space-y-4">
+                            <div className="space-y-4">
                                 <span className="text-[10px] font-black text-sky-500 uppercase tracking-[0.2em] px-2">Account Control</span>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <Button asChild variant="outline" className="h-16 rounded-2xl border-2 font-black text-lg active:scale-95">
+                                    <Button asChild variant="outline" className="h-16 rounded-2xl border-2 border-slate-200 dark:border-slate-800 font-black text-lg active:scale-95 bg-white dark:bg-transparent">
                                         <Link href="/auth/sign-in" onClick={() => setMobileMenuOpen(false)}>Login</Link>
                                     </Button>
-                                    <Button asChild className="h-16 rounded-2xl bg-sky-500 text-white font-black text-lg shadow-xl shadow-sky-500/20 active:scale-95">
+                                    <Button asChild className="h-16 rounded-2xl bg-sky-500 text-white font-black text-lg shadow-xl shadow-sky-500/20 active:scale-95 border-none">
                                         <Link href="/auth/sign-up" onClick={() => setMobileMenuOpen(false)}>Join Now</Link>
                                     </Button>
                                 </div>
                             </div>
 
                             {/* Section: Menu Footer */}
-                            <div className="mt-auto pt-10 border-t border-slate-200 dark:border-slate-800 flex flex-col items-center gap-6">
+                            <div className="pt-10 border-t border-slate-200 dark:border-slate-800 flex flex-col items-center gap-6">
                                 <div className="flex gap-4">
                                     {[
                                         { icon: Twitter, href: "https://twitter.com" },

@@ -50,6 +50,7 @@ const pathTitles: Record<string, string> = {
   "/dashboard/admin/community": "Communities",
   "/dashboard/admin/releases": "Manage Updates",
   "/dashboard/certificates": "Certificate Management",
+  "/dashboard/admin/ai-engine": "AI Engine",
 };
 
 import { useNotifications } from "@/components/notifications/notification-engine";

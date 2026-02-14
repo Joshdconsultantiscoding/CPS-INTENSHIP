@@ -9,6 +9,22 @@ export const metadata = {
 
 export default async function ReferralsPage() {
     const user = await getAuthUser();
+
+    // Enforce access control
+    const { enforceAccess } = await import("@/lib/middleware/access-guard");
+    const access = await enforceAccess(user.id, "/dashboard/referrals");
+
+    if (!access.allowed) {
+        const { BlockedRouteView } = await import("@/components/dashboard/blocked-route-view");
+        return (
+            <BlockedRouteView
+                reason={access.reason || "Access to referrals has been restricted by an administrator."}
+                route="/dashboard/referrals"
+                routeName="Referrals"
+            />
+        );
+    }
+
     const adminSupabase = await createAdminClient();
     const supabase = await createClient();
     const isAdmin = user.role === "admin";

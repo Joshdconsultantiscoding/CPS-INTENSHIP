@@ -21,6 +21,9 @@ import {
     UserPlus,
     StickyNote,
     LucideIcon,
+    ShieldAlert,
+    Brain,
+    FileCheck,
 } from "lucide-react";
 
 export interface NavItem {
@@ -143,6 +146,16 @@ export const adminNavItems: NavItem[] = [
         icon: Users,
     },
     {
+        title: "Compliance",
+        url: "/dashboard/admin/compliance",
+        icon: FileCheck,
+    },
+    {
+        title: "Appeals",
+        url: "/dashboard/appeals",
+        icon: ShieldAlert,
+    },
+    {
         title: "Tasks",
         url: "/dashboard/tasks",
         icon: CheckSquare,
@@ -219,6 +232,11 @@ export const adminNavItems: NavItem[] = [
         title: "Portal Settings",
         url: "/dashboard/admin/portal-settings",
         icon: Settings,
+    },
+    {
+        title: "AI Engine",
+        url: "/dashboard/admin/ai-engine",
+        icon: Brain,
     },
     {
         title: "Bug Reports",

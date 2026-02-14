@@ -80,7 +80,7 @@ export function NotificationPanel({ onClose, className, hideHeaderCloseButton, i
                         </Badge>
                     )}
                 </div>
-                <div className="flex items-center gap-1">
+                <div className={cn("flex items-center gap-2", isMobile && "pr-8")}>
                     {unreadCount > 0 && (
                         <Button
                             variant="ghost"

@@ -3,7 +3,7 @@
 import { getAuthUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { isRedirectError } from "next/dist/client/components/redirect-error";
+import { isRedirectError } from "next/navigation";
 import { ensureProfileSync } from "@/lib/profile-sync";
 
 export interface CreateEventInput {

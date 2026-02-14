@@ -40,7 +40,7 @@ export function AdvancedPricingCard({
                 "relative flex flex-col p-8 rounded-3xl border transition-all duration-500",
                 isRecommended
                     ? "bg-white dark:bg-slate-900 border-sky-500 shadow-2xl shadow-sky-500/10 scale-105 z-10"
-                    : "bg-muted/30 border-border/50 hover:border-sky-500/30"
+                    : "bg-slate-50 dark:bg-muted/30 border-slate-200 dark:border-border/50 hover:border-sky-500/30"
             )}
         >
             {isRecommended && (

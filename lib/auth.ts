@@ -1,5 +1,5 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
-import { isRedirectError } from "next/dist/client/components/redirect-error";
+import { isRedirectError } from "next/navigation";
 import { redirect } from "next/navigation";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { config } from "@/lib/config";

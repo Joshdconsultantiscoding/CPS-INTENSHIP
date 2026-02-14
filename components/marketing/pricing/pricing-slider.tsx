@@ -33,7 +33,7 @@ export function PricingSlider({
                     {icon && <span className="text-sky-500">{icon}</span>}
                     {label}
                 </div>
-                <div className="flex items-baseline gap-1 bg-muted/50 px-3 py-1 rounded-full border border-border/50">
+                <div className="flex items-baseline gap-1 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full border border-slate-200 dark:border-slate-800">
                     <AnimatePresence mode="wait">
                         <motion.span
                             key={value}

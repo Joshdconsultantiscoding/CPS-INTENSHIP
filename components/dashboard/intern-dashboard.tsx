@@ -18,6 +18,7 @@ import {
   CheckSquare,
   Clock,
   AlertTriangle,
+  Ban,
   MessageSquare,
   Trophy,
   Flame,
@@ -53,6 +54,18 @@ export function InternDashboard({
   events = [],
 }: InternDashboardProps) {
   const { settings } = usePortalSettings();
+  const [restrictionError, setRestrictionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("restricted") === "true") {
+      setRestrictionError(params.get("reason") || "You do not have access to this section.");
+      // Clean up URL without refresh
+      const newUrl = window.location.pathname;
+      window.history.replaceState({ path: newUrl }, "", newUrl);
+    }
+  }, []);
+
   // No longer blocking initial render with mounted state for speed-of-light performance
 
   const totalTasks = completedTasks + pendingTasks + overdueTasks;
@@ -70,6 +83,21 @@ export function InternDashboard({
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      {restrictionError && (
+        <Card className="border-destructive/50 bg-destructive/5 dark:bg-destructive/10">
+          <CardContent className="p-4 flex items-center gap-3 text-destructive">
+            <Ban className="h-5 w-5 shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold">Access Restricted</p>
+              <p className="text-xs opacity-90">{restrictionError}</p>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setRestrictionError(null)} className="h-8 w-8 p-0">
+              <Plus className="h-4 w-4 rotate-45" />
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Welcome Section - Mobile Optimized */}
       <div className="flex flex-col gap-3">
         <div>

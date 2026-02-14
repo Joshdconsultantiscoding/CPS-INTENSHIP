@@ -31,6 +31,7 @@ export interface Profile {
   is_typing_to: string | null;
   auth_provider: AuthProvider | null;
   last_seen_version?: string;
+  documents_completed?: boolean;
   created_at: string;
   updated_at: string;
 }

@@ -192,7 +192,7 @@ export default function HomePage() {
                                 <ArrowRight className="ml-2 h-6 w-6" />
                             </Link>
                         </Button>
-                        <Button asChild size="lg" variant="outline" className="h-16 px-10 rounded-2xl border-2 font-black text-xl hover:bg-slate-100 dark:hover:bg-slate-900 transition-all">
+                        <Button asChild size="lg" variant="outline" className="h-16 px-10 rounded-2xl border-2 border-slate-200 dark:border-slate-800 font-black text-xl hover:bg-slate-100 dark:hover:bg-slate-900 transition-all bg-white dark:bg-transparent text-slate-900 dark:text-white">
                             <Link href="/features">Explore Platform</Link>
                         </Button>
                     </motion.div>
@@ -211,7 +211,7 @@ export default function HomePage() {
                                 { label: "Impact", val: "10k+", status: "2026 Goal" },
                                 { label: "Network", val: "500+", status: "Partnering" },
                             ].map((s, i) => (
-                                <div key={i} className="p-5 bg-white/5 dark:bg-slate-900/50 backdrop-blur-2xl rounded-3xl border border-white/10 dark:border-slate-800/50 text-left hover:bg-white/10 transition-all shadow-2xl">
+                                <div key={i} className="p-5 bg-white dark:bg-slate-900/50 backdrop-blur-2xl rounded-3xl border border-slate-200 dark:border-slate-800/50 text-left hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-xl">
                                     <div className="flex items-center justify-between mb-2">
                                         <div className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">{s.label}</div>
                                         <div className={cn(
@@ -314,7 +314,7 @@ export default function HomePage() {
                                     viewport={{ once: true }}
                                     transition={{ delay: i * 0.1 }}
                                     className={cn(
-                                        "flex flex-col items-center gap-3 p-4 bg-slate-50 dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800",
+                                        "flex flex-col items-center gap-3 p-4 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm",
                                         node.full ? "col-span-2" : ""
                                     )}
                                 >

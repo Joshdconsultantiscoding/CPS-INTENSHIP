@@ -64,6 +64,7 @@ import {
   BlockRoutesDialog,
   DeleteUserDialog,
   RestoreUserDialog,
+  HardDeleteUserDialog,
 } from "@/components/admin/intern-controls";
 import { toast } from "sonner";
 
@@ -135,6 +136,8 @@ export function InternManagement({
   const [showBlockDialog, setShowBlockDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showRestoreDialog, setShowRestoreDialog] = useState(false);
+  const [showHardDeleteDialog, setShowHardDeleteDialog] = useState(false);
+
 
   // Use global online users context from Ably provider
   const ablyOnlineUsers = useOnlineUsers();
@@ -599,7 +602,18 @@ export function InternManagement({
                                   className="text-red-600"
                                 >
                                   <Trash2 className="h-4 w-4 mr-2" />
-                                  Delete Account
+                                  Soft Delete Account
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setControlTarget(user);
+                                    setShowHardDeleteDialog(true);
+                                  }}
+                                  className="text-red-800 font-semibold bg-red-50 focus:bg-red-100 dark:bg-red-950/20 dark:focus:bg-red-950/40"
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Hard Delete (Permanent)
                                 </DropdownMenuItem>
                               </>
                             )}
@@ -912,6 +926,17 @@ export function InternManagement({
             userId={controlTarget.id}
             userName={controlTarget.full_name || controlTarget.email}
             onActionComplete={() => router.refresh()}
+          />
+          <HardDeleteUserDialog
+            open={showHardDeleteDialog}
+            onOpenChange={setShowHardDeleteDialog}
+            userId={controlTarget.id}
+            userName={controlTarget.full_name || controlTarget.email}
+            onActionComplete={() => {
+              // Remove user locally to avoid wait for socket/refresh
+              setUsers(prev => prev.filter(u => u.id !== controlTarget.id));
+              router.refresh();
+            }}
           />
         </>
       )}
