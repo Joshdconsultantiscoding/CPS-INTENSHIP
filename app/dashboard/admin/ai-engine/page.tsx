@@ -422,86 +422,133 @@ export default function AIEnginePage() {
                                                                                 <Settings2 className="h-4 w-4 text-primary" />
                                                                             </Button>
                                                                         </DialogTrigger>
-                                                                        <DialogContent className="sm:max-w-md bg-background border-border/50 shadow-[0_0_50px_rgba(0,0,0,0.1)] dark:shadow-[0_0_50px_rgba(0,0,0,0.5)] rounded-2xl overflow-hidden backdrop-blur-3xl">
-                                                                            <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-primary/50 to-transparent"></div>
-                                                                            <DialogHeader>
-                                                                                <DialogTitle className="flex items-center gap-2 text-2xl font-bold tracking-tight italic">
-                                                                                    <Cpu className="h-6 w-6 text-primary" />
-                                                                                    {provider.name.toUpperCase()} CONFIG
-                                                                                </DialogTitle>
-                                                                                <DialogDescription className="text-xs font-mono uppercase tracking-widest">
-                                                                                    Node Protocol Parameters
-                                                                                </DialogDescription>
+                                                                        <DialogContent className="sm:max-w-2xl bg-card/95 backdrop-blur-3xl border-border/50 shadow-[0_0_100px_rgba(0,0,0,0.4)] dark:shadow-[0_0_100px_rgba(0,0,0,0.8)] rounded-[2rem] overflow-hidden p-0 gap-0">
+                                                                            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent pointer-events-none" />
+
+                                                                            <DialogHeader className="p-8 pb-4 relative z-10">
+                                                                                <div className="flex items-center gap-4 mb-2">
+                                                                                    <div className="p-3 bg-primary/10 rounded-2xl border border-primary/20 shadow-inner">
+                                                                                        <Settings2 className="h-6 w-6 text-primary" />
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <DialogTitle className="text-2xl font-black tracking-tighter italic uppercase text-foreground">
+                                                                                            {provider.name} <span className="text-primary not-italic">_Protocol</span>
+                                                                                        </DialogTitle>
+                                                                                        <DialogDescription className="text-[10px] font-mono uppercase tracking-[0.2em] opacity-60">
+                                                                                            Secure Node Override Logic
+                                                                                        </DialogDescription>
+                                                                                    </div>
+                                                                                </div>
                                                                             </DialogHeader>
-                                                                            <div className="space-y-6 py-6 font-mono">
-                                                                                <div className="space-y-3">
-                                                                                    <Label className="text-[10px] font-bold uppercase tracking-widest text-primary/70">Secure Access Token</Label>
+
+                                                                            <div className="p-8 pt-2 space-y-8 relative z-10 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                                                                                {/* Security Layer */}
+                                                                                <div className="space-y-4">
+                                                                                    <div className="flex items-center justify-between px-1">
+                                                                                        <Label className="text-[10px] font-black uppercase tracking-widest text-primary/80 flex items-center gap-2">
+                                                                                            <Shield className="h-3 w-3" /> Encrypted Access Key
+                                                                                        </Label>
+                                                                                        <span className="text-[9px] font-mono text-muted-foreground opacity-40">AES-256-GCM_STRICT</span>
+                                                                                    </div>
                                                                                     <div className="relative group">
+                                                                                        <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
+                                                                                            <Key className="h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                                                                                        </div>
                                                                                         <Input
                                                                                             type="password"
-                                                                                            placeholder={provider.has_api_key ? "VALIDATED_KEY_STORED" : "ENTER NODE TOKEN"}
+                                                                                            placeholder={provider.has_api_key ? "• • • • • • • • • • • • • • • • • • • •" : "ENTER NODE_ACCESS_TOKEN..."}
                                                                                             value={keyInput}
                                                                                             onChange={(e) => setKeyInput(e.target.value)}
-                                                                                            className="pl-12 h-14 bg-accent/5 border-border rounded-xl focus:ring-primary/20 focus:border-primary/40 text-sm"
+                                                                                            className="pl-12 h-14 bg-accent/10 dark:bg-black/20 border-border/50 rounded-2xl focus:ring-primary/20 focus:border-primary/40 text-sm font-mono placeholder:text-muted-foreground/30 ring-offset-background"
                                                                                         />
-                                                                                        <Key className="absolute left-4 top-4.5 h- 5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
                                                                                     </div>
                                                                                 </div>
-                                                                                <div className="space-y-3">
-                                                                                    <Label className="text-[10px] font-bold uppercase tracking-widest text-primary/70">Neural Endpoint URL</Label>
-                                                                                    <div className="relative group">
-                                                                                        <Input
-                                                                                            placeholder="HTTPS://API.ENDPOINT.V1"
-                                                                                            value={urlInput}
-                                                                                            onChange={(e) => setUrlInput(e.target.value)}
-                                                                                            className="pl-12 h-14 bg-accent/5 border-border rounded-xl focus:ring-primary/20 focus:border-primary/40 text-sm"
-                                                                                        />
-                                                                                        <Globe className="absolute left-4 top-4.5 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+
+                                                                                {/* Routing Logic */}
+                                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                                                    <div className="space-y-4">
+                                                                                        <Label className="text-[10px] font-black uppercase tracking-widest text-primary/80 px-1">Source Endpoint</Label>
+                                                                                        <div className="relative group">
+                                                                                            <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
+                                                                                                <Globe className="h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                                                                                            </div>
+                                                                                            <Input
+                                                                                                placeholder="AUTO_CLOUD_RESOLVE"
+                                                                                                value={urlInput}
+                                                                                                onChange={(e) => setUrlInput(e.target.value)}
+                                                                                                className="pl-12 h-14 bg-accent/10 dark:bg-black/20 border-border/50 rounded-2xl focus:ring-primary/20 focus:border-primary/40 text-sm font-mono"
+                                                                                            />
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <div className="space-y-4">
+                                                                                        <Label className="text-[10px] font-black uppercase tracking-widest text-primary/80 px-1">Model Target ID</Label>
+                                                                                        <div className="relative group">
+                                                                                            <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
+                                                                                                <Zap className="h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                                                                                            </div>
+                                                                                            <Input
+                                                                                                placeholder="SYSTEM_DEFAULT"
+                                                                                                value={modelInput}
+                                                                                                onChange={(e) => setModelInput(e.target.value)}
+                                                                                                className="pl-12 h-14 bg-accent/10 dark:bg-black/20 border-border/50 rounded-2xl focus:ring-primary/20 focus:border-primary/40 text-sm font-mono"
+                                                                                            />
+                                                                                        </div>
                                                                                     </div>
                                                                                 </div>
-                                                                                <div className="space-y-3">
-                                                                                    <Label className="text-[10px] font-bold uppercase tracking-widest text-primary/70">Preferred Model ID</Label>
-                                                                                    <div className="relative group">
-                                                                                        <Input
-                                                                                            placeholder="e.g. gpt-4o, claude-3-5-sonnet"
-                                                                                            value={modelInput}
-                                                                                            onChange={(e) => setModelInput(e.target.value)}
-                                                                                            className="pl-12 h-14 bg-accent/5 border-border rounded-xl focus:ring-primary/20 focus:border-primary/40 text-sm"
-                                                                                        />
-                                                                                        <Zap className="absolute left-4 top-4.5 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+
+                                                                                {/* Instructions - Terminal Style */}
+                                                                                <div className="space-y-4">
+                                                                                    <div className="flex items-center justify-between px-1">
+                                                                                        <Label className="text-[10px] font-black uppercase tracking-widest text-primary/80">Behavioral Matrix Override</Label>
+                                                                                        <Badge variant="outline" className="text-[9px] uppercase font-mono tracking-tighter opacity-50 border-primary/20 bg-primary/5">Node_Level</Badge>
                                                                                     </div>
-                                                                                </div>
-                                                                                <div className="space-y-3">
-                                                                                    <Label className="text-[10px] font-bold uppercase tracking-widest text-primary/70">Node Instructions (Override/Append)</Label>
-                                                                                    <div className="relative group">
+                                                                                    <div className="relative rounded-2xl overflow-hidden border border-border/50 shadow-inner group">
+                                                                                        <div className="absolute top-0 left-0 right-0 h-8 bg-muted/30 dark:bg-black/40 border-b border-border/20 flex items-center px-4 justify-between">
+                                                                                            <div className="flex gap-1.5">
+                                                                                                <div className="h-2 w-2 rounded-full bg-rose-500/30" />
+                                                                                                <div className="h-2 w-2 rounded-full bg-amber-500/30" />
+                                                                                                <div className="h-2 w-2 rounded-full bg-emerald-500/30" />
+                                                                                            </div>
+                                                                                            <span className="text-[8px] font-mono uppercase opacity-30 tracking-widest">system32/node_config.sh</span>
+                                                                                        </div>
                                                                                         <textarea
-                                                                                            placeholder="Specific rules for this node..."
+                                                                                            placeholder="# Inject node-specific behaviors here...&#10;# These instructions merge with global system prompts."
                                                                                             value={instructionsInput}
                                                                                             onChange={(e) => setInstructionsInput(e.target.value)}
-                                                                                            className="w-full min-h-[100px] bg-accent/5 border-border rounded-xl p-4 text-sm font-mono focus:ring-primary/20 focus:border-primary/40 outline-none transition-all resize-none"
+                                                                                            className="w-full min-h-[160px] pt-12 p-6 bg-accent/5 dark:bg-black/40 text-[13px] font-mono focus:ring-2 focus:ring-primary/20 outline-none transition-all resize-none shadow-inner scrollbar-hide"
                                                                                         />
                                                                                     </div>
                                                                                 </div>
                                                                             </div>
-                                                                            <DialogFooter className="gap-3 sm:justify-between py-2">
+
+                                                                            <div className="p-8 bg-muted/30 dark:bg-black/20 border-t border-border/30 flex flex-col sm:flex-row gap-4 justify-between items-center relative z-20">
                                                                                 <Button
                                                                                     variant="ghost"
-                                                                                    className="text-muted-foreground text-[10px] tracking-widest uppercase hover:bg-rose-500/10 hover:text-rose-500"
+                                                                                    className="w-full sm:w-auto text-muted-foreground text-[10px] font-black tracking-widest uppercase hover:bg-rose-500/10 hover:text-rose-500 rounded-xl px-6 h-12 transition-all"
                                                                                     onClick={() => {
                                                                                         handleToggleProvider(provider.id, !provider.is_enabled);
                                                                                         setEditingProvider(null);
                                                                                     }}
                                                                                 >
-                                                                                    {provider.is_enabled ? "Suspend Node" : "Reactivate Node"}
+                                                                                    {provider.is_enabled ? "Suspend_Protocol" : "Reactivate_Node"}
                                                                                 </Button>
-                                                                                <Button
-                                                                                    className="h-12 bg-primary hover:bg-primary/80 px-8 rounded-xl font-bold uppercase tracking-widest text-[11px] shadow-[0_0_20px_rgba(59,130,246,0.1)] dark:shadow-[0_0_20px_rgba(59,130,246,0.2)]"
-                                                                                    onClick={handleUpdateKey}
-                                                                                    disabled={saving}
-                                                                                >
-                                                                                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Commit Changes"}
-                                                                                </Button>
-                                                                            </DialogFooter>
+                                                                                <div className="flex gap-4 w-full sm:w-auto">
+                                                                                    <Button
+                                                                                        variant="outline"
+                                                                                        className="flex-1 sm:flex-none border-border/50 rounded-xl px-6 h-12 text-[10px] font-black tracking-widest uppercase"
+                                                                                        onClick={() => setEditingProvider(null)}
+                                                                                    >
+                                                                                        Abort
+                                                                                    </Button>
+                                                                                    <Button
+                                                                                        className="flex-1 sm:flex-none h-12 bg-primary hover:bg-primary/80 px-10 rounded-xl font-black uppercase tracking-[0.15em] text-[11px] shadow-[0_0_30px_rgba(59,130,246,0.3)] transition-all active:scale-95"
+                                                                                        onClick={handleUpdateKey}
+                                                                                        disabled={saving}
+                                                                                    >
+                                                                                        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Commit_Changes"}
+                                                                                    </Button>
+                                                                                </div>
+                                                                            </div>
                                                                         </DialogContent>
                                                                     </Dialog>
                                                                 </div>
