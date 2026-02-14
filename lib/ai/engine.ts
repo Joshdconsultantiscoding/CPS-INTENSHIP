@@ -49,7 +49,8 @@ export class AIEngine {
                 const config = {
                     apiKey: p.api_key_encrypted ? decrypt(p.api_key_encrypted) : undefined,
                     baseUrl: p.base_url,
-                    modelName: undefined, // will be set per call or use default
+                    modelName: p.model_name,
+                    customInstructions: p.custom_instructions,
                     settings: p.supported_features
                 };
 
@@ -122,7 +123,8 @@ export class AIEngine {
 
         try {
             console.log(`[AIEngine] Routing task ${options.taskType || 'unknown'} to ${provider.name} (Sensitivity: ${sensitivity})`);
-            return await provider.generateText(messages, options.systemPrompt);
+            const combinedPrompt = [provider.getCustomInstructions(), options.systemPrompt].filter(Boolean).join('\n\n');
+            return await provider.generateText(messages, combinedPrompt || undefined);
         } catch (error) {
             console.warn(`[AIEngine] Primary provider ${provider.name} failed. Attempting fallback...`, error);
 
@@ -132,7 +134,8 @@ export class AIEngine {
             if (!fallback) throw error;
 
             console.log(`[AIEngine] Falling back to ${fallback.name}`);
-            return await fallback.generateText(messages, options.systemPrompt);
+            const combinedFallbackPrompt = [fallback.getCustomInstructions(), options.systemPrompt].filter(Boolean).join('\n\n');
+            return await fallback.generateText(messages, combinedFallbackPrompt || undefined);
         }
     }
 
@@ -147,6 +150,7 @@ export class AIEngine {
         const provider = await this.getBestProvider(sensitivity);
 
         console.log(`[AIEngine] Streaming task ${options.taskType || 'unknown'} via ${provider.name}`);
-        return await provider.streamText(messages, options.systemPrompt);
+        const combinedPrompt = [provider.getCustomInstructions(), options.systemPrompt].filter(Boolean).join('\n\n');
+        return await provider.streamText(messages, combinedPrompt || undefined);
     }
 }

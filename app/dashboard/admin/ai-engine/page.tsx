@@ -72,6 +72,8 @@ interface AIProvider {
     is_local: boolean;
     priority: number;
     base_url: string | null;
+    model_name: string | null;
+    custom_instructions: string | null;
     has_api_key: boolean;
     supported_features: {
         vision: boolean;
@@ -94,6 +96,8 @@ export default function AIEnginePage() {
     const [editingProvider, setEditingProvider] = useState<AIProvider | null>(null);
     const [keyInput, setKeyInput] = useState("");
     const [urlInput, setUrlInput] = useState("");
+    const [modelInput, setModelInput] = useState("");
+    const [instructionsInput, setInstructionsInput] = useState("");
     const [testLoading, setTestLoading] = useState<string | null>(null);
     const [scrolled, setScrolled] = useState(false);
 
@@ -163,7 +167,9 @@ export default function AIEnginePage() {
                 body: JSON.stringify({
                     id: editingProvider.id,
                     api_key: keyInput,
-                    base_url: urlInput
+                    base_url: urlInput,
+                    model_name: modelInput,
+                    custom_instructions: instructionsInput
                 })
             });
             if (res.ok) {
@@ -171,6 +177,8 @@ export default function AIEnginePage() {
                 setEditingProvider(null);
                 setKeyInput("");
                 setUrlInput("");
+                setModelInput("");
+                setInstructionsInput("");
                 fetchData();
             }
         } catch (error) {
@@ -403,6 +411,8 @@ export default function AIEnginePage() {
                                                                             setEditingProvider(provider);
                                                                             setKeyInput("");
                                                                             setUrlInput(provider.base_url || "");
+                                                                            setModelInput(provider.model_name || "");
+                                                                            setInstructionsInput(provider.custom_instructions || "");
                                                                         } else {
                                                                             setEditingProvider(null);
                                                                         }
@@ -447,6 +457,29 @@ export default function AIEnginePage() {
                                                                                             className="pl-12 h-14 bg-accent/5 border-border rounded-xl focus:ring-primary/20 focus:border-primary/40 text-sm"
                                                                                         />
                                                                                         <Globe className="absolute left-4 top-4.5 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                                                                                    </div>
+                                                                                </div>
+                                                                                <div className="space-y-3">
+                                                                                    <Label className="text-[10px] font-bold uppercase tracking-widest text-primary/70">Preferred Model ID</Label>
+                                                                                    <div className="relative group">
+                                                                                        <Input
+                                                                                            placeholder="e.g. gpt-4o, claude-3-5-sonnet"
+                                                                                            value={modelInput}
+                                                                                            onChange={(e) => setModelInput(e.target.value)}
+                                                                                            className="pl-12 h-14 bg-accent/5 border-border rounded-xl focus:ring-primary/20 focus:border-primary/40 text-sm"
+                                                                                        />
+                                                                                        <Zap className="absolute left-4 top-4.5 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                                                                                    </div>
+                                                                                </div>
+                                                                                <div className="space-y-3">
+                                                                                    <Label className="text-[10px] font-bold uppercase tracking-widest text-primary/70">Node Instructions (Override/Append)</Label>
+                                                                                    <div className="relative group">
+                                                                                        <textarea
+                                                                                            placeholder="Specific rules for this node..."
+                                                                                            value={instructionsInput}
+                                                                                            onChange={(e) => setInstructionsInput(e.target.value)}
+                                                                                            className="w-full min-h-[100px] bg-accent/5 border-border rounded-xl p-4 text-sm font-mono focus:ring-primary/20 focus:border-primary/40 outline-none transition-all resize-none"
+                                                                                        />
                                                                                     </div>
                                                                                 </div>
                                                                             </div>

@@ -4,6 +4,7 @@ export interface AIProviderConfig {
     apiKey?: string;
     baseUrl?: string;
     modelName?: string;
+    customInstructions?: string;
     settings?: any;
 }
 
@@ -23,6 +24,10 @@ export abstract class AIProvider {
 
     constructor(config: AIProviderConfig) {
         this.config = config;
+    }
+
+    getCustomInstructions(): string | undefined {
+        return this.config.customInstructions;
     }
 
     abstract generateText(

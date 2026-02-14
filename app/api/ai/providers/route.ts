@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json();
-        const { id, is_enabled, priority, api_key, base_url } = body;
+        const { id, is_enabled, priority, api_key, base_url, model_name, custom_instructions } = body;
 
         if (!id) return NextResponse.json({ error: 'Provider ID required' }, { status: 400 });
 
@@ -59,6 +59,8 @@ export async function POST(request: NextRequest) {
         if (is_enabled !== undefined) updates.is_enabled = is_enabled;
         if (priority !== undefined) updates.priority = priority;
         if (base_url !== undefined) updates.base_url = base_url;
+        if (model_name !== undefined) updates.model_name = model_name;
+        if (custom_instructions !== undefined) updates.custom_instructions = custom_instructions;
 
         if (api_key && api_key.trim()) {
             updates.api_key_encrypted = encrypt(api_key.trim());
